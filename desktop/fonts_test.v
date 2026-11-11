@@ -5,8 +5,8 @@ import os
 import crypto.sha256
 
 fn test_font_layout_uses_shared_faces_without_changing_geometry() {
-	root := ui2.screen(workbench_paper, [
-		label('heading', '项目 Project 状态', 0, 0, 300, 24, workbench_ink),
+	root := ui2.screen(workbench_colors.paper, [
+		label('heading', '项目 Project 状态', 0, 0, 300, 24, workbench_colors.ink),
 		ui2.text_area('logs', 'HTTP latency 123 ms', ui2.rect(0, 80, 300, 100), ui2.BoxStyle{}, ui2.TextStyle{ font_family: 'Menlo', size: 11 }),
 	])
 	adapted := workbench_font_layout(root)

@@ -8,7 +8,7 @@ import ui2
 
 fn test_linux_title_fits_existing_logical_frame() {
 	$if linux {
-		original := label('title', '运行环境', 0, 0, 400, 24, workbench_ink)
+		original := label('title', '运行环境', 0, 0, 400, 24, workbench_colors.ink)
 		adapted := linux_pixel_layout(original)
 		assert adapted.text_style.size * 96.0 / 72.0 <= adapted.frame.height
 		assert adapted.frame == original.frame
@@ -46,7 +46,7 @@ fn test_runtime_version_picker_requires_explicit_compatible_selection() ! {
 	assert !app.can_install_selected_runtime()
 	app.handle_runtime_catalog_event('runtime_release_0')
 	assert app.can_install_selected_runtime()
-	for width in [320.0, 510.0] { ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_downloads_view(app, width)))! }
+	for width in [320.0, 510.0] { ui2.validate_element_tree(ui2.screen(workbench_colors.paper, runtime_downloads_view(app, width)))! }
 	app.snapshot = host.Snapshot{pid: 123, phase: .running}
 	assert !app.can_install_selected_runtime()
 	app.snapshot = host.Snapshot{}
@@ -58,9 +58,9 @@ fn test_runtime_version_picker_requires_explicit_compatible_selection() ! {
 }
 
 fn test_keyboard_focus_order_skips_unavailable_controls_and_reverses() ! {
-	root := ui2.screen(workbench_paper, [
+	root := ui2.screen(workbench_colors.paper, [
 		ui2.view('workbench_sidebar', ui2.rect(0, 0, 200, 500), ui2.BoxStyle{}, [button('nav', 'Navigation', 0, 0, 100, false, true)]),
-		ui2.scroll('form', ui2.rect(200, 0, 500, 500), workbench_paper, [
+		ui2.scroll('form', ui2.rect(200, 0, 500, 500), workbench_colors.paper, [
 			input('first', '', 'First', 0, 20, 200, true),
 			input('disabled', '', 'Unavailable', 0, 70, 200, false),
 			ui2.Element{...input('secret', '', 'Password', 0, 700, 200, true), secure: true},
@@ -87,8 +87,8 @@ fn test_desktop_details_fit_compact_windows() ! {
 	app.server_snapshot = host.ServerSnapshot{}
 	app.select_server(host.RemoteServer{id: 'ab'.repeat(12), name: 'Fixture', ssh_host: 'fixture', auth_method: 'password'})
 	for width in [488.0, 708.0, 1000.0] {
-		ui2.validate_element_tree(ui2.screen(workbench_paper, remote_servers_view(app, width)))!
-		ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_settings_view(app, width)))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, remote_servers_view(app, width)))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, runtime_settings_view(app, width)))!
 	}
 	for row in server_detail_view(app, 320) { assert row.frame.x + row.frame.width <= 320 }
 	app.new_error = ''
@@ -125,11 +125,11 @@ fn test_remote_server_and_runtime_target_states() ! {
 	app.server_busy = false
 	app.remote_servers = []host.RemoteServer{}
 	app.remote_id = ''
-	ui2.validate_element_tree(ui2.screen(workbench_paper, remote_servers_view(app, 700)))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, remote_servers_view(app, 700)))!
 	app.select_server(host.RemoteServer{id: 'cd'.repeat(12), name: 'Linux', ssh_host: 'fixture'})
 	rows := remote_servers_view(app, 700)
 	assert !rows.any(it.id == 'remote_token' || it.id == 'remote_admin_port')
-	ui2.validate_element_tree(ui2.screen(workbench_paper, rows))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, rows))!
 	app.remote_auth = 'password'
 	app.remote_password = 'ephemeral-test'
 	app.server_command(.connect, '')
@@ -139,19 +139,19 @@ fn test_remote_server_and_runtime_target_states() ! {
 	app.server_busy = false
 	app.remote_servers = [app.server_form()]
 	app.runtime_server_id = app.remote_id
-	ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_settings_view(app, 700)))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, runtime_settings_view(app, 700)))!
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_go_connect')!
 	app.server_snapshot = host.ServerSnapshot{server: app.server_form(), server_id: app.remote_id, connected: true, platform: 'linux-arm64', root: '/home/fixture/.local/share/vhttpd-workbench'}
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
 	app.server_snapshot = host.ServerSnapshot{...app.server_snapshot, version: '0.1.0', runtimes: [host.RemoteRuntime{id: 'legacy', version: '0.1.0', path: '/fixture/runtime'}]}
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_install')!
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'runtime_create_open')!
-	assert !menu_button_enabled(ui2.screen(workbench_paper, runtime_settings_view(app, 700)), 'server_create')
+	assert !menu_button_enabled(ui2.screen(workbench_colors.paper, runtime_settings_view(app, 700)), 'server_create')
 	handled := app.handle_server_event('runtime_create_open')
 	assert handled
 	assert app.runtime_create_open
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_create')!
-	ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_settings_view(app, 700)))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, runtime_settings_view(app, 700)))!
 	app.remote_servers = [host.RemoteServer{...app.remote_servers[0], ssh_host: 'changed-host'}]
 	assert runtime_test_enabled(runtime_settings_view(app, 700), 'server_go_connect')!
 	app.server_snapshot = host.ServerSnapshot{}
@@ -168,7 +168,7 @@ fn test_unknown_and_changed_host_fingerprint_screens() ! {
 	app.remote_worker = host.RemoteWorker{}
 	app.remote_snapshot = host.RemoteSnapshot{profile_id: app.remote_id, busy: true, host_key: host.RemoteHostKey{id: 'challenge', algorithm: 'ED25519', fingerprint: 'SHA256:fixture'}}
 	app.remote_connected_form = app.remote_form()
-	ui2.validate_element_tree(ui2.screen(workbench_paper, remote_instances_view(app, 700)))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, remote_instances_view(app, 700)))!
 	assert runtime_test_enabled(remote_instances_view(app, 700), 'remote_trust_host')!
 	handle_event('remote_trust_host')
 	command := <-app.remote_worker.commands
@@ -176,7 +176,7 @@ fn test_unknown_and_changed_host_fingerprint_screens() ! {
 	assert command.password == ''
 	assert app.remote_snapshot.host_key.id == ''
 	app.remote_snapshot = host.RemoteSnapshot{profile_id: app.remote_id, host_key_changed: true, host_key: host.RemoteHostKey{fingerprint: 'SHA256:changed'}}
-	ui2.validate_element_tree(ui2.screen(workbench_paper, remote_instances_view(app, 700)))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, remote_instances_view(app, 700)))!
 	assert !runtime_test_enabled(remote_instances_view(app, 700), 'remote_open')!
 	app.remote_snapshot = host.RemoteSnapshot{}
 }
@@ -190,7 +190,7 @@ fn test_password_auth_form_and_ephemeral_connect_command() ! {
 	handle_event('remote_auth_password')
 	assert app.remote_auth == 'password'
 	rows := remote_instances_view(app, 700)
-	ui2.validate_element_tree(ui2.screen(workbench_paper, rows))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, rows))!
 	mut password_secure := false
 	for row in rows {
 		if row.id == 'remote_password' { password_secure = row.secure }
@@ -515,8 +515,8 @@ fn test_environment_and_remote_tunnel_summary_layouts() ! {
 	assert choices[1].title != choices[2].title
 	assert app.environment_version_label() == '远端 vhttpd 0.1.0'
 	for width in [320.0, 510.0] {
-		ui2.validate_element_tree(ui2.screen(workbench_paper, remote_instances_view(app, width)))!
-		ui2.validate_element_tree(ui2.screen(workbench_paper, [app.environment_selector()]))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, remote_instances_view(app, width)))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, [app.environment_selector()]))!
 	}
 	app.set_environment('b')
 	assert app.environment_version_label() == '远端 · 未连接'
@@ -647,9 +647,9 @@ fn test_remote_failed_startup_has_persistent_failure_and_recovery_actions() ! {
 			instance: host.RemoteInstance{ready: reported_ready, manual_restart: true, operation: host.RemoteOperation{state: 'failed', error: 'executor_warmup_failed'}},
 			message: '执行器初始化失败。请修复配置、发布后重试。'}
 		rows := remote_instance_summary(app, 700, 0)
-		ui2.validate_element_tree(ui2.screen(workbench_paper, rows))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, rows))!
 		assert failure_test_element(rows, 'remote_state_summary_title')!.text == '重启失败 · 需修复配置'
-		assert failure_test_element(rows, 'remote_state_summary')!.box.border_color == workbench_danger
+		assert failure_test_element(rows, 'remote_state_summary')!.box.border_color == workbench_colors.danger
 		assert failure_test_element(rows, 'remote_open_caption')!.text == '打开 Admin UI 修复配置'
 		assert failure_test_element(rows, 'remote_restart_caption')!.text == '修复后重试重启'
 		assert runtime_test_enabled(rows, 'remote_open')! && runtime_test_enabled(rows, 'remote_restart')!
@@ -675,7 +675,7 @@ fn test_remote_runtime_selection_is_explicit_and_does_not_rebind_instances() ! {
 	app.server_busy = false
 	app.server_runtime_selection = 'missing'
 	assert app.selected_server_runtime() == ''
-	for width in [360.0, 700.0] { ui2.validate_element_tree(ui2.screen(workbench_paper, runtime_remote_view(app, width)))! }
+	for width in [360.0, 700.0] { ui2.validate_element_tree(ui2.screen(workbench_colors.paper, runtime_remote_view(app, width)))! }
 }
 
 fn test_runtime_upgrade_controls_and_recovery_states() ! {
@@ -702,7 +702,7 @@ fn test_runtime_upgrade_controls_and_recovery_states() ! {
  for phase in ['completed','rolled_back','rollback_failed'] {
   status := host.RemoteRuntimeUpgrade{...operation,phase:phase,error:if phase == 'rolled_back' { 'new_process_exited' } else { '' }}
   app.server_snapshot = host.ServerSnapshot{...app.server_snapshot,upgrades:[status]}
-  for width in [360.0,700.0] { ui2.validate_element_tree(ui2.screen(workbench_paper,runtime_remote_view(app,width)))! }
+  for width in [360.0,700.0] { ui2.validate_element_tree(ui2.screen(workbench_colors.paper,runtime_remote_view(app,width)))! }
  }
  assert host.upgrade_phase_title(host.RemoteRuntimeUpgrade{phase:'rolled_back'}).contains('原版本已恢复')
  assert host.upgrade_phase_title(host.RemoteRuntimeUpgrade{phase:'rollback_failed'}).contains('需要处理')
@@ -725,14 +725,14 @@ fn test_application_deployment_preview_is_bound_to_selected_target_and_status_di
  app.remote_profiles=[host.RemoteProfile{id:app.deployment_remote,server_id:'b'.repeat(24),name:'test instance',ssh_host:'fixture',token:'do-not-render',config_path:'/server/instances/test/vhttpd.toml'}]
  app.server_snapshot=host.ServerSnapshot{connected:true,server_id:'b'.repeat(24),deployment_preview:host.ApplicationDeploymentPreview{id:'c'.repeat(24),config_path:'/server/instances/test/vhttpd.toml',files:[]}}
  for width in [360.0,488.0,708.0] {
-  tree := ui2.screen(workbench_paper,application_deployment_view(app,width))
+  tree := ui2.screen(workbench_colors.paper,application_deployment_view(app,width))
   ui2.validate_element_tree(tree)!
   assert focus_targets(tree).any(it.id=='deploy_commit')
  }
  app.server_snapshot=host.ServerSnapshot{...app.server_snapshot,deployments:[host.ApplicationDeploymentStatus{id:'c'.repeat(24),config_path:'/server/instances/test/vhttpd.toml',phase:'starting'}]}
- assert !focus_targets(ui2.screen(workbench_paper,application_deployment_view(app,488))).any(it.id=='deploy_commit')
+ assert !focus_targets(ui2.screen(workbench_colors.paper,application_deployment_view(app,488))).any(it.id=='deploy_commit')
  app.server_snapshot=host.ServerSnapshot{...app.server_snapshot,deployments:[],deployment_preview:host.ApplicationDeploymentPreview{id:'c'.repeat(24),config_path:'/other/instance.toml'}}
- assert !focus_targets(ui2.screen(workbench_paper,application_deployment_view(app,488))).any(it.id=='deploy_commit')
+ assert !focus_targets(ui2.screen(workbench_colors.paper,application_deployment_view(app,488))).any(it.id=='deploy_commit')
 }
 
 fn test_stopped_managed_remote_has_start_action_without_admin_connection() ! {
@@ -751,7 +751,7 @@ fn test_stopped_managed_remote_has_start_action_without_admin_connection() ! {
  for width in [320.0,700.0] {
   rows := remote_instances_view(app,width)
   assert runtime_test_enabled(rows,'remote_start')!
-  ui2.validate_element_tree(ui2.screen(workbench_paper,rows))!
+  ui2.validate_element_tree(ui2.screen(workbench_colors.paper,rows))!
  }
  app.handle_remote_event('remote_start')
  command := <-app.server_worker.commands
@@ -769,9 +769,9 @@ fn test_stopped_managed_remote_has_start_action_without_admin_connection() ! {
 
 // Native-feel navigation, responsive rows and configuration state regressions.
 fn test_keyboard_reaches_navigation_selectors_and_readonly_content() {
-	root := ui2.screen(workbench_paper, [
+	root := ui2.screen(workbench_colors.paper, [
 		ui2.view('workbench_sidebar', ui2.rect(0, 0, 200, 500), ui2.BoxStyle{}, [button('project_0', '项目', 0, 0, 180, false, true), button('project_1', '第二个项目', 0, 40, 180, false, true)]),
-		ui2.scroll('form', ui2.rect(220, 0, 500, 500), workbench_paper, [
+		ui2.scroll('form', ui2.rect(220, 0, 500, 500), workbench_colors.paper, [
 			form_select('application', '应用', ['应用'], ui2.rect(0, 20, 200, 36), true),
 			ui2.Element{...workspace_text('connection', 'readonly', 70, 300, 100), readonly: true},
 			ui2.Element{...button('hidden', 'Hidden', 0, 180, 100, false, true), hidden: true},
@@ -787,7 +787,7 @@ fn test_keyboard_reaches_navigation_selectors_and_readonly_content() {
 }
 
 fn test_selection_arrows_stay_in_the_current_group_and_never_edit_fields() {
-	targets := all_focus_targets(ui2.screen(workbench_paper, [
+	targets := all_focus_targets(ui2.screen(workbench_colors.paper, [
 		button('workspace_tab_environment', '总览', 0, 0, 90, false, true),
 		button('workspace_tab_applications', '应用', 100, 0, 90, false, true),
 		button('project_0', 'One', 0, 60, 90, false, true),
@@ -826,11 +826,11 @@ fn test_buttons_measure_single_line_titles_wrap_rows_and_keep_trailing_header_ac
 	}
 	for width in [320.0, 488.0, 708.0] {
 		root := ui2.view('form', ui2.rect(0, 0, width, 180), ui2.BoxStyle{}, [
-			label('heading', '服务器', 0, 0, width - 120, 24, workbench_ink),
+			label('heading', '服务器', 0, 0, width - 120, 24, workbench_colors.ink),
 			button('back', '返回运行环境', width - 100, 0, 100, false, true),
 			button('restart', '重启并检查整个项目生效', 0, 60, 150, true, true),
 			button('check', 'Check configuration', 162, 60, 140, false, false),
-			label('detail', 'Following content', 0, 108, width, 12, workbench_muted),
+			label('detail', 'Following content', 0, 108, width, 12, workbench_colors.muted),
 		])
 		layout := workbench_text_layout(workbench_font_layout(root))
 		back := layout.children[1]
@@ -877,9 +877,9 @@ fn test_standalone_trailing_button_grows_left_and_preserves_full_title() ! {
 	}
 	for width in [320.0, 488.0, 583.0, 708.0] {
 		root := ui2.view('remote_page', ui2.rect(0, 0, width, 150), ui2.BoxStyle{}, [
-			label('heading', '远端运行环境', 0, 0, width - 120, 24, workbench_ink),
+			label('heading', '远端运行环境', 0, 0, width - 120, 24, workbench_colors.ink),
 			button('back', '运行环境概览', width - 100, 8, 100, false, true),
-			label('hint', 'Following content', 0, 62, width, 12, workbench_muted),
+			label('hint', 'Following content', 0, 62, width, 12, workbench_colors.muted),
 		])
 		layout := workbench_text_layout(workbench_font_layout(root))
 		back := layout.children[1]

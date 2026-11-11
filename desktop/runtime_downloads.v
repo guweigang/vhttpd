@@ -104,8 +104,8 @@ fn (mut app Workshop) handle_runtime_catalog_event(event string) bool {
 fn runtime_downloads_view(app &Workshop, width f64) []ui2.Element {
 	busy := app.runtime_catalog_busy
 	mut rows := [button('runtime_catalog_close', '← 返回运行包', 0, 0, 150, false, true),
-		label('runtime_download_heading', '选择运行包版本', 0, 52, width, 20, workbench_ink),
-		label('runtime_download_platform', app.download_platform() + ' · 公开下载，无需 GitHub 登录', 0, 84, width, 11, workbench_muted),
+		label('runtime_download_heading', '选择运行包版本', 0, 52, width, 20, workbench_colors.ink),
+		label('runtime_download_platform', app.download_platform() + ' · 公开下载，无需 GitHub 登录', 0, 84, width, 11, workbench_colors.muted),
 		ui2.Element{...input('runtime_ref', app.runtime_catalog_ref, '版本号或官方 Release 链接', 0, 114, width - 90, !busy), submit_id: 'runtime_catalog_load'},
 		button(if busy { 'runtime_catalog_cancel' } else { 'runtime_catalog_load' }, if busy { '取消' } else { '查询' }, width - 78, 114, 78, false, true)]
 	third := (width - 16) / 3
@@ -114,15 +114,15 @@ fn runtime_downloads_view(app &Workshop, width f64) []ui2.Element {
 	}
 	mut choices := []ui2.Element{}
 	for i, choice in app.runtime_downloads {
-		mut row := [label('runtime_release_name_${i}', choice.tag, 10, 3, width - 40, 12, workbench_ink),
-			label('runtime_release_meta_${i}', ui_text(if choice.channel == 'stable' { '稳定版' } else { '开发版 · 预发布' }) + ' · ' + choice.published_at.all_before('T'), 10, 27, width - 40, 10, workbench_muted)]
+		mut row := [label('runtime_release_name_${i}', choice.tag, 10, 3, width - 40, 12, workbench_colors.ink),
+			label('runtime_release_meta_${i}', ui_text(if choice.channel == 'stable' { '稳定版' } else { '开发版 · 预发布' }) + ' · ' + choice.published_at.all_before('T'), 10, 27, width - 40, 10, workbench_colors.muted)]
 		row << ui2.Element{...ui2.button('runtime_release_${i}', '', ui2.rect(0, 0, width - 12, 52), ui2.BoxStyle{transparent: true}, ui2.TextStyle{}), enabled: !busy, accessibility_label: choice.tag + ' · ' + choice.channel}
 		focused := ui2.focused_id() == 'runtime_release_${i}'
-		choices << ui2.view('runtime_release_row_${i}', ui2.rect(0, f64(i * 58), width - 12, 52), ui2.BoxStyle{bg: if app.runtime_selected_tag == choice.tag { workbench_soft_accent } else { workbench_sidebar }, radius: 6, border_color: workbench_accent, border_left: if focused { 2.0 } else { 0.0 }, border_right: if focused { 2.0 } else { 0.0 }, border_top: if focused { 2.0 } else { 0.0 }, border_bottom: if focused { 2.0 } else { 0.0 }}, row)
+		choices << ui2.view('runtime_release_row_${i}', ui2.rect(0, f64(i * 58), width - 12, 52), ui2.BoxStyle{bg: if app.runtime_selected_tag == choice.tag { workbench_colors.soft_accent } else { workbench_colors.sidebar }, radius: 6, border_color: workbench_colors.accent, border_left: if focused { 2.0 } else { 0.0 }, border_right: if focused { 2.0 } else { 0.0 }, border_top: if focused { 2.0 } else { 0.0 }, border_bottom: if focused { 2.0 } else { 0.0 }}, row)
 	}
-	rows << ui2.scroll('runtime_release_list', ui2.rect(0, 210, width, 180), workbench_sidebar, choices)
+	rows << ui2.scroll('runtime_release_list', ui2.rect(0, 210, width, 180), workbench_colors.sidebar, choices)
 	rows << state_notice('runtime_catalog_notice', if busy { '正在读取版本列表' } else if app.runtime_catalog_error != '' { '版本查询未完成' } else if choices.len == 0 { '暂无可安装版本' } else { '选择后再安装' }, if app.runtime_catalog_error != '' { app.runtime_catalog_error } else if choices.len == 0 && !busy { '仅列出包含完整运行包和校验文件的公开版本。可指定旧版本，或选择本地包。' } else if app.runtime_selected_tag != '' { app.runtime_selected_tag } else { '最近 30 个公开版本，按目标平台筛选。开发版来自通过 CI 的预发布。' }, ui2.rect(0, 410, width, 92), if app.runtime_catalog_error != '' { 'warning' } else { 'info' })
 	rows << button('runtime_install_selected', if app.runtime_server_id == '' {'安装并设为本机默认版本'} else {'下载到此主机的运行包库'}, 0, 524, width, true, app.can_install_selected_runtime())
-	rows << ui2.label('runtime_download_hint', if app.runtime_server_id == '' {'安装前校验 SHA256 和完整性，安装后用于之后启动的本机运行环境。'} else {'安装前校验 SHA256 和兼容性。下载完成后，回到运行包页选择运行环境并确认切换。'}, ui2.rect(0, 574, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
+	rows << ui2.label('runtime_download_hint', if app.runtime_server_id == '' {'安装前校验 SHA256 和完整性，安装后用于之后启动的本机运行环境。'} else {'安装前校验 SHA256 和兼容性。下载完成后，回到运行包页选择运行环境并确认切换。'}, ui2.rect(0, 574, width, 52), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 3})
 	return rows
 }

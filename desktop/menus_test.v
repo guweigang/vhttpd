@@ -10,7 +10,7 @@ fn fixture_menu_item(menus []ui2.Menu, action string) ui2.MenuItem {
 
 fn test_menu_structure_empty_and_local_lifecycle_states() ! {
 	mut app := Workshop{}
-	root := ui2.screen(workbench_paper, [])
+	root := ui2.screen(workbench_colors.paper, [])
 	menus := app.workbench_menus(root)
 	ui2.validate_menus(menus)!
 	assert menus[0].title == '文件'
@@ -74,7 +74,7 @@ fn test_environment_project_menu_is_scoped_and_busy_gated() ! {
 		projects: [host.Project{name: 'local-only'}],
 		remote_servers: [host.RemoteServer{id: server_id, name: 'Server', ssh_host: 'fixture'}],
 		remote_profiles: [host.RemoteProfile{id: profile_id, name: 'remote-only', server_id: server_id}]}
-	menus := app.workbench_menus(ui2.screen(workbench_paper, []))
+	menus := app.workbench_menus(ui2.screen(workbench_colors.paper, []))
 	ui2.validate_menus(menus)!
 	assert fixture_menu_item(menus, 'remote_select_' + profile_id).checked
 	assert fixture_menu_item(menus, 'environment:' + server_id).checked
@@ -82,14 +82,14 @@ fn test_environment_project_menu_is_scoped_and_busy_gated() ! {
 	assert !fixture_menu_item(menus, 'folder').enabled
 	for menu in menus { assert menu_find(menu.items, 'menu:project_0') == none }
 	busy := Workshop{...app, server_busy: true}
-	busy_menus := busy.workbench_menus(ui2.screen(workbench_paper, []))
+	busy_menus := busy.workbench_menus(ui2.screen(workbench_colors.paper, []))
 	assert !fixture_menu_item(busy_menus, 'remote_select_' + profile_id).enabled
 	assert !fixture_menu_item(busy_menus, 'environment:').enabled
 	assert !fixture_menu_item(busy_menus, 'remote_restart').enabled
 }
 
 fn test_menu_shortcuts_share_the_current_enabled_state() {
-	root := ui2.screen(workbench_paper, [])
+	root := ui2.screen(workbench_colors.paper, [])
 	mut app := Workshop{}
 	menus := app.workbench_menus(root)
 	for key, action in {'cmd+n': 'new', 'cmd+o': 'import', 'cmd+comma': 'runtime'} {
@@ -154,7 +154,7 @@ fn test_bilingual_menu_structure_state_and_shortcuts_are_identical() ! {
 	for preference in ['auto', 'zh-CN', 'en'] {
 		workbench_language_preference = preference
 		for app in fixtures {
-			root := ui2.screen(workbench_paper, [])
+			root := ui2.screen(workbench_colors.paper, [])
 			workbench_language = 'zh-CN'
 			chinese := app.workbench_menus(root)
 			workbench_language = 'en'
@@ -176,7 +176,7 @@ fn test_menu_groups_and_workspace_navigation_follow_concepts() {
 	mut app := Workshop{projects: [host.Project{name: 'bodytest'}],
 		snapshot: host.Snapshot{phase: .running, pid: 42}, show_runtime: true, show_development: true, show_component_install: true,
 		workspace_application: 'wechat', workspace_log_application: 'wechat', workspace_log_source: 'stdout'}
-	menus := app.workbench_menus(ui2.screen(workbench_paper, []))
+	menus := app.workbench_menus(ui2.screen(workbench_colors.paper, []))
 	assert menus[0].items.any(it.id == 'menu:new')
 	assert menus[2].items.any(it.id == 'menu:start')
 	assert menus[4].items.any(it.id == 'menu:runtime')
@@ -188,7 +188,7 @@ fn test_menu_groups_and_workspace_navigation_follow_concepts() {
 		app.menu_workspace_page(action)
 		assert int(app.workspace_page) == i
 		assert !app.show_runtime && !app.show_development && !app.show_component_install
-		current := app.workbench_menus(ui2.screen(workbench_paper, []))
+		current := app.workbench_menus(ui2.screen(workbench_colors.paper, []))
 		assert fixture_menu_item(current, action).checked
 		assert current[3].items.filter(it.checked).len == 1
 		assert app.snapshot == before

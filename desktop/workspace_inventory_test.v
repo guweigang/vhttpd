@@ -21,7 +21,7 @@ fn test_offline_inventory_remains_selectable_and_labels_its_source() ! {
 	assert inventory_test_element(rows, 'workspace_application_alpha')!.enabled
 	assert inventory_test_element(rows, 'workspace_application_beta')!.enabled
 	assert inventory_test_element(rows, 'workspace_application_details')!.text.contains('本地配置；运行状态未确认')
-	ui2.validate_element_tree(ui2.screen(workbench_paper, rows))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, rows))!
 }
 
 fn inventory_test_element(elements []ui2.Element, id string) !ui2.Element {

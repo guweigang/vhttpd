@@ -268,8 +268,8 @@ fn (mut app Workshop) handle_server_event(event string) bool {
 fn remote_servers_view(app &Workshop, width f64) []ui2.Element {
 	list_width := if width >= 620 { 174.0 } else { 144.0 }
 	detail_x := list_width + 24
-	mut rows := [label('server_title', '远端服务器', 0, 26, width - 120, 24, workbench_ink),
-		label('server_intro', '连接服务器 → 安装运行包 → 创建运行环境', 0, 62, width, 12, workbench_muted),
+	mut rows := [label('server_title', '远端服务器', 0, 26, width - 120, 24, workbench_colors.ink),
+		label('server_intro', '连接服务器 → 安装运行包 → 创建运行环境', 0, 62, width, 12, workbench_colors.muted),
 		button('remote_close', '返回运行环境', width - 100, 26, 100, false, true)]
 	busy := app.server_busy || app.server_snapshot.busy
 	mut selector := [button('server_new', '+ 添加服务器', 10, 10, list_width - 20, false, !busy)]
@@ -279,26 +279,26 @@ fn remote_servers_view(app &Workshop, width f64) []ui2.Element {
 		items << sidebar_button('server_select_${server.id}', server.name, ui2.rect(0, y, list_width - 20, 36), false, server.id == app.remote_id, !busy, .left)
 		y += 42
 	}
-	selector << ui2.scroll('server_list', ui2.rect(10, 58, list_width - 20, 335), workbench_sidebar, items)
+	selector << ui2.scroll('server_list', ui2.rect(10, 58, list_width - 20, 335), workbench_colors.sidebar, items)
 	selector << button('server_instances', '已运行实例…', 10, 410, list_width - 20, false, !busy)
-	rows << ui2.view('server_selector', ui2.rect(0, 106, list_width, 460), ui2.BoxStyle{bg: workbench_sidebar, radius: 8}, selector)
+	rows << ui2.view('server_selector', ui2.rect(0, 106, list_width, 460), ui2.BoxStyle{bg: workbench_colors.sidebar, radius: 8}, selector)
 	rows << ui2.view('server_detail', ui2.rect(detail_x, 106, width - detail_x, elements_height(server_detail_view(app, width - detail_x))), ui2.BoxStyle{transparent: true}, server_detail_view(app, width - detail_x))
 	return rows
 }
 
 fn server_detail_view(app &Workshop, width f64) []ui2.Element {
 	if app.remote_id == '' {
-		return [label('server_empty_title', '先添加一台服务器', 0, 18, width, 20, workbench_ink),
-			ui2.label('server_empty_help', '只需 SSH 地址和登录方式。\n服务器尚未安装 vhttpd 也可以添加，\n这里不需要 Admin Token。', ui2.rect(0, 60, width, 90), ui2.TextStyle{size: 13, color: workbench_muted, lines: 4})]
+		return [label('server_empty_title', '先添加一台服务器', 0, 18, width, 20, workbench_colors.ink),
+			ui2.label('server_empty_help', '只需 SSH 地址和登录方式。\n服务器尚未安装 vhttpd 也可以添加，\n这里不需要 Admin Token。', ui2.rect(0, 60, width, 90), ui2.TextStyle{size: 13, color: workbench_colors.muted, lines: 4})]
 	}
 	state := app.server_snapshot
 	active := state.server_id == app.remote_id
 	busy := app.server_busy || state.busy
 	connected := active && state.connected && app.server_form() == state.server
-	mut rows := [label('server_detail_title', if app.remote_servers.any(it.id == app.remote_id) { app.remote_name } else { ui_text('添加服务器') }, 0, 0, width, 20, workbench_ink)]
+	mut rows := [label('server_detail_title', if app.remote_servers.any(it.id == app.remote_id) { app.remote_name } else { ui_text('添加服务器') }, 0, 0, width, 20, workbench_colors.ink)]
 	if active && state.host_key.id != '' {
 		rows << state_notice('server_fingerprint', '首次连接 · 核对主机指纹', app.remote_host + '\n' + state.host_key.algorithm + '\n' + state.host_key.fingerprint, ui2.rect(0, 44, width, 145), 'warning')
-		rows << ui2.label('server_fingerprint_help', '通过管理员或可信渠道核对后再信任。取消不会保存信任记录。', ui2.rect(0, 204, width, 54), ui2.TextStyle{size: 12, color: workbench_muted, lines: 3})
+		rows << ui2.label('server_fingerprint_help', '通过管理员或可信渠道核对后再信任。取消不会保存信任记录。', ui2.rect(0, 204, width, 54), ui2.TextStyle{size: 12, color: workbench_colors.muted, lines: 3})
 		rows << button('server_trust', '信任并继续', 0, 274, 135, true, true)
 		rows << button('server_disconnect', '取消', 147, 274, 75, false, true)
 		return rows
@@ -307,31 +307,31 @@ fn server_detail_view(app &Workshop, width f64) []ui2.Element {
 	notice_height := if active && state.error { 100.0 } else { 76.0 }
 	rows << state_notice('server_state', if active && state.host_key_changed { '主机指纹变化 · 已阻止连接' } else if busy { '正在连接…' } else if connected { '已连接 · 下一步准备运行环境' } else if active && state.error { '连接未完成' } else { 'SSH 连接' }, message, ui2.rect(0, 38, width, notice_height), if active && state.host_key_changed { 'danger' } else if active && state.error { 'warning' } else if connected { 'good' } else { 'info' })
 	mut y := notice_height + 55
-	rows << ui2.label('server_connection_section', '连接地址', ui2.rect(0, y, width, 23), ui2.TextStyle{size: 13, bold: true, color: workbench_ink})
+	rows << ui2.label('server_connection_section', '连接地址', ui2.rect(0, y, width, 23), ui2.TextStyle{size: 13, bold: true, color: workbench_colors.ink})
 	y += 33
 	half := (width - 14) / 2
-	rows << label('server_name_label', '显示名称', 0, y, half, 11, workbench_muted)
-	rows << label('server_host_label', 'SSH 主机', half + 14, y, half, 11, workbench_muted)
+	rows << label('server_name_label', '显示名称', 0, y, half, 11, workbench_colors.muted)
+	rows << label('server_host_label', 'SSH 主机', half + 14, y, half, 11, workbench_colors.muted)
 	rows << input('server_name', app.remote_name, '例如：测试环境', 0, y + 20, half, !busy)
 	rows << input('server_host', app.remote_host, 'IP 或 Host 别名', half + 14, y + 20, half, !busy)
 	y += 73
-	rows << label('server_user_label', '用户（可选）', 0, y, half, 11, workbench_muted)
-	rows << label('server_port_label', '端口（可选）', half + 14, y, half, 11, workbench_muted)
+	rows << label('server_user_label', '用户（可选）', 0, y, half, 11, workbench_colors.muted)
+	rows << label('server_port_label', '端口（可选）', half + 14, y, half, 11, workbench_colors.muted)
 	rows << input('server_user', app.remote_user, '沿用 SSH 配置', 0, y + 20, half, !busy)
 	rows << input('server_port', app.remote_port, '沿用 SSH 配置', half + 14, y + 20, half, !busy)
 	y += 83
-	rows << ui2.label('server_auth_heading', '登录方式', ui2.rect(0, y, width, 23), ui2.TextStyle{size: 13, bold: true, color: workbench_ink})
+	rows << ui2.label('server_auth_heading', '登录方式', ui2.rect(0, y, width, 23), ui2.TextStyle{size: 13, bold: true, color: workbench_colors.ink})
 	y += 31
 	rows << choice_button('server_key', '密钥 / SSH 配置', 0, y, half, app.remote_auth == 'key', !busy)
 	rows << choice_button('server_password_mode', '密码', half + 14, y, half, app.remote_auth == 'password', !busy)
 	y += 49
 	if app.remote_auth == 'password' {
 		rows << ui2.Element{...input('server_password', app.remote_password, 'SSH 登录密码', 0, y, width, !busy), secure: true}
-		rows << label('server_password_help', '仅本次连接使用，不保存到磁盘。', 0, y + 44, width, 11, workbench_muted)
+		rows << label('server_password_help', '仅本次连接使用，不保存到磁盘。', 0, y + 44, width, 11, workbench_colors.muted)
 	} else {
 		rows << button('server_identity', '选择私钥…', 0, y, half, false, !busy)
 		rows << button('server_identity_clear', '使用 SSH 配置', half + 14, y, half, false, !busy)
-		rows << label('server_identity_path', if app.remote_identity == '' { ui_text('使用系统密钥和 ssh-agent。') } else { app.remote_identity }, 0, y + 44, width, 11, workbench_muted)
+		rows << label('server_identity_path', if app.remote_identity == '' { ui_text('使用系统密钥和 ssh-agent。') } else { app.remote_identity }, 0, y + 44, width, 11, workbench_colors.muted)
 	}
 	y += 86
 	rows << button('server_save', '保存', 0, y, 75, false, !busy)
@@ -339,14 +339,14 @@ fn server_detail_view(app &Workshop, width f64) []ui2.Element {
 	y += 48
 	rows << button('server_disconnect', '断开连接', 0, y, 105, false, active && (state.connected || state.busy))
 	rows << button('server_delete', '移除…', width - 78, y, 78, false, !busy && app.remote_servers.any(it.id == app.remote_id))
-	rows << label('server_keyboard_help', 'Tab 切换 · Shift+Tab 返回 · Return 连接', 0, y + 46, width, 10, workbench_muted)
+	rows << label('server_keyboard_help', 'Tab 切换 · Shift+Tab 返回 · Return 连接', 0, y + 46, width, 10, workbench_colors.muted)
 	return rows
 }
 
 fn runtime_settings_view(app &Workshop, width f64) []ui2.Element {
 	list_width := if width >= 620 { 174.0 } else { 144.0 }
 	x := list_width + 24
-	mut selector := [label('runtime_target_label', '目标主机', 10, 12, list_width - 20, 11, workbench_muted),
+	mut selector := [label('runtime_target_label', '目标主机', 10, 12, list_width - 20, 11, workbench_colors.muted),
 		sidebar_button('runtime_target_', host.local_environment_name(), ui2.rect(10, 40, list_width - 20, 34), false, app.runtime_server_id == '', app.can_switch_environment(), .left)]
 	mut y := 86.0
 	for server in app.remote_servers {
@@ -354,10 +354,10 @@ fn runtime_settings_view(app &Workshop, width f64) []ui2.Element {
 		y += 42
 	}
 	body := if app.show_runtime_downloads { runtime_downloads_view(app, width - x) } else if app.runtime_server_id == '' { runtime_local_view(app, width - x) } else { runtime_remote_view(app, width - x) }
-	return [label('runtime_page_heading', '运行包', 0, 26, width - 120, 24, workbench_ink),
-		label('runtime_page_help', '运行包提供 vhttpd 程序与依赖；运行环境保存配置、应用和数据。', 0, 62, width, 12, workbench_muted),
+	return [label('runtime_page_heading', '运行包', 0, 26, width - 120, 24, workbench_colors.ink),
+		label('runtime_page_help', '运行包提供 vhttpd 程序与依赖；运行环境保存配置、应用和数据。', 0, 62, width, 12, workbench_colors.muted),
 		button('runtime_close', '返回运行环境', width - 100, 26, 100, false, true),
-		ui2.view('runtime_selector', ui2.rect(0, 106, list_width, if y > 200 { y + 16 } else { 200.0 }), ui2.BoxStyle{bg: workbench_sidebar, radius: 8}, selector),
+		ui2.view('runtime_selector', ui2.rect(0, 106, list_width, if y > 200 { y + 16 } else { 200.0 }), ui2.BoxStyle{bg: workbench_colors.sidebar, radius: 8}, selector),
 		ui2.view('runtime_detail', ui2.rect(x, 106, width - x, elements_height(body)), ui2.BoxStyle{transparent: true}, body)]
 }
 

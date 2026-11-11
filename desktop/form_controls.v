@@ -7,15 +7,15 @@ import ui2
 // field ourselves and let its borderless popup fill the entire hit area.
 fn form_select(id string, title string, choices []string, frame ui2.Rect, enabled bool) ui2.Element {
 	box := ui2.BoxStyle{
-		bg: workbench_paper
+		bg: workbench_colors.paper
 		radius: 6
-		border_color: if enabled && workbench_focused_id() == id { workbench_accent } else { workbench_line }
+		border_color: if enabled && workbench_focused_id() == id { workbench_colors.accent } else { workbench_colors.line }
 		border_left: 1
 		border_right: 1
 		border_top: 1
 		border_bottom: 1
 	}
-	style := ui2.TextStyle{size: 13, color: if enabled { workbench_ink } else { workbench_muted }}
+	style := ui2.TextStyle{size: 13, color: if enabled { workbench_colors.ink } else { workbench_colors.muted }}
 	$if macos {
 		popup := ui2.Element{
 			...ui2.dropdown(id, title, choices, ui2.rect(10, 0, frame.width - 20, frame.height), ui2.BoxStyle{transparent: true}, style)

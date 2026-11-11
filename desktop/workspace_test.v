@@ -25,7 +25,7 @@ fn test_application_master_detail_keeps_both_selector_and_detail_visible() ! {
 		for width in [488.0,708.0] {
 			for id in ['bodytest','paseo'] {
 				assert app.handle_workspace_event('workspace_application_'+id)
-				root := ui2.screen(workbench_paper,runtime_workspace_view(mut app,width,740))
+				root := ui2.screen(workbench_colors.paper,runtime_workspace_view(mut app,width,740))
 				ui2.validate_element_tree(root)!
 				selector := root.children.filter(it.id=='workspace_app_selector')[0]
 				detail := root.children.filter(it.id=='workspace_app_detail')[0]
@@ -47,7 +47,7 @@ fn test_workspace_application_navigation_never_changes_process_owner() ! {
 	assert app.workspace_application == 'paseo'
 	assert app.snapshot.pid == 123 && app.selected == 0 && app.sequence == 0
 	rows := runtime_workspace_view(mut app, 560, 740)
-	root := ui2.screen(workbench_paper, rows)
+	root := ui2.screen(workbench_colors.paper, rows)
 	for action in ['start', 'stop', 'restart', 'remote_restart'] {
 		assert !workspace_has_action(root, action)
 	}
@@ -69,7 +69,7 @@ fn test_workspace_pages_validate_local_and_remote_multiapp_trees() ! {
 		for page in [WorkspacePage.environment, .applications, .relay, .configuration, .logs] {
 			app.workspace_page = page
 			for width in [488.0, 708.0] {
-				root := ui2.screen(workbench_paper, runtime_workspace_view(mut app, width, 740))
+				root := ui2.screen(workbench_colors.paper, runtime_workspace_view(mut app, width, 740))
 				ui2.validate_element_tree(root)!
 			}
 		}

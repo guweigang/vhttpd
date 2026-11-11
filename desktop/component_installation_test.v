@@ -18,7 +18,7 @@ fn component_text(element ui2.Element) string {
 fn test_new_installation_does_not_reuse_server_messages_or_old_deployments() {
 	for remote in [false, true] {
 		app := Workshop{ environment_id: if remote { 'bullsoft' } else { '' }, snapshot: host.Snapshot{ message: '上次操作成功' }, server_snapshot: host.ServerSnapshot{ connected: true, message: '远端连接库已刷新。', deployments: [host.ApplicationDeploymentStatus{ id: 'old', phase: 'completed' }] } }
-		root := ui2.screen(workbench_paper, component_installation_view(app, 488))
+		root := ui2.screen(workbench_colors.paper, component_installation_view(app, 488))
 		text := component_text(root)
 		assert !component_action(root, 'component_message')
 		assert !text.contains('操作状态')
@@ -50,7 +50,7 @@ fn test_installation_feedback_is_bound_to_its_operation() {
 
 fn test_installation_target_can_use_the_live_server_inventory() {
 	app := Workshop{ environment_id: 'bullsoft', component_target: 'bodytest', server_snapshot: host.ServerSnapshot{ projects: [host.RemoteProfile{ id: 'bodytest', name: 'bodytest' }] } }
-	text := component_text(ui2.screen(workbench_paper, component_installation_view(app, 488)))
+	text := component_text(ui2.screen(workbench_colors.paper, component_installation_view(app, 488)))
 	assert text.contains('/ bodytest')
 }
 
@@ -65,26 +65,26 @@ fn test_component_installation_preview_and_layout_are_bound_to_source() ! {
 		}
 		mut app := Workshop{ environment_id: if remote { 'server' } else { '' }, component_file: '/fixture/component.toml', component_name: 'demo', component_prepared_file: '/fixture/component.toml', component_prepared_name: 'demo', component_target: 'target', component_sequence: 7, component_action: 'preview', snapshot: host.Snapshot{ component_preview: preview, component_result: host.OperationResult{ sequence: 7, target: 'target', action: 'preview', preview_id: preview.id } }, server_snapshot: host.ServerSnapshot{ connected: true, deployment_preview: preview, component_result: host.OperationResult{ sequence: 7, target: 'target', action: 'preview', preview_id: preview.id } } }
 		for width in [488.0, 708.0] {
-			root := ui2.screen(workbench_paper, component_installation_view(app, width))
+			root := ui2.screen(workbench_colors.paper, component_installation_view(app, width))
 			ui2.validate_element_tree(root)!
 			assert component_action(root, 'component_commit')
 		}
 		app.component_preview_before = preview.id
-		assert !component_action(ui2.screen(workbench_paper, component_installation_view(app, 488)), 'component_commit')
+		assert !component_action(ui2.screen(workbench_colors.paper, component_installation_view(app, 488)), 'component_commit')
 		app.component_preview_before = ''
 		if remote {
 			app.server_snapshot = host.ServerSnapshot{...app.server_snapshot,deployment_preview:host.ApplicationDeploymentPreview{id:'unrelated-preview'}}
-			assert !component_action(ui2.screen(workbench_paper,component_installation_view(app,488)),'component_commit')
+			assert !component_action(ui2.screen(workbench_colors.paper,component_installation_view(app,488)),'component_commit')
 			app.server_snapshot = host.ServerSnapshot{...app.server_snapshot,deployment_preview:preview}
 		}
 		app.component_name = 'another-app'
-		assert !component_action(ui2.screen(workbench_paper, component_installation_view(app, 488)), 'component_commit')
+		assert !component_action(ui2.screen(workbench_colors.paper, component_installation_view(app, 488)), 'component_commit')
 	}
 }
 
 fn test_stopped_environment_still_offers_independent_install() ! {
 	mut app := Workshop{ projects: [host.Project{ name: 'empty', config_path: '/fixture/vhttpd.toml' }], workspace_page: .applications }
-	root := ui2.screen(workbench_paper, runtime_workspace_view(mut app, 488, 740))
+	root := ui2.screen(workbench_colors.paper, runtime_workspace_view(mut app, 488, 740))
 	ui2.validate_element_tree(root)!
 	assert component_action(root, 'component_open')
 }
@@ -92,7 +92,7 @@ fn test_stopped_environment_still_offers_independent_install() ! {
 fn test_new_application_form_uses_templates_instead_of_source_picker() ! {
  for remote in [false,true] {
   app:=Workshop{component_new:true,component_name:'demo',component_port:'0',component_template:'vjsx-http',environment_id:if remote {'server'} else {''}}
-  root:=ui2.screen(workbench_paper,component_installation_view(app,510))
+  root:=ui2.screen(workbench_colors.paper,component_installation_view(app,510))
   ui2.validate_element_tree(root)!
   assert component_action(root,'component_prepare')
   assert component_action(root,'component_template_http')

@@ -93,8 +93,8 @@ fn (mut app Workshop) poll_creation() {
 
 fn input(id string, value string, placeholder string, x f64, y f64, width f64, enabled bool) ui2.Element {
 	el := ui2.text_field_with_change_and_submit(id, 'form_submit', placeholder, value, ui2.rect(x, y, width, 36),
-		ui2.BoxStyle{ bg: workbench_paper, radius: 6, border_color: if ui2.focused_id() == id { workbench_accent } else { workbench_line }, border_left: 1, border_right: 1, border_top: 1, border_bottom: 1 },
-		ui2.TextStyle{ size: 13, color: workbench_ink }, 0)
+		ui2.BoxStyle{ bg: workbench_colors.paper, radius: 6, border_color: if ui2.focused_id() == id { workbench_colors.accent } else { workbench_colors.line }, border_left: 1, border_right: 1, border_top: 1, border_bottom: 1 },
+		ui2.TextStyle{ size: 13, color: workbench_colors.ink }, 0)
 	return ui2.Element{ ...el, enabled: enabled, accessibility_label: match id {
 		'new_name' { '项目名称' }
 		'new_parent' { '项目存放目录' }
@@ -112,10 +112,10 @@ fn input(id string, value string, placeholder string, x f64, y f64, width f64, e
 fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 	templates := host.project_templates()
 	mut elements := [
-		label('new_breadcrumb', '本地  /  新建运行环境', x, 25, width, 12, workbench_muted),
-		label('new_title', '新建运行环境', x, 73, width, 26, workbench_ink),
-		label('new_intro', '先创建基础运行环境，再从应用页独立安装应用。', x, 110, width, 13, workbench_muted),
-		label('template_label', '1  选择初始化方式', x, 154, width, 13, workbench_ink),
+		label('new_breadcrumb', '本地  /  新建运行环境', x, 25, width, 12, workbench_colors.muted),
+		label('new_title', '新建运行环境', x, 73, width, 26, workbench_colors.ink),
+		label('new_intro', '先创建基础运行环境，再从应用页独立安装应用。', x, 110, width, 13, workbench_colors.muted),
+		label('template_label', '1  选择初始化方式', x, 154, width, 13, workbench_colors.ink),
 	]
 	for i, template in templates {
 		y := 184.0 + f64(i) * 54
@@ -125,27 +125,27 @@ fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 		} else {
 			'○  ${template.title}'
 		}, ui2.rect(x, y, width, 34), ui2.BoxStyle{ bg: if selected {
-			workbench_soft_accent
+			workbench_colors.soft_accent
 		} else {
-			workbench_paper
-		}, radius: 6, border_color: if selected { workbench_accent } else { workbench_line }, border_left: 1, border_right: 1, border_top: 1, border_bottom: 1 }, if app.creating {
-			u32(0x596575)
+			workbench_colors.paper
+		}, radius: 6, border_color: if selected { workbench_colors.accent } else { workbench_colors.line }, border_left: 1, border_right: 1, border_top: 1, border_bottom: 1 }, if app.creating {
+			workbench_colors.disabled_foreground
 		} else if selected {
-			workbench_accent
+			workbench_colors.accent
 		} else {
-			workbench_ink
+			workbench_colors.ink
 		}, !app.creating, .left, 12)
 		elements << el
-		elements << label('template_description_${i}', template.description, x + 4, y + 35, width - 8, 12, workbench_muted)
+		elements << label('template_description_${i}', template.description, x + 4, y + 35, width - 8, 12, workbench_colors.muted)
 	}
-	elements << label('new_name_label', '2  填写项目名称', x, 356, width, 13, workbench_ink)
+	elements << label('new_name_label', '2  填写项目名称', x, 356, width, 13, workbench_colors.ink)
 	elements << input('new_name', app.new_name, 'my-vjsx-app', x, 383, width, !app.creating)
-	elements << label('new_parent_label', '3  选择存放目录', x, 431, width, 13, workbench_ink)
+	elements << label('new_parent_label', '3  选择存放目录', x, 431, width, 13, workbench_colors.ink)
 	elements << input('new_parent', app.new_parent, '选择已有文件夹', x, 458, width - 103, !app.creating)
 	elements << button('new_choose_parent', '选择目录…', x + width - 92, 458, 92, false, !app.creating)
 	target := os.join_path(app.new_parent, app.new_name.trim_space())
-	elements << label('new_target', '将创建：${target}', x, 500, width, 11, workbench_muted)
-	check := ui2.checkbox('new_auto_start', '创建后立即启动，并打开浏览器 Admin UI', app.new_auto_start, ui2.rect(x, 530, width, 26), ui2.TextStyle{ size: 13, color: workbench_ink })
+	elements << label('new_target', '将创建：${target}', x, 500, width, 11, workbench_colors.muted)
+	check := ui2.checkbox('new_auto_start', '创建后立即启动，并打开浏览器 Admin UI', app.new_auto_start, ui2.rect(x, 530, width, 26), ui2.TextStyle{ size: 13, color: workbench_colors.ink })
 	elements << ui2.Element{ ...check, enabled: !app.creating }
 	elements << button('new_cancel', '取消', x, if app.new_error != '' || app.creating { 688.0 } else { 614.0 }, 78, false, !app.creating)
 	elements << button('new_submit', if app.creating {
@@ -167,8 +167,8 @@ fn new_project_view(app &Workshop, x f64, width f64) []ui2.Element {
 	if app.new_error != '' || app.creating {
 		elements << state_notice('new_message', if app.new_error != '' { '创建未完成' } else { '正在创建项目' }, message, ui2.rect(x, 571, width, 104), if app.new_error != '' { 'danger' } else { 'info' })
 	} else {
-		elements << label('new_message', '自动选择可用端口；已有目录不会覆盖。', x, 571, width, 12, workbench_muted)
-		elements << label('new_keyboard_help', 'Tab 切换输入 · Return 创建 · Esc 返回', x, 588, width, 11, workbench_muted)
+		elements << label('new_message', '自动选择可用端口；已有目录不会覆盖。', x, 571, width, 12, workbench_colors.muted)
+		elements << label('new_keyboard_help', 'Tab 切换输入 · Return 创建 · Esc 返回', x, 588, width, 11, workbench_colors.muted)
 	}
 	return elements
 }

@@ -43,7 +43,7 @@ fn collect_focus_targets(element ui2.Element, scroll string, x f64, y f64, mut t
 			collect_focus_targets(child, scroll, x + element.frame.x, y + element.frame.y, mut targets)
 		}
 	}
-	if element.kind == .view && element.box.bg == workbench_soft_accent {
+	if element.kind == .view && element.box.bg == workbench_colors.soft_accent {
 		for i in start .. targets.len {
 			if focus_selection_group(targets[i].id) != '' { targets[i] = FocusTarget{...targets[i], selected: true} }
 		}
@@ -252,14 +252,14 @@ fn submit_active_form() {
 
 fn choice_button(id string, title string, x f64, y f64, width f64, selected bool, enabled bool) ui2.Element {
 	return painted_button(id, title, ui2.rect(x, y, width, 34), ui2.BoxStyle{
-		bg: if selected { workbench_soft_accent } else { workbench_paper }
+		bg: if selected { workbench_colors.soft_accent } else { workbench_colors.paper }
 		radius: 6
-		border_color: if selected { workbench_accent } else { workbench_line }
+		border_color: if selected { workbench_colors.accent } else { workbench_colors.line }
 		border_left: 1
 		border_right: 1
 		border_top: 1
 		border_bottom: 1
-	}, if !enabled { u32(0x596575) } else if selected { workbench_accent } else { workbench_ink }, enabled, .center, 6)
+	}, if !enabled { workbench_colors.disabled_foreground } else if selected { workbench_colors.accent } else { workbench_colors.ink }, enabled, .center, 6)
 }
 
 // Retry only on the UI thread and only while the destination field remains on

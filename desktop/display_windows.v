@@ -34,7 +34,7 @@ fn windows_pixel_layout(original ui2.Element, scale f64) ui2.Element {
 		element = ui2.Element{...element, frame: ui2.rect(element.frame.x, element.frame.y, element.frame.width, 36), children: captions}
 	}
 	if element.kind == .view && element.button_behavior && element.enabled && ui2.focused_id() == element.id {
-		element = ui2.Element{...element, box: ui2.BoxStyle{...element.box, radius: 6, border_color: workbench_accent, border_left: 2, border_top: 2, border_right: 2, border_bottom: 2}}
+		element = ui2.Element{...element, box: ui2.BoxStyle{...element.box, radius: 6, border_color: workbench_colors.accent, border_left: 2, border_top: 2, border_right: 2, border_bottom: 2}}
 	}
 	mut children := []ui2.Element{cap: element.children.len}
 	for child in element.children { children << windows_pixel_layout(child, scale) }
@@ -58,7 +58,7 @@ fn windows_pixel_layout(original ui2.Element, scale f64) ui2.Element {
 		...element
 		frame:        ui2.rect(element.frame.x * scale, element.frame.y * scale, element.frame.width * scale, element.frame.height * scale)
 		text_style:   ui2.TextStyle{ ...element.text_style, size: pixel_size * 0.75, font_family: family }
-		box:          ui2.BoxStyle{ ...element.box, bg: if element.kind == .checkbox { workbench_paper } else { element.box.bg }, radius: element.box.radius * scale, border_left: element.box.border_left * scale, border_top: element.box.border_top * scale, border_right: element.box.border_right * scale, border_bottom: element.box.border_bottom * scale }
+		box:          ui2.BoxStyle{ ...element.box, bg: if element.kind == .checkbox { workbench_colors.paper } else { element.box.bg }, radius: element.box.radius * scale, border_left: element.box.border_left * scale, border_top: element.box.border_top * scale, border_right: element.box.border_right * scale, border_bottom: element.box.border_bottom * scale }
 		padding_left: (if element.kind in [.text_field, .text_area] && element.padding_left < 10 { 10.0 } else { element.padding_left }) * scale
 		padding:      element.padding * scale
 		children:     children
@@ -80,7 +80,7 @@ fn windows_pixel_layout(original ui2.Element, scale f64) ui2.Element {
 	border := if focused { 2.0 * scale } else { scale }
 	return ui2.Element{
 		...ui2.view('windows_field_${element.id}', ui2.rect(adapted.frame.x, adapted.frame.y, adapted.frame.width, height),
-			ui2.BoxStyle{...adapted.box, radius: 6 * scale, border_color: if focused { workbench_accent } else { element.box.border_color }, border_left: border, border_top: border, border_right: border, border_bottom: border}, [field])
+			ui2.BoxStyle{...adapted.box, radius: 6 * scale, border_color: if focused { workbench_colors.accent } else { element.box.border_color }, border_left: border, border_top: border, border_right: border, border_bottom: border}, [field])
 		enabled: element.enabled
 		hidden: element.hidden
 		clickable: !element.readonly
@@ -102,7 +102,7 @@ fn windows_brand_asset(path string) string {
 	return if percent != 100 && os.is_file(candidate) { candidate } else { path }
 }
 
-fn C.vhttpd_workbench_choose_environment(voidptr, voidptr, int, int, int, int) int
+fn C.vhttpd_workbench_choose_environment(voidptr, voidptr, int, int, int, int, u32, u32, u32, u32, u32) int
 
 fn (mut app Workshop) choose_windows_environment() {
 	app.environment_menu = ui2.DropdownMenuState{}
@@ -120,7 +120,9 @@ fn (mut app Workshop) choose_windows_environment() {
 		}
 	}
 	scale := windows_display_scale()
-	chosen := C.vhttpd_workbench_choose_environment(ui2.native_window_handle(), labels.data, labels.len, current, int(16 * scale), int(122 * scale))
+	chosen := C.vhttpd_workbench_choose_environment(ui2.native_window_handle(), labels.data, labels.len, current, int(16 * scale), int(122 * scale),
+		workbench_colors.paper, workbench_colors.ink, workbench_colors.accent, workbench_colors.soft_accent,
+		workbench_colors.line)
 	if chosen > 0 && chosen <= choices.len && app.can_switch_environment() {
 		app.reload_remote_profiles()
 		app.open_environment_projects(choices[chosen - 1].id)

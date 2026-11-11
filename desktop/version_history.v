@@ -38,29 +38,29 @@ fn version_history_view(app &Workshop, width f64) []ui2.Element {
 	if app.show_history_diff { return history_comparison_view(app, width) }
 	versions := app.snapshot.recovery_history
 	mut rows := [
-		label('history_breadcrumb', app.projects[app.selected].name + ui_text(' / 已生效版本'), 0, 25, width, 12, workbench_muted),
-		label('history_title', ui_text('版本历史'), 0, 65, width, 24, workbench_ink),
+		label('history_breadcrumb', app.projects[app.selected].name + ui_text(' / 已生效版本'), 0, 25, width, 12, workbench_colors.muted),
+		label('history_title', ui_text('版本历史'), 0, 65, width, 24, workbench_colors.ink),
 		button('history_close', ui_text('返回工作台'), 0, 108, 125, false, true),
-		label('history_help', ui_text('查看变化只读 · 恢复前可预览'), 143, 116, width - 143, 11, workbench_muted),
-		label('history_retention', ui_text('只记录已确认生效的配置，自动保留最近最多 20 个版本。'), 0, 157, width, 11, workbench_muted),
+		label('history_help', ui_text('查看变化只读 · 恢复前可预览'), 143, 116, width - 143, 11, workbench_colors.muted),
+		label('history_retention', ui_text('只记录已确认生效的配置，自动保留最近最多 20 个版本。'), 0, 157, width, 11, workbench_colors.muted),
 	]
 	mut y := 190.0
 	for v in versions {
-		rows << label('version_' + v.id, ui_text('版本 ${v.number} · ') + v.confirmed_at + if v.latest { ui_text(' · 最近生效') } else { '' }, 0, y, width, 13, workbench_ink)
-		rows << label('version_state_' + v.id, ui_text('${v.file_count} 个配置来源 · ') + if v.saved { ui_text('已保存') } else { ui_text('尚未保存') }, 0, y + 23, width, 10, workbench_muted)
+		rows << label('version_' + v.id, ui_text('版本 ${v.number} · ') + v.confirmed_at + if v.latest { ui_text(' · 最近生效') } else { '' }, 0, y, width, 13, workbench_colors.ink)
+		rows << label('version_state_' + v.id, ui_text('${v.file_count} 个配置来源 · ') + if v.saved { ui_text('已保存') } else { ui_text('尚未保存') }, 0, y + 23, width, 10, workbench_colors.muted)
 		rows << button('history_before_' + v.id, if app.history_before == v.id { ui_text('对比基准 ✓') } else { ui_text('设为对比基准') }, 0, y + 44, 128, false, true)
 		rows << button('history_view_' + v.id, ui_text('查看变化'), 140, y + 44, 112, false, true)
 		rows << button('history_restore_' + v.id, if !history_can_restore(app, v.id) && v.latest { ui_text('当前已生效') } else { ui_text('恢复此版本') }, 264, y + 44, 148, false, history_can_restore(app, v.id))
 		y += 94
 	}
-	if versions.len == 0 { rows << label('history_empty', ui_text('首次启动并确认配置生效后，会自动记录版本。'), 0, y, width, 12, workbench_muted) }
+	if versions.len == 0 { rows << label('history_empty', ui_text('首次启动并确认配置生效后，会自动记录版本。'), 0, y, width, 12, workbench_colors.muted) }
 	return rows
 }
 
 fn history_comparison_view(app &Workshop, width f64) []ui2.Element {
 	mut rows := [
-		label('compare_breadcrumb', app.projects[app.selected].name + ui_text(' / 版本历史'), 0, 25, width, 12, workbench_muted),
-		label('compare_title', ui_text('版本变化'), 0, 65, width, 24, workbench_ink),
+		label('compare_breadcrumb', app.projects[app.selected].name + ui_text(' / 版本历史'), 0, 25, width, 12, workbench_colors.muted),
+		label('compare_title', ui_text('版本变化'), 0, 65, width, 24, workbench_colors.ink),
 		button('history_list', ui_text('返回版本列表'), 0, 108, 125, false, true),
 		button('history_restore_' + app.history_before, history_restore_title(app, app.history_before), 137, 108, 150, false, history_can_restore(app, app.history_before)),
 		button('history_restore_' + app.history_after, history_restore_title(app, app.history_after), 299, 108, 150, false, history_can_restore(app, app.history_after)),
@@ -80,7 +80,7 @@ fn history_comparison_view(app &Workshop, width f64) []ui2.Element {
 	} else {
 		lines << if app.snapshot.message != '' { ui_text(app.snapshot.message) } else { ui_text('正在读取版本变化…') }
 	}
-	body := ui2.text_area('history_diff', lines.join('\n'), ui2.rect(0, 159, width, 480), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
+	body := ui2.text_area('history_diff', lines.join('\n'), ui2.rect(0, 159, width, 480), ui2.BoxStyle{bg: workbench_colors.sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_colors.ink, font_family: workbench_detail_font()})
 	rows << ui2.Element{...body, readonly: true}
 	return rows
 }

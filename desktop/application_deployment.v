@@ -82,19 +82,19 @@ fn (mut app Workshop) handle_deployment_event(event string) bool {
 
 fn application_deployment_view(app &Workshop, width f64) []ui2.Element {
 	mut rows := [
-		label('deploy_title', '部署工程到运行环境', 0, 30, width - 120, 24, workbench_ink),
+		label('deploy_title', '部署工程到运行环境', 0, 30, width - 120, 24, workbench_colors.ink),
 		button('deploy_close', '返回运行环境', width - 110, 29, 110, false, !app.server_busy),
-		label('deploy_help', '当前按整个工程部署，包含其中全部应用；不是单个应用的独立发布。', 0, 72, width, 12, workbench_muted),
+		label('deploy_help', '当前按整个工程部署，包含其中全部应用；不是单个应用的独立发布。', 0, 72, width, 12, workbench_colors.muted),
 	]
 	mut y := 115.0
 	enabled := !app.server_busy && !app.server_snapshot.busy && !app.deployment_running()
-	rows << label('deploy_source_title', '源工程 · 源码、静态资源与 include', 0, y, width, 14, workbench_ink)
+	rows << label('deploy_source_title', '源工程 · 源码、静态资源与 include', 0, y, width, 14, workbench_colors.ink)
 	y += 34
 	for i, p in app.projects {
 		rows << sidebar_button('deploy_local_${i}', p.name, ui2.rect(0, y, width, 34), false, i == app.deployment_local, enabled, .left)
 		y += 42
 	}
-	rows << label('deploy_target_title', '目标运行环境 · 共用 vhttpd 进程', 0, y + 8, width, 14, workbench_ink)
+	rows << label('deploy_target_title', '目标运行环境 · 共用 vhttpd 进程', 0, y + 8, width, 14, workbench_colors.ink)
 	y += 46
 	for p in app.remote_profiles {
 		rows << sidebar_button('deploy_target_${p.id}', p.name + ' · ' + p.ssh_host, ui2.rect(0, y, width, 34), false, p.id == app.deployment_remote, enabled, .left)
@@ -123,11 +123,11 @@ fn application_deployment_view(app &Workshop, width f64) []ui2.Element {
 	preview := app.server_snapshot.deployment_preview
 	if preview.id != '' && targets.len == 1 && preview.config_path == targets[0].config_path {
 		changed := preview.files.filter(it.action != 'unchanged')
-		rows << label('deploy_preview_title', '整项目预检通过 · ${changed.len} 个文件变更', 0, y, width, 16, workbench_ink)
+		rows << label('deploy_preview_title', '整项目预检通过 · ${changed.len} 个文件变更', 0, y, width, 16, workbench_colors.ink)
 		y += 34
 		for i, file in changed {
 			if i >= 40 {
-				rows << label('deploy_more', '其余 ${changed.len - 40} 个文件同属本次部署包。', 0, y, width, 12, workbench_muted)
+				rows << label('deploy_more', '其余 ${changed.len - 40} 个文件同属本次部署包。', 0, y, width, 12, workbench_colors.muted)
 				y += 30
 				break
 			}
@@ -136,10 +136,10 @@ fn application_deployment_view(app &Workshop, width f64) []ui2.Element {
 				'replace' { '替换' }
 				'delete' { '移除' }
 				else { '未变更' }
-			}) + ' · ' + file.path, 0, y, width, 12, workbench_ink)
+			}) + ' · ' + file.path, 0, y, width, 12, workbench_colors.ink)
 			y += 28
 		}
-		rows << label('deploy_preserved', '远端环境字段保留；凭据不在预览中展示。', 0, y + 4, width, 12, workbench_muted)
+		rows << label('deploy_preserved', '远端环境字段保留；凭据不在预览中展示。', 0, y + 4, width, 12, workbench_colors.muted)
 		y += 42
 		rows << button('deploy_commit', '部署并重启', 0, y, 175, true, enabled)
 		y += 52
@@ -162,7 +162,7 @@ fn application_deployment_view(app &Workshop, width f64) []ui2.Element {
 					host.application_deployment_hint(status.error)
 				}, ui2.rect(0, y, width, 110), tone)
 				y += 128
-				rows << ui2.label('deployment_log', '远端日志：' + status.config_path.all_before_last('/') + '/.desktop-deployments/' + status.id + '/runtime.log', ui2.rect(0, y, width, 60), ui2.TextStyle{ size: 11, color: workbench_muted, lines: 3 })
+				rows << ui2.label('deployment_log', '远端日志：' + status.config_path.all_before_last('/') + '/.desktop-deployments/' + status.id + '/runtime.log', ui2.rect(0, y, width, 60), ui2.TextStyle{ size: 11, color: workbench_colors.muted, lines: 3 })
 				y += 72
 			}
 		}

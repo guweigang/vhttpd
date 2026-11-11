@@ -191,7 +191,7 @@ fn component_installation_view(app &Workshop, width f64) []ui2.Element {
 	}
 	busy := app.server_busy || app.server_snapshot.busy || app.snapshot.sequence < app.sequence || app.deployment_running()
 	mut rows := [
-		label('component_title', if app.component_adopt_engines.len > 0 {'迁移旧安装身份'} else if app.component_installation_id != '' {'更新应用'} else if app.component_new {'新建应用'} else {'安装独立应用'}, 0, 30, width - 130, 24, workbench_ink),
+		label('component_title', if app.component_adopt_engines.len > 0 {'迁移旧安装身份'} else if app.component_installation_id != '' {'更新应用'} else if app.component_new {'新建应用'} else {'安装独立应用'}, 0, 30, width - 130, 24, workbench_colors.ink),
 		button('component_close', '返回应用', width - 110, 29, 110, false, !busy),
 	]
 	mut target_name := os.file_name(os.dir(app.component_target))
@@ -210,7 +210,7 @@ fn component_installation_view(app &Workshop, width f64) []ui2.Element {
 			}
 		}
 	}
-	rows << label('component_target_label', ui_text('目标运行环境：') + app.display_environment_name() + ' / ' + target_name, 0, 80, width, 12, workbench_muted)
+	rows << label('component_target_label', ui_text('目标运行环境：') + app.display_environment_name() + ' / ' + target_name, 0, 80, width, 12, workbench_colors.muted)
 	rows << state_notice('component_scope', if app.component_installation_id != '' {'核对绑定 → 预览变更 → 更新应用'} else if app.component_new {'选择模板 → 预览改动 → 创建应用'} else {'选择应用 → 预览改动 → 确认安装'}, if app.component_installation_id != '' {'按应用 UUID 和安装 UUID 更新已绑定副本。保留远端监听地址、环境资源、私有配置和未纳入部署的数据；已部署文件发生外部修改时将拒绝覆盖。'} else if app.component_new {'自动生成应用源码和组件配置，并安装到当前运行环境；无需另建进程或管理入口。'} else {'选择包含 component.toml 的应用工程。预览时会为旧工程创建 app.json；安装只新增代码和 include，资源沿用目标运行环境。'}, ui2.rect(0, 110, width, 115), 'info')
 	if app.component_new {
         rows << choice_button('component_template_http','HTTP 入门',0,250,(width-12)/2,app.component_template=='vjsx-http',!busy)
@@ -219,16 +219,16 @@ fn component_installation_view(app &Workshop, width f64) []ui2.Element {
         rows << choice_button('component_template_pipeline','TOML Pipeline',0,288,third,app.component_template=='pipeline',!busy)
         rows << choice_button('component_template_wechat','微信云函数',third+12,288,third,app.component_template=='wechat-cloud-functions',!busy)
         rows << choice_button('component_template_codexbot','Codex Bot',2*(third+12),288,third,app.component_template=='codexbot',!busy)
-        rows << label('component_port_label','应用端口（0 自动选择）',0,330,width-120,12,workbench_muted)
+        rows << label('component_port_label','应用端口（0 自动选择）',0,330,width-120,12,workbench_colors.muted)
         rows << input('component_port',app.component_port,'0',width-100,323,100,!busy)
     } else {
-	rows << label('component_file_label', '应用工程中的 app.json 或组件配置', 0, 250, width, 13, workbench_ink)
+	rows << label('component_file_label', '应用工程中的 app.json 或组件配置', 0, 250, width, 13, workbench_colors.ink)
 	rows << input('component_file', app.component_file, '/path/to/application/component.toml', 0, 278, width - 110, !busy && app.component_installation_id == '')
 	rows << button('component_choose', '选择文件…', width - 100, 278, 100, false, !busy && app.component_installation_id == '')
 
     }
 	offset := if app.component_new { 38 } else { 0 }
-	rows << label('component_name_label', '安装目录名（1–64 位字母、数字、短横线、下划线）', 0, 332 + offset, width, 13, workbench_ink)
+	rows << label('component_name_label', '安装目录名（1–64 位字母、数字、短横线、下划线）', 0, 332 + offset, width, 13, workbench_colors.ink)
 	rows << input('component_name', app.component_name, 'my-app', 0, 360 + offset, width, !busy && app.component_installation_id == '')
 	rows << button('component_prepare', if busy {
 		'正在处理…'
@@ -243,11 +243,11 @@ fn component_installation_view(app &Workshop, width f64) []ui2.Element {
 	}
 	if app.component_preview_ready() {
 		changed := preview.files.filter(it.action != 'unchanged')
-		rows << label('component_preview_heading', if app.component_installation_id != '' {'更新预览 · ${changed.len} 个文件变更'} else {'安装预览 · ${changed.len} 个文件变更'}, 0, y, width, 16, workbench_ink)
+		rows << label('component_preview_heading', if app.component_installation_id != '' {'更新预览 · ${changed.len} 个文件变更'} else {'安装预览 · ${changed.len} 个文件变更'}, 0, y, width, 16, workbench_colors.ink)
 		y += 36
 		for i, file in changed {
 			if i >= 40 {
-				rows << label('component_more', '其余 ${changed.len - 40} 个文件随应用一起安装。', 0, y, width, 12, workbench_muted)
+				rows << label('component_more', '其余 ${changed.len - 40} 个文件随应用一起安装。', 0, y, width, 12, workbench_colors.muted)
 				y += 30
 				break
 			}
@@ -257,7 +257,7 @@ fn component_installation_view(app &Workshop, width f64) []ui2.Element {
                 '删除 · '
 			} else {
 				'更新 · '
-			}) + file.path, 0, y, width, 12, workbench_ink)
+			}) + file.path, 0, y, width, 12, workbench_colors.ink)
 			y += 28
 		}
 		rows << button('component_commit', if app.component_installation_id != '' {'更新并应用'} else {'安装并应用'}, 0, y + 16, 160, true, !busy)

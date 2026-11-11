@@ -28,13 +28,13 @@ __global language_audit_width = 708.0
 fn language_audit_window() ui2.Element {
 	pages:=language_page_fixtures(language_audit_width)
 	page:=pages[language_audit_index]
-	content:=workbench_text_layout(localize_element(workbench_font_layout(ui2.screen(workbench_paper,page.rows))))
-	return ui2.screen(workbench_paper,[
+	content:=workbench_text_layout(localize_element(workbench_font_layout(ui2.screen(workbench_colors.paper,page.rows))))
+	return ui2.screen(workbench_colors.paper,[
 		ui2.dropdown('audit_page',page.name,pages.map(it.name),ui2.rect(16,12,300,36),ui2.BoxStyle{},ui2.TextStyle{size:14,font_family:workbench_ui_font}),
 		button('audit_language',if workbench_language=='en' {'中文'} else {'English'},328,12,96,false,true),
 		button('audit_width',if language_audit_width==708 {'488 px'} else {'708 px'},436,12,96,false,true),
 		button('audit_next','Next →',544,12,140,true,true),
-		ui2.scroll('audit_content',ui2.rect(16,64,language_audit_width,ui2.bounds().height-80),workbench_paper,content.children),
+		ui2.scroll('audit_content',ui2.rect(16,64,language_audit_width,ui2.bounds().height-80),workbench_colors.paper,content.children),
 	])
 }
 
@@ -183,7 +183,7 @@ fn test_page_language_and_text_bounds_audit() ! {
 		workbench_language=language
 		for width in [488.0,708.0] {
 			for page in language_page_fixtures(width) {
-				root:=workbench_text_layout(localize_element(workbench_font_layout(ui2.screen(workbench_paper,page.rows))))
+				root:=workbench_text_layout(localize_element(workbench_font_layout(ui2.screen(workbench_colors.paper,page.rows))))
 				language_scan_page(root,page.name,language,width,mut issues)
 				count++
 			}

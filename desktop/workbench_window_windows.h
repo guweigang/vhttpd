@@ -118,7 +118,13 @@ typedef struct {
     HFONT font;
     double scale;
     UINT width;
+    COLORREF foreground, accent, selection, hover;
+    HBRUSH background_brush;
 } VhttpdEnvironmentMenu;
+
+static COLORREF vhttpd_workbench_rgb(unsigned int color) {
+    return RGB((color >> 16) & 255, (color >> 8) & 255, color & 255);
+}
 
 static LRESULT CALLBACK vhttpd_workbench_environment_proc(HWND hwnd, UINT message,
         WPARAM wparam, LPARAM lparam, UINT_PTR id, DWORD_PTR data) {
@@ -142,17 +148,15 @@ static LRESULT CALLBACK vhttpd_workbench_environment_proc(HWND hwnd, UINT messag
                 high_contrast = (contrast.dwFlags & HCF_HIGHCONTRASTON) != 0;
             BOOL hover = (item->itemState & ODS_SELECTED) != 0;
             BOOL checked = (item->itemState & ODS_CHECKED) != 0;
-            COLORREF background = high_contrast ? GetSysColor(COLOR_MENU) : RGB(255,255,255);
-            COLORREF foreground = high_contrast ? GetSysColor(COLOR_MENUTEXT) : RGB(23,32,42);
-            COLORREF accent = high_contrast ? GetSysColor(COLOR_HIGHLIGHTTEXT) : RGB(37,99,235);
-            HBRUSH paper = CreateSolidBrush(background);
-            FillRect(item->hDC, &item->rcItem, paper);
-            DeleteObject(paper);
+            COLORREF foreground = high_contrast ? GetSysColor(COLOR_MENUTEXT) : style->foreground;
+            COLORREF accent = high_contrast ? GetSysColor(COLOR_HIGHLIGHTTEXT) : style->accent;
+            FillRect(item->hDC, &item->rcItem,
+                high_contrast ? GetSysColorBrush(COLOR_MENU) : style->background_brush);
             RECT row = item->rcItem;
             InflateRect(&row, -(int)(4*scale), -(int)(2*scale));
             if (hover || checked) {
                 COLORREF fill = high_contrast ? GetSysColor(COLOR_HIGHLIGHT) :
-                    (hover ? RGB(224,234,255) : RGB(235,241,255));
+                    (checked ? style->selection : style->hover);
                 HBRUSH brush = CreateSolidBrush(fill);
                 HGDIOBJ previous_brush = SelectObject(item->hDC, brush);
                 HGDIOBJ previous_pen = SelectObject(item->hDC, GetStockObject(NULL_PEN));
@@ -189,13 +193,23 @@ static LRESULT CALLBACK vhttpd_workbench_environment_proc(HWND hwnd, UINT messag
 }
 
 static int vhttpd_workbench_choose_environment(void *window, void *label_table,
-        int count, int selected, int x, int y) {
+        int count, int selected, int x, int y,
+        unsigned int background, unsigned int foreground, unsigned int accent, unsigned int selection, unsigned int hover) {
     HWND owner = (HWND)window;
     const wchar_t *const *labels = (const wchar_t *const *)label_table;
     if (!owner || !IsWindow(owner) || !labels || count <= 0) return 0;
     HMENU menu = CreatePopupMenu();
     if (!menu) return 0;
     VhttpdEnvironmentMenu style = {0};
+    style.foreground = vhttpd_workbench_rgb(foreground);
+    style.accent = vhttpd_workbench_rgb(accent);
+    style.selection = vhttpd_workbench_rgb(selection);
+    style.hover = vhttpd_workbench_rgb(hover);
+    style.background_brush = CreateSolidBrush(vhttpd_workbench_rgb(background));
+    if (!style.background_brush) {
+        DestroyMenu(menu);
+        return 0;
+    }
     style.scale = vhttpd_workbench_windows_scale();
     style.font = CreateFontW(-(int)(14*style.scale),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
         DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,
@@ -221,6 +235,7 @@ static int vhttpd_workbench_choose_environment(void *window, void *label_table,
     if (!SetWindowSubclass(owner,vhttpd_workbench_environment_proc,74,(DWORD_PTR)&style)) {
         if (style.font) DeleteObject(style.font);
         DestroyMenu(menu);
+        DeleteObject(style.background_brush);
         return 0;
     }
     BOOL valid = TRUE;
@@ -238,7 +253,9 @@ static int vhttpd_workbench_choose_environment(void *window, void *label_table,
     }
     MENUINFO info = {sizeof(MENUINFO)};
     info.fMask = MIM_BACKGROUND | MIM_STYLE;
-    info.hbrBack = (HBRUSH)GetStockObject(WHITE_BRUSH);
+    HIGHCONTRASTW contrast = {sizeof(HIGHCONTRASTW)};
+    info.hbrBack = SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0)
+        && (contrast.dwFlags & HCF_HIGHCONTRASTON) ? GetSysColorBrush(COLOR_MENU) : style.background_brush;
     info.dwStyle = MNS_NOCHECK;
     SetMenuInfo(menu,&info);
     POINT anchor = {x,y};
@@ -247,7 +264,11 @@ static int vhttpd_workbench_choose_environment(void *window, void *label_table,
     UINT chosen = valid ? TrackPopupMenuEx(menu,TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
         anchor.x,anchor.y,owner,NULL) : 0;
     RemoveWindowSubclass(owner,vhttpd_workbench_environment_proc,74);
+    info.fMask = MIM_BACKGROUND;
+    info.hbrBack = NULL;
+    SetMenuInfo(menu, &info);
     DestroyMenu(menu);
+    DeleteObject(style.background_brush);
     if (style.font) DeleteObject(style.font);
     PostMessageW(owner,WM_NULL,0,0);
     return chosen <= (UINT)count ? (int)chosen : 0;

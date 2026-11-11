@@ -12,7 +12,7 @@ fn language_layout_fonts() ! {
 fn test_long_localized_labels_move_following_rows_and_preserve_values() ! {
 	language_layout_fonts()!
 	root:=ui2.view('form',ui2.rect(0,0,220,80),ui2.BoxStyle{},[
-		label('intro','Choose an environment before installing apps and configuring shared resources.',0,0,200,14,workbench_ink),
+		label('intro','Choose an environment before installing apps and configuring shared resources.',0,0,200,14,workbench_colors.ink),
 		input('value','原始配置值','',0,24,200,true),
 	])
 	result:=workbench_text_layout(root)
@@ -29,7 +29,7 @@ fn test_single_line_buttons_wrap_as_controls_and_preserve_hit_areas() ! {
 	root:=ui2.view('actions',ui2.rect(0,0,240,90),ui2.BoxStyle{},[
 		button('long','Manage runtime packages',0,0,100,false,true),
 		button('short','Back',112,0,100,false,false),
-		label('after','Next row',0,42,200,14,workbench_ink),
+		label('after','Next row',0,42,200,14,workbench_colors.ink),
 	])
 	result:=workbench_text_layout(root)
 	first:=result.children[0]
@@ -54,7 +54,7 @@ fn test_mixed_cjk_text_wraps_without_broken_utf8_or_growing_log_editors() ! {
 	for line in wrapped.text.split('\n') {assert workbench_label_width(line,style)<=110}
 	logs:=workspace_text('raw_logs','运行环境\nOriginal output 原始日志',0,200,70)
 	assert workbench_text_layout(logs)==logs
-	name:=label('workspace_title','这是用户填写的运行环境名称',0,0,60,14,workbench_ink)
+	name:=label('workspace_title','这是用户填写的运行环境名称',0,0,60,14,workbench_colors.ink)
 	assert workbench_text_layout(name)==name
 }
 

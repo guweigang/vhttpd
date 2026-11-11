@@ -151,7 +151,7 @@ fn (mut app Workshop) handle_workspace_event(event string) bool {
 }
 
 fn workspace_text(id string, text string, y f64, width f64, height f64) ui2.Element {
-	field := ui2.text_area(id, text, ui2.rect(0, y, width, height), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_ink, font_family: workbench_detail_font() })
+	field := ui2.text_area(id, text, ui2.rect(0, y, width, height), ui2.BoxStyle{ bg: workbench_colors.sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_colors.ink, font_family: workbench_detail_font() })
 	return ui2.Element{ ...field, readonly: true }
 }
 
@@ -159,8 +159,8 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 	remote := app.environment_id != ''
 	data := app.workspace_data()
 	mut rows := [
-		label('workspace_location', app.environment_name() + '  /  vhttpd 运行环境', 0, 24, width, 12, workbench_muted),
-		label('workspace_title', app.workspace_name(), 0, 60, width, 26, workbench_ink),
+		label('workspace_location', app.environment_name() + '  /  vhttpd 运行环境', 0, 24, width, 12, workbench_colors.muted),
+		label('workspace_title', app.workspace_name(), 0, 60, width, 26, workbench_colors.ink),
 	]
 	for i, item in ['environment', 'applications', 'relay', 'configuration', 'logs'] {
 		title := ui_text_in('workspace-tab',['运行环境', '应用', 'Relay', '配置', '日志'][i])
@@ -184,7 +184,7 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 				if !ready {
 					rows << button('remote_start', '启动运行环境', 310, 338, 150, false, app.can_start_remote_project())
 				}
-				rows << label('workspace_process', 'vhttpd ' + app.remote_snapshot.instance.version + ' · ' + app.remote_snapshot.instance.platform, 0, 400, width, 13, workbench_ink)
+				rows << label('workspace_process', 'vhttpd ' + app.remote_snapshot.instance.version + ' · ' + app.remote_snapshot.instance.platform, 0, 400, width, 13, workbench_colors.ink)
 			} else {
 				rows << button('start', '启动运行环境', 0, 290, 150, true, app.local_command_enabled('start'))
 				rows << button(if app.snapshot.can_force { 'force' } else { 'stop' }, '停止运行环境', 162, 290, 150, false, app.local_command_enabled(if app.snapshot.can_force {
@@ -199,7 +199,7 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 					'PID ' + app.snapshot.pid.str() + ' · ' + app.snapshot.executor
 				} else {
 					'进程尚未启动'
-				}, 0, 400, width, 13, workbench_ink)
+				}, 0, 400, width, 13, workbench_colors.ink)
 			}
 			rows << label('workspace_app_count', if data.applications_available() {
 				if data.from_configuration { '已安装 ' + data.applications.len.str() + ' 个应用 · 本地配置，运行状态未确认' } else { '已加载 ' + data.applications.len.str() + ' 个应用 · ' + data.checked_at + ' 更新' }
@@ -209,9 +209,9 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 				} else {
 					'运行环境就绪后读取应用列表'
 				}
-			}, 0, 434, width, 13, workbench_muted)
+			}, 0, 434, width, 13, workbench_colors.muted)
 			rows << button('workspace_go_applications', '查看承载的应用', 0, 478, 176, false, true)
-			rows << label('workspace_lifecycle_hint', '重启会短暂影响本运行环境中的全部应用；断开远端管理连接不停止进程。', 0, 536, width, 12, workbench_muted)
+			rows << label('workspace_lifecycle_hint', '重启会短暂影响本运行环境中的全部应用；断开远端管理连接不停止进程。', 0, 536, width, 12, workbench_colors.muted)
 			message := if remote {
 				if app.remote_message != '' { app.remote_message } else { app.remote_snapshot.message }
 			} else if app.notice != '' {
@@ -219,7 +219,7 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 			} else {
 				app.snapshot.message
 			}
-			rows << ui2.label('workspace_message', message, ui2.rect(0, 576, width, 72), ui2.TextStyle{ size: 12, color: workbench_muted, lines: 3 })
+			rows << ui2.label('workspace_message', message, ui2.rect(0, 576, width, 72), ui2.TextStyle{ size: 12, color: workbench_colors.muted, lines: 3 })
 			if remote {
 				rows << remote_access_notice(app, width, 672)
 			}
@@ -229,7 +229,7 @@ fn runtime_workspace_view(mut app Workshop, width f64, height f64) []ui2.Element
 		.relay { rows << relay_overview_view(app,width,remote) }
 
 		.configuration {
-			rows << label('workspace_configuration_hint', '配置按所属对象组织；发布后在运行环境页检查和重启生效。', 0, 168, width, 12, workbench_muted)
+			rows << label('workspace_configuration_hint', '配置按所属对象组织；发布后在运行环境页检查和重启生效。', 0, 168, width, 12, workbench_colors.muted)
 			mut lines := [ui_text('运行环境配置'),
 				ui_text('监听地址、端口、执行器、管理认证与公共资源。'), '', ui_text('应用配置'),
 				ui_text('应用入口、请求管线及数据库/存储等资源绑定。'), '', ui_text('Relay 配置'),
@@ -267,7 +267,7 @@ fn workspace_applications_view(app &Workshop, data host.RuntimeWorkspace, width 
  detail_width := width-detail_x
  pane_height := if height > 730 {height-238} else {492.0}
  selected := app.selected_workspace_application(data)
- mut rows := [label('workspace_apps_hint','应用共用当前 vhttpd 进程；选择应用查看监听、资源和日志。',0,168,if remote {width} else {width-166},12,workbench_muted)]
+ mut rows := [label('workspace_apps_hint','应用共用当前 vhttpd 进程；选择应用查看监听、资源和日志。',0,168,if remote {width} else {width-166},12,workbench_colors.muted)]
  if !remote {rows << button('takeover_open','本地接管…',width-152,160,152,false,app.projects.len>0)}
  mut items := []ui2.Element{}
  for i,application in data.applications {
@@ -275,22 +275,22 @@ fn workspace_applications_view(app &Workshop, data host.RuntimeWorkspace, width 
   title := if application.label != '' {application.label} else {application.id}
   items << project_button('workspace_application_'+application.id,title,ports,ui2.rect(0,f64(i)*64,list_width-20,58),application.id==selected,true)
  }
- mut selector := [label('workspace_apps_count',if data.applications_available() {'已安装应用 · '+data.applications.len.str()} else {'已安装应用 · 未确认'},10,14,list_width-20,12,workbench_muted),
-  ui2.scroll('workspace_app_list',ui2.rect(10,46,list_width-20,pane_height-154),workbench_sidebar,items),
+ mut selector := [label('workspace_apps_count',if data.applications_available() {'已安装应用 · '+data.applications.len.str()} else {'已安装应用 · 未确认'},10,14,list_width-20,12,workbench_colors.muted),
+  ui2.scroll('workspace_app_list',ui2.rect(10,46,list_width-20,pane_height-154),workbench_colors.sidebar,items),
   button('application_new_open','新建应用…',10,pane_height-94,list_width-20,true,!app.server_busy),
   button('component_open','安装已有应用…',10,pane_height-48,list_width-20,false,!app.server_busy)]
- rows << ui2.view('workspace_app_selector',ui2.rect(0,210,list_width,pane_height),ui2.BoxStyle{bg:workbench_sidebar,radius:8},selector)
+ rows << ui2.view('workspace_app_selector',ui2.rect(0,210,list_width,pane_height),ui2.BoxStyle{bg:workbench_colors.sidebar,radius:8},selector)
  mut details := []ui2.Element{}
  if !data.applications_available() {
   details << state_notice('workspace_apps_unknown','应用列表尚未确认',if data.error!='' {data.error} else {'请先启动或连接运行环境。'},ui2.rect(0,0,detail_width,130),'info')
  } else if data.applications.len == 0 {
-  details << label('workspace_apps_empty','当前运行环境未声明业务应用。',0,12,detail_width,13,workbench_muted)
+  details << label('workspace_apps_empty','当前运行环境未声明业务应用。',0,12,detail_width,13,workbench_colors.muted)
  } else {
   for application in data.applications {
    if application.id != selected {continue}
    title := if application.label!='' {application.label} else {application.id}
-   details << label('workspace_application_name',title,0,0,detail_width,22,workbench_ink)
-   details << label('workspace_application_id','应用标识：'+application.id,0,42,detail_width,12,workbench_muted)
+   details << label('workspace_application_name',title,0,0,detail_width,22,workbench_colors.ink)
+   details << label('workspace_application_id','应用标识：'+application.id,0,42,detail_width,12,workbench_colors.muted)
    binding := app.workspace_application_binding(application) or {host.ApplicationBinding{}}
    mut lines := [ui_text('所属运行环境：')+app.workspace_name()]
    if data.from_configuration {
@@ -317,7 +317,7 @@ fn workspace_applications_view(app &Workshop, data host.RuntimeWorkspace, width 
    details << button(if application.identity.installation_id == '' {'workspace_app_adopt_'+application.id} else {'workspace_app_source_'+application.id},if application.identity.installation_id == '' {'迁移旧安装身份…'} else if binding.installation_id == '' {'关联本地源码…'} else {'更换源码位置…'},0,pane_height-126,detail_width,false,true)
    details << button('workspace_app_logs_'+application.id,'查看应用日志',0,pane_height-82,(detail_width-12)/2,true,true)
    details << button('workspace_app_update_'+application.id,'更新应用…',(detail_width+12)/2,pane_height-82,(detail_width-12)/2,false,binding.installation_id != '')
-   details << ui2.label('workspace_application_scope','启停和升级由运行环境统一管理。',ui2.rect(0,pane_height-32,detail_width,32),ui2.TextStyle{size:11,color:workbench_muted,lines:2})
+   details << ui2.label('workspace_application_scope','启停和升级由运行环境统一管理。',ui2.rect(0,pane_height-32,detail_width,32),ui2.TextStyle{size:11,color:workbench_colors.muted,lines:2})
   }
  }
  rows << ui2.view('workspace_app_detail',ui2.rect(detail_x,210,detail_width,pane_height),ui2.BoxStyle{transparent:true},details)
@@ -429,7 +429,7 @@ fn workspace_logs_view(mut app Workshop, width f64, height f64) []ui2.Element {
 			}
 		} else {
 			'应用日志 · ' + app.workspace_log_application
-		}, 0, 168, width, 13, workbench_ink),
+		}, 0, 168, width, 13, workbench_colors.ink),
 		input('workspace_logs_search', app.workspace_log_search, '搜索日志', 0, 204, width - 180, true),
 		button(if app.workspace_logs_follow {
 			'workspace_logs_pause'
@@ -440,7 +440,7 @@ fn workspace_logs_view(mut app Workshop, width f64, height f64) []ui2.Element {
 			'自动滚动 · 向上翻阅可暂停'
 		} else {
 			'跟随已暂停 · 新日志继续接收'
-		}, 0, 256, width - 154, 12, workbench_muted),
+		}, 0, 256, width - 154, 12, workbench_colors.muted),
 		button('workspace_logs_all', if app.workspace_log_application != '' { '环境日志' } else { '全部应用' }, width - 136, 248, 136, false, true),
 		workspace_text('workspace_logs', text, if header_visible {380.0} else {344.0}, width, if height > 730 {
 			height - if header_visible {424} else {388}
@@ -457,7 +457,7 @@ fn workspace_logs_view(mut app Workshop, width f64, height f64) []ui2.Element {
 			data.events_error
 		} else {
 			if app.workspace_log_application != '' { '每应用显示最近 256 条；独立文件轮转保留，重启后加载历史。未归属输出仅在环境日志显示。' } else { '每 3 秒刷新。当前显示环境级运行事件；应用业务输出请进入应用日志。' }
-		}, 0, if height > 730 { height - 28 } else { 696.0 }, width, 11, workbench_muted),
+		}, 0, if height > 730 { height - 28 } else { 696.0 }, width, 11, workbench_colors.muted),
 	]
 	rows << choice_button('workspace_source_runtime', if app.workspace_log_application != '' { '请求记录' } else { '运行事件' }, 0, 296, 120, if app.workspace_log_application != '' {app.workspace_log_source == 'runtime'} else {app.workspace_log_source !in ['relay','stdout','application']}, true)
 	rows << choice_button('workspace_source_relay', 'Relay', 132, 296, 100, app.workspace_log_source == 'relay', true)

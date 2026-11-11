@@ -202,8 +202,8 @@ fn (mut app Workshop) handle_remote_event(event string) bool {
 
 fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 	mut rows := [
-		label('remote_heading', if app.environment_id == '' { '远端运行环境' } else { app.environment_name() + ' · 运行环境' }, 0, 28, width - 120, 26, workbench_ink),
-		label('remote_description', 'SSH 管理远端运行环境；停止后可启动，运行后可编辑配置、重启和检查生效。', 0, 68, width, 12, workbench_muted),
+		label('remote_heading', if app.environment_id == '' { '远端运行环境' } else { app.environment_name() + ' · 运行环境' }, 0, 28, width - 120, 26, workbench_colors.ink),
+		label('remote_description', 'SSH 管理远端运行环境；停止后可启动，运行后可编辑配置、重启和检查生效。', 0, 68, width, 12, workbench_colors.muted),
 		button('remote_close', '运行环境概览', width - 100, 25, 100, false, true),
 		button(if app.environment_id == '' { 'server_back' } else { 'remote_new' }, if app.environment_id == '' { '服务器' } else { '导入已有实例' }, 145, 103, 130, false, !app.remote_snapshot.busy),
 		button(if app.environment_id == '' { 'remote_new' } else { 'remote_create_project' }, if app.environment_id == '' { '+ 添加实例' } else { '+ 新建运行环境' }, 0, 103, 130, true, !app.remote_snapshot.busy),
@@ -225,7 +225,7 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		y += 42
 	}
 	if app.remote_id == '' {
-		rows << label('remote_empty', '从左侧选择 vhttpd 运行环境；新建项目会使用当前环境的运行包，导入可登记已运行的实例。', 0, y + 12, width, 14, workbench_muted)
+		rows << label('remote_empty', '从左侧选择 vhttpd 运行环境；新建项目会使用当前环境的运行包，导入可登记已运行的实例。', 0, y + 12, width, 14, workbench_colors.muted)
 		return rows
 	}
 	if app.remote_upgrade_running() {
@@ -253,7 +253,7 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		rows << state_notice('remote_host_key_notice', '首次连接：请核对 SSH 主机指纹',
 			'主机：${app.remote_host}' + if app.remote_port != '' { ':${app.remote_port}' } else { '' } + '\n密钥类型：${challenge.algorithm}\n指纹：${challenge.fingerprint}',
 			ui2.rect(0, y, width, 124), 'warning')
-		rows << ui2.label('remote_host_key_help', '请通过服务器管理员或可信渠道核对指纹。信任后由系统 SSH 记住此主机，再继续登录。', ui2.rect(0, y + 136, width, 48), ui2.TextStyle{size: 12, color: workbench_muted, lines: 2})
+		rows << ui2.label('remote_host_key_help', '请通过服务器管理员或可信渠道核对指纹。信任后由系统 SSH 记住此主机，再继续登录。', ui2.rect(0, y + 136, width, 48), ui2.TextStyle{size: 12, color: workbench_colors.muted, lines: 2})
 		rows << button('remote_trust_host', '信任此主机并连接', 0, y + 190, 190, true, true)
 		rows << button('remote_disconnect', '取消连接', 204, y + 190, 110, false, true)
 		return rows
@@ -264,7 +264,7 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		y += 140
 	}
 	if !app.remote_edit_connection && app.remote_form().config_path != '' && app.remote_form().runtime_id != '' {
-		rows << label('remote_existing_name', app.remote_name, 0, y, width, 22, workbench_ink)
+		rows << label('remote_existing_name', app.remote_name, 0, y, width, 22, workbench_colors.ink)
 		rows << state_notice('remote_existing_state', if app.remote_control_path() == '' { '服务器未连接' } else { '实例未连接' }, '先连接服务器，再点击启动运行环境。启动使用原配置和绑定的运行包，并检查残留 PID；运行中的实例不会重复启动。', ui2.rect(0, y + 42, width, 110), 'info')
 		rows << button('remote_start', '启动运行环境', 0, y + 170, 175, true, app.can_start_remote_project())
 		mut detail_y := y + 220
@@ -279,31 +279,31 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		}
 		detail_y += 50
 		rows << button('remote_edit', '编辑连接…', 0, detail_y, 125, false, !app.remote_snapshot.busy && !app.server_busy)
-		rows << ui2.label('remote_existing_source', app.remote_form().config_path, ui2.rect(0, detail_y + 55, width, 60), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})
+		rows << ui2.label('remote_existing_source', app.remote_form().config_path, ui2.rect(0, detail_y + 55, width, 60), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 3})
 		message := if app.server_snapshot.error { app.server_snapshot.message } else if app.remote_message != '' { app.remote_message } else { app.remote_snapshot.message }
-		if message != '' { rows << ui2.label('remote_existing_message', message, ui2.rect(0, detail_y + 130, width, 90), ui2.TextStyle{size: 12, color: workbench_ink, lines: 4}) }
+		if message != '' { rows << ui2.label('remote_existing_message', message, ui2.rect(0, detail_y + 130, width, 90), ui2.TextStyle{size: 12, color: workbench_colors.ink, lines: 4}) }
 		return rows
 	}
 	editable := !app.remote_snapshot.busy
 	half := (width - 16) / 2
-	rows << label('remote_name_label', '运行环境名称', 0, y, half, 12, workbench_muted)
-	rows << label('remote_host_label', 'SSH 主机 / Host 别名', half + 16, y, half, 12, workbench_muted)
+	rows << label('remote_name_label', '运行环境名称', 0, y, half, 12, workbench_colors.muted)
+	rows << label('remote_host_label', 'SSH 主机 / Host 别名', half + 16, y, half, 12, workbench_colors.muted)
 	rows << input('remote_name', app.remote_name, '例如：开发服务器', 0, y + 23, half, editable)
 	rows << input('remote_host', app.remote_host, '例如：dev-server', half + 16, y + 23, half, editable)
 	y += 72
-	rows << label('remote_user_label', 'SSH 用户（留空沿用 SSH 配置）', 0, y, half, 12, workbench_muted)
-	rows << label('remote_port_label', 'SSH 端口（留空沿用 SSH 配置）', half + 16, y, half, 12, workbench_muted)
+	rows << label('remote_user_label', 'SSH 用户（留空沿用 SSH 配置）', 0, y, half, 12, workbench_colors.muted)
+	rows << label('remote_port_label', 'SSH 端口（留空沿用 SSH 配置）', half + 16, y, half, 12, workbench_colors.muted)
 	rows << input('remote_user', app.remote_user, '默认用户', 0, y + 23, half, editable)
 	rows << input('remote_port', app.remote_port, '默认端口', half + 16, y + 23, half, editable)
 	y += 72
-	rows << label('remote_auth_label', 'SSH 认证方式', 0, y, width, 12, workbench_muted)
+	rows << label('remote_auth_label', 'SSH 认证方式', 0, y, width, 12, workbench_colors.muted)
 	rows << choice_button('remote_auth_key', '密钥 / SSH 配置', 0, y + 23, 170, app.remote_auth == 'key', editable)
 	rows << choice_button('remote_auth_password', '密码登录', 182, y + 23, 130, app.remote_auth == 'password', editable)
 	y += 72
 	if app.remote_auth == 'password' {
 		rows << ui2.Element{ ...input('remote_password', app.remote_password, 'SSH 登录密码（仅本次连接使用）', 0, y, width, editable), secure: true }
 		y += 43
-		rows << label('remote_password_hint', '密码不保存到磁盘；连接提交后清空，重新连接时需再次输入。', 0, y, width, 11, workbench_muted)
+		rows << label('remote_password_hint', '密码不保存到磁盘；连接提交后清空，重新连接时需再次输入。', 0, y, width, 11, workbench_colors.muted)
 		y += 33
 	} else {
 	rows << button('remote_identity', if app.remote_identity == '' {
@@ -317,10 +317,10 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		'使用系统 SSH 配置、密钥和 ssh-agent；首次连接可直接在工作台核对主机指纹。'
 	} else {
 		app.remote_identity
-	}, 0, y, width, 11, workbench_muted)
+	}, 0, y, width, 11, workbench_colors.muted)
 	y += 33
 	}
-	rows << label('remote_admin_label', '远端 Admin 端口（通过 SSH 访问远端 127.0.0.1）', 0, y, width, 12, workbench_muted)
+	rows << label('remote_admin_label', '远端 Admin 端口（通过 SSH 访问远端 127.0.0.1）', 0, y, width, 12, workbench_colors.muted)
 	rows << input('remote_admin_port', app.remote_admin_port, '2018', 0, y + 23, 130, editable)
 	rows << ui2.Element{ ...input('remote_token', app.remote_token, '远端 Admin Token', 146, y + 23, width - 146, editable), secure: true }
 	y += 74
@@ -341,10 +341,10 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 	} else {
 		'连接后查看运行版本和配置状态。'
 	}
-	rows << label('remote_status', message, 0, y, width, 13, workbench_ink)
+	rows << label('remote_status', message, 0, y, width, 13, workbench_colors.ink)
 	y += 38
 	if instance.version == '' && app.remote_form().config_path != '' {
-		rows << ui2.label('remote_discovered_source', '远端配置：' + app.remote_form().config_path, ui2.rect(0, y, width, 44), ui2.TextStyle{size: 11, color: workbench_muted, lines: 2})
+		rows << ui2.label('remote_discovered_source', '远端配置：' + app.remote_form().config_path, ui2.rect(0, y, width, 44), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 2})
 		y += 50
 	}
 	if active && instance.version != '' {
@@ -352,8 +352,8 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 			'业务就绪'
 		} else {
 			'尚未就绪'
-		}, 0, y, width, 13, workbench_ink)
-		rows << label('remote_config_source', instance.config_path, 0, y + 27, width, 11, workbench_muted)
+		}, 0, y, width, 13, workbench_colors.ink)
+		rows << label('remote_config_source', instance.config_path, 0, y + 27, width, 11, workbench_colors.muted)
 		y += 65
 	}
 	rows << button('remote_open', if connected { '打开 Admin UI' } else { '连接并打开 Admin UI' }, 0, y, 175, true, (connected || app.remote_control_path() != '') && !app.remote_snapshot.busy && !app.server_busy)
@@ -365,7 +365,7 @@ fn remote_instances_view(app &Workshop, width f64) []ui2.Element {
 		'此实例未启用手工重启；远端需使用 --manual-restart 启动。'
 	} else {
 		'发布后回到这里重启；断开连接或退出工作台不会停止远端运行环境。'
-	}, 0, y, width, 11, workbench_muted)
+	}, 0, y, width, 11, workbench_colors.muted)
 	return rows
 }
 
@@ -379,17 +379,17 @@ fn (app &Workshop) remote_control_path() string {
 
 fn remote_instance_summary(app &Workshop, width f64, y f64) []ui2.Element {
 	state := app.remote_snapshot
-	mut rows := [label('remote_connected_name', app.remote_name, 0, y, width, 22, workbench_ink),
-		label('remote_connected_host', app.remote_host + ' · Admin ' + app.remote_admin_port, 0, y + 37, width, 12, workbench_muted),
-		label('remote_version', 'vhttpd ' + state.instance.version + ' · ' + state.instance.platform, 0, y + 70, width, 13, workbench_ink),
+	mut rows := [label('remote_connected_name', app.remote_name, 0, y, width, 22, workbench_colors.ink),
+		label('remote_connected_host', app.remote_host + ' · Admin ' + app.remote_admin_port, 0, y + 37, width, 12, workbench_colors.muted),
+		label('remote_version', 'vhttpd ' + state.instance.version + ' · ' + state.instance.platform, 0, y + 70, width, 13, workbench_colors.ink),
 		state_notice('remote_state_summary', if state.restarting { '正在重启并检查生效' } else if state.instance.startup_failed() { '重启失败 · 需修复配置' } else if !state.instance.ready { '业务尚未就绪' } else if state.config_status.pending { '配置待重启生效' } else { '已连接 · 业务就绪' }, if app.remote_message != '' { app.remote_message } else { state.message }, ui2.rect(0, y + 112, width, 100), if state.restarting { 'info' } else if state.instance.startup_failed() { 'danger' } else if state.config_status.pending || !state.instance.ready { 'warning' } else { 'good' }),
 		button('remote_open', if state.instance.startup_failed() { '打开 Admin UI 修复配置' } else { '打开远端 Admin UI ↗' }, 0, y + 234, 180, true, !state.busy),
 		button('remote_restart', if state.instance.startup_failed() { '修复后重试重启' } else { '重启并检查生效' }, 192, y + 234, 175, false, !state.busy && state.instance.manual_restart && !app.remote_upgrade_running() && !app.deployment_running()),
 		button('remote_check', '检查生效', 0, y + 283, 110, false, !state.busy),
 		button('remote_edit', '编辑连接…', 122, y + 283, 125, false, !state.busy),
 		button('remote_disconnect', '断开', width - 90, y + 283, 90, false, true),
-		ui2.label('remote_config_source', state.instance.config_path, ui2.rect(0, y + 341, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3}),
-		label('remote_restart_hint', '配置在 Admin UI 编辑；发布后回到这里重启和检查生效。', 0, y + 408, width, 11, workbench_muted),
+		ui2.label('remote_config_source', state.instance.config_path, ui2.rect(0, y + 341, width, 52), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 3}),
+		label('remote_restart_hint', '配置在 Admin UI 编辑；发布后回到这里重启和检查生效。', 0, y + 408, width, 11, workbench_colors.muted),
 		remote_access_notice(app, width, y + 445),
 		button('deploy_open','部署本地应用…',0,y + 445 + (if width < 420 { 244.0 } else { 208.0 }) + 20,180,true,!state.busy)]
 	return rows
@@ -408,7 +408,7 @@ fn remote_access_notice(app &Workshop, width f64, y f64) ui2.Element {
 	detail := ui_text('运行包：') + runtime + if binding.runtime_path != '' { ui_text('\n进程路径：') + binding.runtime_path } else { '' } + ui_text('\n目标：') + app.remote_host + ' → 127.0.0.1:' + app.remote_admin_port + ui_text('\n浏览器入口：') + url + ui_text('\n本机地址仅是 SSH 代理入口，配置修改仍发生在远端运行环境。')
 	return ui2.view('remote_access', ui2.rect(0, y, width, height), ui2.BoxStyle{bg: bg, radius: 8, border_color: ink, border_left: 3}, [
 		ui2.label('remote_access_title', '通过 SSH 隧道访问远端 Admin', ui2.rect(16, 11, width - 32, 24), ui2.TextStyle{size: 13, bold: true, color: ink}),
-		ui2.label('remote_access_detail', detail, ui2.rect(16, 39, width - 32, height - 48), ui2.TextStyle{size: 12, color: workbench_muted, lines: 8}),
+		ui2.label('remote_access_detail', detail, ui2.rect(16, 39, width - 32, height - 48), ui2.TextStyle{size: 12, color: workbench_colors.muted, lines: 8}),
 	])
 }
 

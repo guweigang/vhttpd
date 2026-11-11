@@ -1,4 +1,8 @@
 {
+  "外观": "Appearance",
+  "浅色": "Light",
+  "深色": "Dark",
+  "无法保存外观设置": "Could Not Save Appearance Settings",
   "绑定目录并开启 MCP": "Bind Directory and Start MCP",
   "开启本机工作区 MCP": "Start Local Workspace MCP",
   "打开源码目录（无需安装）…": "Open Source Folder (No Install)…",

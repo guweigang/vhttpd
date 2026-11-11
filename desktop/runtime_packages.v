@@ -27,21 +27,21 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 	state := app.server_snapshot
 	active := state.server_id == app.runtime_server_id && state.connected && app.remote_servers.any(it.id == app.runtime_server_id && it == state.server)
 	busy := app.server_busy || state.busy || state.upgrades.any(!it.finished()) || app.deployment_running()
-	mut rows := [label('server_runtime_title', '远端运行包', 0, 12, width, 22, workbench_ink)]
+	mut rows := [label('server_runtime_title', '远端运行包', 0, 12, width, 22, workbench_colors.ink)]
 	if !active {
 		rows << state_notice('server_need_connect', '先连接目标服务器', '连接后可查看此主机安装的版本，以及各运行环境正在使用的版本。', ui2.rect(0, 58, width, 104), 'info')
 		rows << button('server_go_connect', '连接此服务器', 0, 180, 160, true, !busy)
 		return rows
 	}
-	rows << ui2.label('runtime_relationship', '同一个运行包可供多个运行环境使用。安装版本后，为指定环境确认切换。', ui2.rect(0, 50, width, 46), ui2.TextStyle{ size: 12, color: workbench_muted, lines: 2 })
+	rows << ui2.label('runtime_relationship', '同一个运行包可供多个运行环境使用。安装版本后，为指定环境确认切换。', ui2.rect(0, 50, width, 46), ui2.TextStyle{ size: 12, color: workbench_colors.muted, lines: 2 })
 	rows << button('server_install', '下载运行包…', 0, 108, (width - 12) / 2, true, !busy)
 	rows << button('server_package', '从本地安装…', (width + 12) / 2, 108, (width - 12) / 2, false, !busy)
-	rows << label('server_install_hint', '安装到主机的版本库；已有运行环境保持当前版本。', 0, 154, width, 11, workbench_muted)
+	rows << label('server_install_hint', '安装到主机的版本库；已有运行环境保持当前版本。', 0, 154, width, 11, workbench_colors.muted)
 	mut y := 198.0
 	projects := app.managed_runtime_projects()
 	selected := projects.filter(it.id == app.selected_upgrade_project())
 	if !app.runtime_create_open {
-		rows << label('runtime_environment_label', '1. 选择运行环境', 0, y, width, 15, workbench_ink)
+		rows << label('runtime_environment_label', '1. 选择运行环境', 0, y, width, 15, workbench_colors.ink)
 		y += 30
 		if projects.len > 0 {
 			name := if selected.len == 1 { selected[0].name } else { ui_text('请选择运行环境') }
@@ -51,10 +51,10 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 				app.runtime_label(selected[0].runtime_id)
 			} else {
 				'选择环境后查看'
-			}, ui2.rect(0, y, width, 42), ui2.TextStyle{ size: 12, color: workbench_muted, lines: 2 })
+			}, ui2.rect(0, y, width, 42), ui2.TextStyle{ size: 12, color: workbench_colors.muted, lines: 2 })
 			y += 58
 		} else {
-			rows << label('runtime_no_environments', '尚无已绑定的运行环境，可在安装版本后新建。', 0, y, width, 12, workbench_muted)
+			rows << label('runtime_no_environments', '尚无已绑定的运行环境，可在安装版本后新建。', 0, y, width, 12, workbench_colors.muted)
 			y += 40
 		}
 	} else {
@@ -65,7 +65,7 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 		'选择新环境使用的运行包'
 	} else {
 		'2. 选择已安装运行包'
-	}, 0, y, width - 80, 15, workbench_ink)
+	}, 0, y, width - 80, 15, workbench_colors.ink)
 	rows << button('server_refresh', '刷新', width - 72, y - 6, 72, false, !busy)
 	y += 34
 	mut packages := []ui2.Element{}
@@ -89,16 +89,16 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 		}
 		packages << ui2.view('runtime_package_row_' + runtime.id, ui2.rect(0, f64(i) * 72, width - 12, 64), ui2.BoxStyle{
 			bg:           if chosen {
-				workbench_soft_accent
+				workbench_colors.soft_accent
 			} else {
-				workbench_sidebar
+				workbench_colors.sidebar
 			}
 			radius:       6
-			border_color: workbench_accent
+			border_color: workbench_colors.accent
 			border_left:  if chosen { 3.0 } else { 0.0 }
 		}, [
-			label('runtime_package_name_' + runtime.id, (if chosen { '已选择 · ' } else { '' }) + runtime.label(), 12, 8, width - 38, 13, workbench_ink),
-			label('runtime_users_' + runtime.id, meta, 12, 35, width - 38, 11, workbench_muted),
+			label('runtime_package_name_' + runtime.id, (if chosen { '已选择 · ' } else { '' }) + runtime.label(), 12, 8, width - 38, 13, workbench_colors.ink),
+			label('runtime_users_' + runtime.id, meta, 12, 35, width - 38, 11, workbench_colors.muted),
 			ui2.Element{
 				...ui2.button('server_runtime_choice_' + runtime.id, '', ui2.rect(0, 0, width - 12, 64), ui2.BoxStyle{ transparent: true }, ui2.TextStyle{})
 				enabled:             !busy
@@ -118,9 +118,9 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 		228.0
 	}
 	if packages.len == 0 {
-		packages << label('runtime_empty_library', '尚未安装运行包，请先下载或从本地安装。', 12, 14, width - 24, 12, workbench_muted)
+		packages << label('runtime_empty_library', '尚未安装运行包，请先下载或从本地安装。', 12, 14, width - 24, 12, workbench_colors.muted)
 	}
-	rows << ui2.scroll('runtime_package_library', ui2.rect(0, y, width, list_height), workbench_paper, packages)
+	rows << ui2.scroll('runtime_package_library', ui2.rect(0, y, width, list_height), workbench_colors.paper, packages)
 	y += list_height + 20
 	if app.runtime_create_open {
 		rows << runtime_create_form(app, width, y)
@@ -128,10 +128,10 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 	} else if selected.len == 1 {
 		target := app.selected_server_runtime()
 		if target == selected[0].runtime_id {
-			rows << ui2.label('runtime_already_current', '当前环境已使用所选版本。点击列表中的其他版本，查看切换预览。', ui2.rect(0, y, width, 48), ui2.TextStyle{ size: 12, color: workbench_muted, lines: 2 })
+			rows << ui2.label('runtime_already_current', '当前环境已使用所选版本。点击列表中的其他版本，查看切换预览。', ui2.rect(0, y, width, 48), ui2.TextStyle{ size: 12, color: workbench_colors.muted, lines: 2 })
 			y += 62
 		} else if target != '' {
-			rows << ui2.label('runtime_switch_preview', '切换预览 · ' + selected[0].name + '\n当前：' + app.runtime_label(selected[0].runtime_id) + '\n目标：' + app.runtime_label(target) + '\n确认后，该环境内全部应用将短暂停机并重启。', ui2.rect(0, y, width, 110), ui2.TextStyle{ size: 12, color: workbench_ink, lines: 4 })
+			rows << ui2.label('runtime_switch_preview', '切换预览 · ' + selected[0].name + '\n当前：' + app.runtime_label(selected[0].runtime_id) + '\n目标：' + app.runtime_label(target) + '\n确认后，该环境内全部应用将短暂停机并重启。', ui2.rect(0, y, width, 110), ui2.TextStyle{ size: 12, color: workbench_colors.ink, lines: 4 })
 			y += 124
 			rows << button('server_upgrade', '确认切换此环境…', 0, y, 200, true, app.can_upgrade_selected_project())
 			y += 52
@@ -177,9 +177,9 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 					} else {
 						'该次切换未完成'
 					}
-					rows << ui2.label('upgrade_status_' + upgrade.id, '历史记录 · ' + selected[0].name + ' · ' + ui_text(result) + '\n' + app.runtime_label(upgrade.previous_id) + ' → ' + app.runtime_label(upgrade.target_id), ui2.rect(0, y, width, 72), ui2.TextStyle{ size: 12, color: workbench_muted, lines: 3 })
+					rows << ui2.label('upgrade_status_' + upgrade.id, '历史记录 · ' + selected[0].name + ' · ' + ui_text(result) + '\n' + app.runtime_label(upgrade.previous_id) + ' → ' + app.runtime_label(upgrade.target_id), ui2.rect(0, y, width, 72), ui2.TextStyle{ size: 12, color: workbench_colors.muted, lines: 3 })
 					y += 82
-					rows << ui2.label('upgrade_log_' + upgrade.id, '该次操作日志：' + upgrade.config_path.all_before_last('/') + '/.desktop-upgrades/' + upgrade.id + '/runtime.log', ui2.rect(0, y, width, 56), ui2.TextStyle{ size: 11, color: workbench_muted, lines: 3 })
+					rows << ui2.label('upgrade_log_' + upgrade.id, '该次操作日志：' + upgrade.config_path.all_before_last('/') + '/.desktop-upgrades/' + upgrade.id + '/runtime.log', ui2.rect(0, y, width, 56), ui2.TextStyle{ size: 11, color: workbench_colors.muted, lines: 3 })
 					y += 68
 				}
 			}
@@ -199,7 +199,7 @@ fn runtime_remote_view(app &Workshop, width f64) []ui2.Element {
 		}, result.message, ui2.rect(0, y, width, 104), if result.error { 'warning' } else { 'info' })
 		y += 120
 	} else if busy {
-		rows << label('runtime_operation_busy', '正在处理当前请求，请稍候…', 0, y, width, 12, workbench_muted)
+		rows << label('runtime_operation_busy', '正在处理当前请求，请稍候…', 0, y, width, 12, workbench_colors.muted)
 		y += 40
 	}
 	if !app.runtime_create_open {
@@ -213,7 +213,7 @@ fn runtime_create_form(app &Workshop, width f64, top f64) []ui2.Element {
 	mut y := top
 	state := app.server_snapshot
 	editable := !app.server_busy && !state.busy && !state.upgrades.any(!it.finished()) && !app.deployment_running()
-	rows << label('server_create_heading', '新建运行环境（独立进程）', 0, y, width, 20, workbench_ink)
+	rows << label('server_create_heading', '新建运行环境（独立进程）', 0, y, width, 20, workbench_colors.ink)
 	y += 38
 	rows << input('server_instance_name', app.server_instance_name, '运行环境名称', 0, y, width, editable)
 	y += 51
@@ -222,11 +222,11 @@ fn runtime_create_form(app &Workshop, width f64, top f64) []ui2.Element {
 	rows << choice_button('server_template_http', 'HTTP 入门', 0, y, (width - 12) / 2, app.server_template == 0, editable)
 	rows << choice_button('server_template_api', 'JSON API', (width + 12) / 2, y, (width - 12) / 2, app.server_template == 1, editable)
 	y += 53
-	rows << label('server_ports_label', '业务监听端口 / Admin 端口（均通过 SSH 访问）', 0, y, width, 12, workbench_muted)
+	rows << label('server_ports_label', '业务监听端口 / Admin 端口（均通过 SSH 访问）', 0, y, width, 12, workbench_colors.muted)
 	rows << input('server_web_port', app.server_web_port, '19881', 0, y + 24, 150, editable && app.server_template != 2)
 	rows << input('server_admin_port', app.server_admin_port, '2018', 166, y + 24, 150, editable)
 	y += 79
-	rows << label('server_instance_path', state.root + '/instances/' + app.server_instance_name, 0, y, width, 11, workbench_muted)
+	rows << label('server_instance_path', state.root + '/instances/' + app.server_instance_name, 0, y, width, 11, workbench_colors.muted)
 	rows << button('server_create', '创建、启动并打开 Admin UI', 0, y + 30, 260, true, editable && app.selected_server_runtime() != '')
 	return rows
 }

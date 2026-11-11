@@ -9,9 +9,9 @@ import ui2
 fn test_language_switch_changes_presentation_without_mutating_model_data() ! {
 	previous := workbench_language
 	defer { workbench_language = previous }
-	root := ui2.screen(workbench_paper, [
-		label('project_label', '运行环境', 0, 0, 180, 14, workbench_muted),
-		label('workspace_title', '运行环境', 0, 40, 180, 14, workbench_ink),
+	root := ui2.screen(workbench_colors.paper, [
+		label('project_label', '运行环境', 0, 0, 180, 14, workbench_colors.muted),
+		label('workspace_title', '运行环境', 0, 40, 180, 14, workbench_colors.ink),
 		input('new_name', '运行环境', '项目名称', 0, 80, 300, true),
 		workspace_text('workspace_logs', '运行环境\n配置已生效', 130, 300, 100),
 		ui2.dropdown('server_upgrade_environment', '运行环境', ['运行环境', '日志'], ui2.rect(0, 240, 300, 36), ui2.BoxStyle{}, ui2.TextStyle{}),
@@ -41,7 +41,7 @@ fn test_localized_menu_keeps_action_ids_targets_and_language_choices() {
 	defer { workbench_language = previous }
 	app := Workshop{ projects: [host.Project{ name: '运行环境', config_path: '/tmp/example.toml' }] }
 	workbench_language = 'en'
-	menus := app.workbench_menus(ui2.screen(workbench_paper, []))
+	menus := app.workbench_menus(ui2.screen(workbench_colors.paper, []))
 	assert menus[0].title == 'File'
 	assert menus[2].title == 'Environments'
 	assert language_menu_item(menus, 'edit_copy').title == 'Copy'
@@ -112,7 +112,7 @@ fn test_configuration_preview_translates_wording_but_preserves_values_and_action
  assert details.contains('Restore to: 配置已生效')
  assert details.contains('Rollback preview generated')
  app.snapshot=host.Snapshot{phase:.stopped,message:'配置文件已恢复，整项目校验通过；启动后自动检查生效。'}
- root:=ui2.screen(workbench_paper,config_rollback_view(&app,708))
+ root:=ui2.screen(workbench_colors.paper,config_rollback_view(&app,708))
  assert menu_button_enabled(root,'start')
 }
 

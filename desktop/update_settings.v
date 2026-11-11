@@ -75,7 +75,7 @@ fn (app &Workshop) update_settings_config() ui2.SettingsConfig {
 		frame: ui2.rect(0, 58, width, height - 58)
 		state: app.desktop_update_settings
 		nav_width: 0
-		theme: ui2.component_theme(false)
+		theme: workbench_component_theme
 		accessibility_label: ui_text('软件更新')
 		group_variant: .outline
 		pages: [ui2.SettingPage{

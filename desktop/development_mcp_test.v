@@ -8,17 +8,17 @@ import ui2
 
 fn test_mcp_selects_applications_without_directory_picker() ! {
 	mut app := Workshop{}
-	initial := ui2.screen(workbench_paper, development_mcp_view(&app, 510))
+	initial := ui2.screen(workbench_colors.paper, development_mcp_view(&app, 510))
 	assert !menu_button_enabled(initial, 'mcp_start')
 	assert !menu_button_enabled(initial, 'mcp_choose_root')
 	ui2.validate_element_tree(initial)!
 	app.projects = [host.Project{ name: 'environment', config_path: '/fixture/vhttpd.toml', workdir: '/fixture' }]
 	app.development_apps = [host.DevelopmentApplication{ id: 'alpha', label: 'Alpha', root: '/fixture/apps/alpha' }]
 	app.development_application = 'alpha'
-	assert menu_button_enabled(ui2.screen(workbench_paper, development_mcp_view(&app, 510)), 'mcp_start')
+	assert menu_button_enabled(ui2.screen(workbench_colors.paper, development_mcp_view(&app, 510)), 'mcp_start')
 	app.development_service = &devmcp.Service{ url: 'http://127.0.0.1:12345/mcp', token: 'fixture-only' }
 	active := development_mcp_view(&app, 510)
-	assert mcp_control_enabled(ui2.screen(workbench_paper, active), 'mcp_application')
+	assert mcp_control_enabled(ui2.screen(workbench_colors.paper, active), 'mcp_application')
 	assert active.filter(it.id == 'mcp_connection_config')[0].readonly
 	// Project details must clear the action row, including the narrow-window wrap.
 	for width in [510.0, 708.0] {
@@ -46,9 +46,9 @@ fn test_mcp_selects_applications_without_directory_picker() ! {
 			}
 		}
 	}
-	ui2.validate_element_tree(ui2.screen(workbench_paper, active))!
+	ui2.validate_element_tree(ui2.screen(workbench_colors.paper, active))!
 	app.development_pending = true
-	assert !mcp_control_enabled(ui2.screen(workbench_paper, development_mcp_view(&app, 510)), 'mcp_application')
+	assert !mcp_control_enabled(ui2.screen(workbench_colors.paper, development_mcp_view(&app, 510)), 'mcp_application')
 }
 
 fn test_mcp_environment_switch_refreshes_catalog_and_clears_missing_config_error() ! {
@@ -67,7 +67,7 @@ fn test_mcp_environment_switch_refreshes_catalog_and_clears_missing_config_error
 	assert app.development_catalog_project == valid
 	assert app.development_apps.len > 0
 	assert app.development_message == ''
-	assert menu_button_enabled(ui2.screen(workbench_paper, development_mcp_view(&app, 510)), 'mcp_start')
+	assert menu_button_enabled(ui2.screen(workbench_colors.paper, development_mcp_view(&app, 510)), 'mcp_start')
 	application := app.development_application
 	// A click queued for the old inventory must not bind a different project.
 	app.selected = 1

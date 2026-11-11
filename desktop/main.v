@@ -11,15 +11,6 @@ import ui2
 
 fn C.atexit(fn ()) int
 
-const workbench_paper = u32(0xffffff)
-const workbench_sidebar = u32(0xf4f7fb)
-const workbench_ink = u32(0x17202a)
-const workbench_muted = u32(0x627184)
-const workbench_line = u32(0xe0e7f0)
-const workbench_green = u32(0x2c6149)
-const workbench_accent = u32(0x2563eb)
-const workbench_soft_accent = u32(0xeaf1ff)
-
 @[heap]
 struct Workshop {
 mut:
@@ -279,6 +270,7 @@ fn main() {
 	mut app := unsafe { workshop }
 	app.owner_pid = os.getpid()
 	initialize_language()
+	initialize_appearance()
 	configure_workbench_fonts() or { app.notice = err.msg() }
 	app.binary = host.selected_runtime(os.executable(), root) or {
 		app.notice = err.msg()
@@ -324,7 +316,7 @@ fn main() {
 		C.vhttpd_workbench_prepare_windows_display()
 		app.brand_mark = windows_brand_asset(app.brand_mark)
 	}
-	app.refresh_workbench_menus(ui2.screen(workbench_paper, []))
+	app.refresh_workbench_menus(ui2.screen(workbench_colors.paper, []))
 	$if !windows {
 		configure_workbench_tray(app.brand_mark, root)
 	}
@@ -966,7 +958,7 @@ fn label(id string, text string, x f64, y f64, width f64, size f64, color u32) u
 // Keep text independent of NSButton's disabled-title drawing, while retaining
 // a real native button over the entire frame for clicks, keyboard and AX actions.
 fn painted_button(id string, title string, frame ui2.Rect, box ui2.BoxStyle, color u32, enabled bool, align ui2.Align, inset f64) ui2.Element {
-	focus_box := if enabled && workbench_focused_id() == id { ui2.BoxStyle{...box, border_color: u32(0x1e40af), border_left: 2, border_right: 2, border_top: 2, border_bottom: 2} } else { box }
+	focus_box := if enabled && workbench_focused_id() == id { ui2.BoxStyle{...box, border_color: workbench_colors.focus, border_left: 2, border_right: 2, border_top: 2, border_bottom: 2} } else { box }
 	caption := ui2.label('${id}_caption', title, ui2.rect(inset, 0, frame.width - inset * 2, frame.height), ui2.TextStyle{
 		size:  13
 		color: color
@@ -984,23 +976,23 @@ fn painted_button(id string, title string, frame ui2.Rect, box ui2.BoxStyle, col
 
 fn button(id string, title string, x f64, y f64, width f64, primary bool, enabled bool) ui2.Element {
 	bg := if !enabled {
-		u32(0xe9edf2)
+		workbench_colors.disabled_background
 	} else if primary {
-		workbench_accent
+		workbench_colors.accent
 	} else {
-		workbench_paper
+		workbench_colors.paper
 	}
 	color := if !enabled {
-		u32(0x596575)
+		workbench_colors.disabled_foreground
 	} else if primary {
-		workbench_paper
+		workbench_colors.on_accent
 	} else {
-		workbench_ink
+		workbench_colors.ink
 	}
 	return painted_button(id, title, ui2.rect(x, y, width, 34), ui2.BoxStyle{
 		bg:            bg
 		radius:        6
-		border_color:  workbench_line
+		border_color:  workbench_colors.line
 		border_left:   1
 		border_right:  1
 		border_top:    1
@@ -1010,35 +1002,35 @@ fn button(id string, title string, x f64, y f64, width f64, primary bool, enable
 
 fn sidebar_button(id string, title string, frame ui2.Rect, primary bool, selected bool, enabled bool, align ui2.Align) ui2.Element {
 	bg := if selected || (primary && !enabled) {
-		workbench_soft_accent
+		workbench_colors.soft_accent
 	} else if primary {
-		workbench_accent
+		workbench_colors.accent
 	} else {
-		workbench_sidebar
+		workbench_colors.sidebar
 	}
 	color := if !enabled {
-		u32(0x596575)
+		workbench_colors.disabled_foreground
 	} else if primary {
-		workbench_paper
+		workbench_colors.on_accent
 	} else {
-		workbench_ink
+		workbench_colors.ink
 	}
 	return painted_button(id, title, frame, ui2.BoxStyle{ bg: bg, radius: 6 }, color, enabled, align, 12)
 }
 
 fn sidebar_section_heading(id string, title string, y f64) ui2.Element {
 	return ui2.view(id + '_section', ui2.rect(16, y, 180, 30), ui2.BoxStyle{transparent: true}, [
-		ui2.view(id + '_accent', ui2.rect(0, 5, 3, 14), ui2.BoxStyle{bg: workbench_accent, radius: 1}, []),
-		ui2.label(id, title, ui2.rect(10, 0, 170, 24), ui2.TextStyle{size: 14, color: workbench_muted}),
+		ui2.view(id + '_accent', ui2.rect(0, 5, 3, 14), ui2.BoxStyle{bg: workbench_colors.accent, radius: 1}, []),
+		ui2.label(id, title, ui2.rect(10, 0, 170, 24), ui2.TextStyle{size: 14, color: workbench_colors.muted}),
 	])
 }
 
 fn project_button(id string, title string, badge string, frame ui2.Rect, selected bool, enabled bool) ui2.Element {
-	bg := if selected { workbench_soft_accent } else { workbench_sidebar }
-	caption := ui2.label('${id}_name', title, ui2.rect(12, if badge == '' { 12.0 } else { 3.0 }, frame.width - 24, 25), ui2.TextStyle{ size: 13, color: workbench_ink, align: .left })
+	bg := if selected { workbench_colors.soft_accent } else { workbench_colors.sidebar }
+	caption := ui2.label('${id}_name', title, ui2.rect(12, if badge == '' { 12.0 } else { 3.0 }, frame.width - 24, 25), ui2.TextStyle{ size: 13, color: workbench_colors.ink, align: .left })
 	mut children := [caption]
 	if badge != '' {
-		children << label('${id}_state', badge, 12, 27, frame.width - 24, 10, if badge.contains('失败') || badge.contains('待') || badge.contains('未就绪') { workbench_warning } else if badge.ends_with('运行中') || badge.ends_with('SSH 已连接') { workbench_green } else { workbench_muted })
+		children << label('${id}_state', badge, 12, 27, frame.width - 24, 10, if badge.contains('失败') || badge.contains('待') || badge.contains('未就绪') { workbench_colors.warning } else if badge.ends_with('运行中') || badge.ends_with('SSH 已连接') { workbench_colors.green } else { workbench_colors.muted })
 	}
 	hit := ui2.button(id, '', ui2.rect(0, 0, frame.width, frame.height), ui2.BoxStyle{ transparent: true }, ui2.TextStyle{ size: 13 })
 	children << ui2.Element{
@@ -1052,12 +1044,13 @@ fn project_button(id string, title string, badge string, frame ui2.Rect, selecte
 	}
 	focused := enabled && workbench_focused_id() == id
 	return ui2.view('${id}_container', frame, ui2.BoxStyle{ bg: bg, radius: 6,
-		border_color: if focused { workbench_accent } else { bg },
+		border_color: if focused { workbench_colors.accent } else { bg },
 		border_left: if focused { 2.0 } else { 0.0 }, border_right: if focused { 2.0 } else { 0.0 },
 		border_top: if focused { 2.0 } else { 0.0 }, border_bottom: if focused { 2.0 } else { 0.0 } }, children)
 }
 
 fn build_window() ui2.Element {
+	refresh_system_appearance()
 	root := workbench_text_layout(localize_element(workbench_font_layout(build_window_tree())))
 	mut app := unsafe { workshop }
 	$if linux {
@@ -1087,7 +1080,8 @@ fn build_window_tree() ui2.Element {
 		anchor: ui2.rect(16, 82, 180, 34)
 		window: workbench_bounds()
 		width:  260
-		label: '选择运行环境'
+		label:  '选择运行环境'
+		theme:  workbench_component_theme
 	}) or { return root }
 	mut children := root.children.clone()
 	children << menu
@@ -1102,9 +1096,9 @@ fn build_window_content() ui2.Element {
 	h := if b.height > 660 { b.height } else { 660.0 }
 	if app.desktop_update_open {
 		settings := ui2.settings(app.update_settings_config()) or {
-			label('desktop_update_error', '无法打开软件更新。', 24, 70, w - 48, 14, workbench_ink)
+			label('desktop_update_error', '无法打开软件更新。', 24, 70, w - 48, 14, workbench_colors.ink)
 		}
-		return ui2.screen(workbench_paper, [
+		return ui2.screen(workbench_colors.paper, [
 			button('desktop_update_back', '返回工作台', 16, 12, 132, false, true),
 			settings,
 		])
@@ -1166,99 +1160,99 @@ fn build_window_content() ui2.Element {
 			'项目列表读取失败，请刷新重试'
 		} else {
 			'此位置暂无运行环境'
-		}, 10, 8, 170, 11, workbench_muted)
+		}, 10, 8, 170, 11, workbench_colors.muted)
 	}
-	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 396), workbench_sidebar, project_rows)
+	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 396), workbench_colors.sidebar, project_rows)
 	can_choose := app.can_new_or_import()
 	side << sidebar_button('new', '+ 新建', ui2.rect(16, 143, 85, 34), true, false, can_choose, .center)
 	side << sidebar_button('import', '导入…', ui2.rect(111, 143, 85, 34), false, false, can_choose, .center)
 	side << sidebar_button('server_home', '连接与服务器', ui2.rect(16, h - 125, 180, 34), false, app.show_remote, !app.creating, .left)
 	side << sidebar_section_heading('env_label', '管理', h - 163)
 	side << sidebar_button('runtime', '运行包', ui2.rect(16, h - 83, 180, 34), false, app.show_runtime, !app.creating, .left)
-	side << label('binary_label', app.environment_version_label(), 22, h - 32, 170, 11, workbench_muted)
+	side << label('binary_label', app.environment_version_label(), 22, h - 32, 170, 11, workbench_colors.muted)
 	mut children := [ui2.view('workbench_sidebar', ui2.rect(0, 0, 214, h), ui2.BoxStyle{
-		bg:           workbench_sidebar
-		border_color: workbench_line
+		bg:           workbench_colors.sidebar
+		border_color: workbench_colors.line
 		border_right: 1
 	}, side)]
 	if app.show_development {
 		app.sync_development_apps()
-		children << ui2.scroll('development_mcp_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, development_mcp_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('development_mcp_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, development_mcp_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_shared_relays {
-		children << ui2.scroll('shared_relays_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, shared_relays_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('shared_relays_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, shared_relays_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_component_install {
-		children << ui2.scroll('component_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, component_installation_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('component_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, component_installation_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_deployment {
-		children << ui2.scroll('deployment_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, application_deployment_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('deployment_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, application_deployment_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_remote && !app.show_servers && !app.remote_edit_connection && app.remote_snapshot.connected && app.remote_snapshot.profile_id==app.remote_id && same_remote_connection(app.remote_form(),app.remote_connected_form) && !app.show_runtime {
-		children << ui2.scroll('runtime_workspace_page',ui2.rect(content_x,0,cw+30,h),workbench_paper,runtime_workspace_view(mut app,cw,h))
-		return ui2.screen(workbench_paper,children)
+		children << ui2.scroll('runtime_workspace_page',ui2.rect(content_x,0,cw+30,h),workbench_colors.paper,runtime_workspace_view(mut app,cw,h))
+		return ui2.screen(workbench_colors.paper,children)
 	}
 	if app.show_remote {
-		children << ui2.scroll('remote_instances_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, if app.show_servers {
+		children << ui2.scroll('remote_instances_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, if app.show_servers {
 			remote_servers_view(app, cw)
 		} else {
 			remote_instances_view(app, cw)
 		})
-		return ui2.screen(workbench_paper, children)
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_runtime {
-		children << ui2.scroll('runtime_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, runtime_settings_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('runtime_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, runtime_settings_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_takeover && app.environment_id == '' {
-		children << ui2.scroll('takeover_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, if app.show_relay_monitor {
+		children << ui2.scroll('takeover_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, if app.show_relay_monitor {
 			relay_monitor_view(app, cw)
 		} else {
 			takeover_view(app, cw)
 		})
-		return ui2.screen(workbench_paper,children)
+		return ui2.screen(workbench_colors.paper,children)
 	}
 	if app.environment_id != '' {
-		children << ui2.scroll('environment_projects_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, remote_instances_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('environment_projects_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, remote_instances_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_rollback && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('config_rollback_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, config_rollback_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('config_rollback_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, config_rollback_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_history && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('version_history_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, version_history_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('version_history_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, version_history_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_config_diff && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('config_diff_page', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, config_diff_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('config_diff_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, config_diff_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.show_details && !app.new_project && app.projects.len > 0 {
-		children << ui2.scroll('project_details', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, project_details_view(app, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('project_details', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, project_details_view(app, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.new_project {
-		children << ui2.scroll('new_project_form', ui2.rect(content_x, 0, cw + 30, h), workbench_paper, new_project_view(app, 0, cw))
-		return ui2.screen(workbench_paper, children)
+		children << ui2.scroll('new_project_form', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, new_project_view(app, 0, cw))
+		return ui2.screen(workbench_colors.paper, children)
 	}
 	if app.projects.len == 0 {
-		children << label('empty_breadcrumb', '本地项目  /  开始使用', content_x, 25, cw, 12, workbench_muted)
-		children << label('empty', '还没有 vhttpd 运行环境', content_x, 73, cw, 26, workbench_ink)
+		children << label('empty_breadcrumb', '本地项目  /  开始使用', content_x, 25, cw, 12, workbench_colors.muted)
+		children << label('empty', '还没有 vhttpd 运行环境', content_x, 73, cw, 26, workbench_colors.ink)
 		children << state_notice('empty_guide', '从一个 vjsx 模板开始', '创建 vhttpd 运行配置及一个起始应用；同一运行环境可以继续承载其他应用。', ui2.rect(content_x, 132, cw, 106), 'info')
 		children << button('empty_new', '新建运行环境', content_x, 262, 160, true, true)
 		children << button('empty_import', '导入运行配置', content_x + 176, 262, 140, false, true)
 		if app.notice != '' {
 			children << state_notice('empty_notice', '项目列表暂不可用', app.notice, ui2.rect(content_x, 322, cw, 112), 'warning')
 		}
-		return ui2.screen(workbench_paper, children)
+		return ui2.screen(workbench_colors.paper, children)
 	}
-	children << ui2.scroll('runtime_workspace_page',ui2.rect(content_x,0,cw+30,h),workbench_paper,runtime_workspace_view(mut app,cw,h))
-	return ui2.screen(workbench_paper,children)
+	children << ui2.scroll('runtime_workspace_page',ui2.rect(content_x,0,cw+30,h),workbench_colors.paper,runtime_workspace_view(mut app,cw,h))
+	return ui2.screen(workbench_colors.paper,children)
 }
 
 fn workbench_bounds() ui2.Rect {

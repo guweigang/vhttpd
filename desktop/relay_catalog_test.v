@@ -24,11 +24,11 @@ fn test_catalog_is_scoped_and_remote_navigation_wins_over_other_pages() ! {
 	assert app.handle_shared_relay_event('shared_new')
 	assert app.shared_id.len == 24
 	for width in [488.0, 708.0] {
-		ui2.validate_element_tree(ui2.screen(workbench_paper, shared_relays_view(&app, width)))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, shared_relays_view(&app, width)))!
 	}
 	app.shared_protocol = 'websocket'
 	for width in [488.0, 708.0] {
-		ui2.validate_element_tree(ui2.screen(workbench_paper, shared_relays_view(&app, width)))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, shared_relays_view(&app, width)))!
 	}
 	app.environment_id = ''
 	app.open_relay_catalog()
@@ -77,7 +77,7 @@ fn test_empty_catalog_displays_remote_connection_errors() ! {
 	app := Workshop{ environment_id: 'server', shared_message: '请先连接所选远端服务器，再刷新连接库。' }
 	for width in [488.0, 708.0] {
 		rows := shared_relays_view(&app, width)
-		ui2.validate_element_tree(ui2.screen(workbench_paper, rows))!
+		ui2.validate_element_tree(ui2.screen(workbench_colors.paper, rows))!
 		assert rows.len > 0
 	}
 }
@@ -88,15 +88,15 @@ fn test_saved_connections_do_not_duplicate_runtime_service_inventory() ! {
 	app.open_relay_catalog()
 	assert app.shared_id == entry.id
 	for width in [488.0,708.0] {
-		root := ui2.screen(workbench_paper,shared_relays_view(&app,width))
+		root := ui2.screen(workbench_colors.paper,shared_relays_view(&app,width))
 		ui2.validate_element_tree(root)!
 		assert catalog_has_id(root,'shared_name') && catalog_has_id(root,'shared_token')
 		assert !catalog_has_id(root,'shared_remote_id') && !catalog_has_id(root,'shared_db_local')
 		assert !catalog_has_id(root,'shared_service_native_hub')
 	}
-	assert !catalog_has_id(ui2.screen(workbench_paper,shared_relays_view(&app,488)), 'shared_tab_services')
+	assert !catalog_has_id(ui2.screen(workbench_colors.paper,shared_relays_view(&app,488)), 'shared_tab_services')
 	assert app.handle_shared_relay_event('shared_detail_history')
-	assert catalog_has_id(ui2.screen(workbench_paper,shared_relays_view(&app,488)),'shared_probe_history')
+	assert catalog_has_id(ui2.screen(workbench_colors.paper,shared_relays_view(&app,488)),'shared_probe_history')
 	assert app.sequence == 0
 }
 
@@ -127,7 +127,7 @@ fn test_remote_probe_requires_matching_connected_idle_host_without_local_fallbac
 		app.start_shared_relay_test(entry)
 		assert !app.shared_testing
 		assert app.shared_message.contains('远端主机')
-		root := ui2.screen(workbench_paper,shared_relays_view(&app,488))
+		root := ui2.screen(workbench_colors.paper,shared_relays_view(&app,488))
 		assert catalog_text(root).contains('请先连接所选远端主机')
 		assert !menu_button_enabled(root,'shared_test')
 		select { _ := <-app.server_worker.commands { assert false, 'Disconnected/busy/wrong host must not receive a probe' } else {} }
@@ -143,7 +143,7 @@ fn test_probe_results_are_bound_to_parameters_and_library_returns_to_relay() {
 	mut app := Workshop{environment_id:'host',show_shared_relays:true}
 	assert app.handle_shared_relay_event('shared_close')
 	assert !app.show_shared_relays && app.show_remote && app.workspace_page == .relay
-	menus := app.workbench_menus(ui2.screen(workbench_paper,[]))
+	menus := app.workbench_menus(ui2.screen(workbench_colors.paper,[]))
 	for menu in menus { assert menu_find(menu.items,'menu:shared_relays') == none }
 }
 

@@ -16,9 +16,9 @@ fn (mut app Workshop) inspect_current_project() {
 fn project_details_view(app &Workshop, width f64) []ui2.Element {
 	project := app.projects[app.selected]
 	mut elements := [
-		label('details_breadcrumb', ui_text('运行环境  /  ${project.name}'), 0, 25, width, 12, workbench_muted),
-		label('details_title', ui_text('配置组成'), 0, 73, width, 25, workbench_ink),
-		label('details_intro', ui_text('以下来自磁盘配置；连接、重连与通道状态请查看 Admin UI → Relay。'), 0, 111, width, 12, workbench_muted),
+		label('details_breadcrumb', ui_text('运行环境  /  ${project.name}'), 0, 25, width, 12, workbench_colors.muted),
+		label('details_title', ui_text('配置组成'), 0, 73, width, 25, workbench_colors.ink),
+		label('details_intro', ui_text('以下来自磁盘配置；连接、重连与通道状态请查看 Admin UI → Relay。'), 0, 111, width, 12, workbench_colors.muted),
 		button('details_close', ui_text('返回工作台'), 0, 157, 100, false, true),
 		button('details_refresh', ui_text('重新读取'), 112, 157, 90, false, true),
 		button('edit_config', ui_text('打开配置'), 214, 157, 90, false, true),
@@ -53,7 +53,7 @@ fn project_details_view(app &Workshop, width f64) []ui2.Element {
 	if app.details_error != '' {
 		lines = [app.details_error, '', ui_text('原始文件保留，可点击“打开配置”修复。')]
 	}
-	body := ui2.text_area('details_body', lines.join('\n'), ui2.rect(0, 214, width, 450), ui2.BoxStyle{ bg: workbench_sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_ink, font_family: workbench_detail_font() })
+	body := ui2.text_area('details_body', lines.join('\n'), ui2.rect(0, 214, width, 450), ui2.BoxStyle{ bg: workbench_colors.sidebar, radius: 7 }, ui2.TextStyle{ size: 12, color: workbench_colors.ink, font_family: workbench_detail_font() })
 	elements << ui2.Element{ ...body, readonly: true }
 	return elements
 }

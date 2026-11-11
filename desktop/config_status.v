@@ -12,8 +12,8 @@ fn config_status_view(app &Workshop, x f64, y f64, width f64) ui2.Element {
 	bg, color := state_colors(tone)
 	return ui2.view('config_status_card', ui2.rect(x, y, width, 81), ui2.BoxStyle{bg: bg, radius: 8, border_color: color, border_left: 3}, [
 		ui2.label('config_effectiveness', title, ui2.rect(16, 8, width - 236, 20), ui2.TextStyle{size: 13, bold: true, color: color}),
-		label('config_changes', detail, 16, 31, width - 236, 11, workbench_muted),
-		label('config_checked', if running && status.checked_at != '' { ui_text('整项目检查 ${status.checked_at} · 每 2 秒刷新') } else { ui_text('仅检查工作台拥有的实例') }, 12, 53, width - 24, 10, workbench_muted),
+		label('config_changes', detail, 16, 31, width - 236, 11, workbench_colors.muted),
+		label('config_checked', if running && status.checked_at != '' { ui_text('整项目检查 ${status.checked_at} · 每 2 秒刷新') } else { ui_text('仅检查工作台拥有的实例') }, 12, 53, width - 24, 10, workbench_colors.muted),
 		button(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' }, if status.recovery_available && !status.pending && status.state != .unavailable { ui_text('版本历史') } else { ui_text('差异详情') }, width - 208, 9, 94, false, app.local_command_enabled(if status.recovery_available && !status.pending && status.state != .unavailable { 'history_open' } else { 'config_diff' })),
 		button(if status.pending { 'apply_restart' } else { 'check_config' }, if status.pending { ui_text('重启并生效') } else { ui_text('检查生效') }, width - 106, 9, 94, status.pending, app.local_command_enabled(if status.pending { 'apply_restart' } else { 'check_config' })),
 	])
@@ -53,8 +53,8 @@ fn config_diff_view(app &Workshop, width f64) []ui2.Element {
 	project := app.projects[app.selected]
 	status := app.config_statuses[project.config_path] or { host.ConfigStatus{} }
 	mut rows := [
-		label('diff_breadcrumb', project.name + ui_text(' / 配置差异'), 0, 25, width, 12, workbench_muted),
-		label('diff_title', if app.snapshot.phase != .running { ui_text('已生效版本 · 恢复与差异') } else if status.state == .unavailable { ui_text('配置检查失败 · 差异详情') } else if status.pending { ui_text('待生效配置 · 差异详情') } else { ui_text('配置已生效 · 差异详情') }, 0, 65, width, 24, workbench_ink),
+		label('diff_breadcrumb', project.name + ui_text(' / 配置差异'), 0, 25, width, 12, workbench_colors.muted),
+		label('diff_title', if app.snapshot.phase != .running { ui_text('已生效版本 · 恢复与差异') } else if status.state == .unavailable { ui_text('配置检查失败 · 差异详情') } else if status.pending { ui_text('待生效配置 · 差异详情') } else { ui_text('配置已生效 · 差异详情') }, 0, 65, width, 24, workbench_colors.ink),
 		button('config_diff_close', ui_text('返回工作台'), 0, 108, 104, false, true),
 		button('check_config', ui_text('重新检查'), 116, 108, 94, false, app.snapshot.phase == .running),
 		button('restart', ui_text('重启并检查'), 222, 108, 112, true, app.snapshot.phase == .running),
@@ -66,11 +66,11 @@ fn config_diff_view(app &Workshop, width f64) []ui2.Element {
 		ui_text('受影响 Relay：') + if status.relays.len > 0 { status.relays.join(', ') } else { ui_text('无') },
 		ui_text('受影响 Pipeline：') + if status.pipelines.len > 0 { status.pipelines.join(', ') } else { ui_text('无') },
 		ui_text('文件与上次确认已生效的版本比较。')]
-	body := ui2.text_area('diff_summary', lines.join('\n'), ui2.rect(0, 159, width, 132), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
+	body := ui2.text_area('diff_summary', lines.join('\n'), ui2.rect(0, 159, width, 132), ui2.BoxStyle{bg: workbench_colors.sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_colors.ink, font_family: workbench_detail_font()})
 	rows << ui2.Element{...body, readonly: true}
 	mut y := 311.0
 	if status.pending {
-		rows << label('diff_fields_title', ui_text('Relay / Pipeline 字段变化'), 0, y, width, 16, workbench_ink)
+		rows << label('diff_fields_title', ui_text('Relay / Pipeline 字段变化'), 0, y, width, 16, workbench_colors.ink)
 		y += 35
 		mut field_lines := []string{}
 		for field in status.fields {
@@ -84,24 +84,24 @@ fn config_diff_view(app &Workshop, width f64) []ui2.Element {
 		}
 		if field_lines.len == 0 { field_lines << ui_text('Relay / Pipeline 字段未变，差异来自其他组件。') }
 		height := f64(if field_lines.len * 15 + 20 > 300 { 300 } else { field_lines.len * 15 + 20 })
-		field_body := ui2.text_area('diff_field_values', field_lines.join('\n'), ui2.rect(0, y, width, height), ui2.BoxStyle{bg: workbench_sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_ink, font_family: workbench_detail_font()})
+		field_body := ui2.text_area('diff_field_values', field_lines.join('\n'), ui2.rect(0, y, width, height), ui2.BoxStyle{bg: workbench_colors.sidebar, radius: 6}, ui2.TextStyle{size: 11, color: workbench_colors.ink, font_family: workbench_detail_font()})
 		rows << ui2.Element{...field_body, readonly: true}
 		y += height + 24
 	}
 	if status.pending && status.files.len == 0 {
-		rows << label('diff_no_files', ui_text('文件文本未变；差异可能来自环境引用或运行计划变化。'), 0, y, width, 12, workbench_muted)
+		rows << label('diff_no_files', ui_text('文件文本未变；差异可能来自环境引用或运行计划变化。'), 0, y, width, 12, workbench_colors.muted)
 		y += 34
 	}
 	mut files := status.files.clone()
 	files << status.affected_sources
 	for i, file in files {
 		if i == status.files.len {
-			rows << label('diff_affected_sources', ui_text('受影响组件的其他来源（文件不一定有修改）'), 0, y, width, 13, workbench_ink)
+			rows << label('diff_affected_sources', ui_text('受影响组件的其他来源（文件不一定有修改）'), 0, y, width, 13, workbench_colors.ink)
 			y += 36
 		}
 		path := if file.path.starts_with(os.dir(project.config_path) + '/') { './' + file.path[os.dir(project.config_path).len + 1..] } else { file.path }
-		rows << label('diff_file_${i}', ui_text(file.change) + ' · ' + path, 0, y, width, 13, workbench_ink)
-		rows << label('diff_declarations_${i}', ui_text('文件声明 Relay：') + (if file.relays.len > 0 { file.relays.join(', ') } else { ui_text('无') }) + '  /  Pipeline：' + (if file.pipelines.len > 0 { file.pipelines.join(', ') } else { ui_text('无') }), 0, y + 29, width, 11, workbench_muted)
+		rows << label('diff_file_${i}', ui_text(file.change) + ' · ' + path, 0, y, width, 13, workbench_colors.ink)
+		rows << label('diff_declarations_${i}', ui_text('文件声明 Relay：') + (if file.relays.len > 0 { file.relays.join(', ') } else { ui_text('无') }) + '  /  Pipeline：' + (if file.pipelines.len > 0 { file.pipelines.join(', ') } else { ui_text('无') }), 0, y + 29, width, 11, workbench_colors.muted)
 		rows << button('config_edit_${i}', if file.editable { ui_text('在 Admin UI 继续编辑 ↗') } else { ui_text('来源已移出项目') }, 0, y + 60, 205, false, file.editable && app.snapshot.phase == .running)
 		y += 116
 	}

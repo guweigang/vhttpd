@@ -71,7 +71,7 @@ fn (app &Workshop) environment_menu_items() []ui2.DropdownMenuItem {
 }
 
 fn (app &Workshop) environment_selector() ui2.Element {
-	return painted_button(ui2.dropdown_menu_toggle_action('environment_menu'), app.display_environment_name() + ' ▾', ui2.rect(16, 82, 180, 34), ui2.BoxStyle{bg: workbench_paper, radius: 6}, workbench_ink, app.can_switch_environment(), .left, 10)
+	return painted_button(ui2.dropdown_menu_toggle_action('environment_menu'), app.display_environment_name() + ' ▾', ui2.rect(16, 82, 180, 34), ui2.BoxStyle{bg: workbench_colors.paper, radius: 6}, workbench_colors.ink, app.can_switch_environment(), .left, 10)
 }
 
 fn (mut app Workshop) apply_environment_menu(step ui2.DropdownMenuStep) {

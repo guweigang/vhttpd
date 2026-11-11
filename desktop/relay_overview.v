@@ -73,36 +73,36 @@ fn relay_service_card(item RelayServiceRow, prefix string, y f64, width f64, com
 	id := prefix + '_' + item.id
 	height := if compact { 88.0 } else { 112.0 }
 	mut children := [
-		ui2.label(id+'_name',item.name,ui2.rect(16,10,width-160,26),ui2.TextStyle{size:15,bold:true,color:workbench_ink}),
+		ui2.label(id+'_name',item.name,ui2.rect(16,10,width-160,26),ui2.TextStyle{size:15,bold:true,color:workbench_colors.ink}),
 		relay_status_badge(id+'_state',item.status,item.tone,width-124,12,108),
-		ui2.label(id+'_kind',item.kind,ui2.rect(16,39,width-32,18),ui2.TextStyle{size:11,color:workbench_muted}),
+		ui2.label(id+'_kind',item.kind,ui2.rect(16,39,width-32,18),ui2.TextStyle{size:11,color:workbench_colors.muted}),
 	]
 	if !compact {
-		children << ui2.label(id+'_detail',item.detail,ui2.rect(16,64,width-168,18),ui2.TextStyle{size:11,color:workbench_muted})
-		children << ui2.label(id+'_metrics',item.metrics,ui2.rect(16,87,width-32,18),ui2.TextStyle{size:11,color:workbench_ink})
+		children << ui2.label(id+'_detail',item.detail,ui2.rect(16,64,width-168,18),ui2.TextStyle{size:11,color:workbench_colors.muted})
+		children << ui2.label(id+'_metrics',item.metrics,ui2.rect(16,87,width-32,18),ui2.TextStyle{size:11,color:workbench_colors.ink})
 		if item.application != '' {
 			children << button('workspace_application_'+item.application,'查看应用',width-112,57,96,false,true)
 		}
 	} else {
-		children << label(id+'_metrics',item.metrics,16,57,width-32,11,workbench_ink)
+		children << label(id+'_metrics',item.metrics,16,57,width-32,11,workbench_colors.ink)
 	}
-	return ui2.view(id,ui2.rect(0,y,width,height),ui2.BoxStyle{bg:workbench_paper,radius:8,border_color:workbench_line,border_left:1,border_right:1,border_top:1,border_bottom:1},children)
+	return ui2.view(id,ui2.rect(0,y,width,height),ui2.BoxStyle{bg:workbench_colors.paper,radius:8,border_color:workbench_colors.line,border_left:1,border_right:1,border_top:1,border_bottom:1},children)
 }
 
 fn relay_metric(id string, title string, value string, hint string, frame ui2.Rect) ui2.Element {
-	return ui2.view(id,frame,ui2.BoxStyle{bg:workbench_sidebar,radius:8},[
-		label(id+'_title',title,14,9,frame.width-28,11,workbench_muted),
-		label(id+'_value',value,14,32,frame.width-28,24,workbench_ink),
-		label(id+'_hint',hint,14,72,frame.width-28,10,workbench_muted),
+	return ui2.view(id,frame,ui2.BoxStyle{bg:workbench_colors.sidebar,radius:8},[
+		label(id+'_title',title,14,9,frame.width-28,11,workbench_colors.muted),
+		label(id+'_value',value,14,32,frame.width-28,24,workbench_colors.ink),
+		label(id+'_hint',hint,14,72,frame.width-28,10,workbench_colors.muted),
 	])
 }
 
 fn relay_overview_view(app &Workshop, width f64, remote bool) []ui2.Element {
 	data := app.workspace_data()
 	live := data.relay
-	mut rows := [label('relay_overview_title','连接与通道',0,164,width-196,18,workbench_ink),
+	mut rows := [label('relay_overview_title','连接与通道',0,164,width-196,18,workbench_colors.ink),
 		button('workspace_relay_library','从已保存连接选择…',width-184,160,184,false,true),
-		label('relay_overview_hint','运行中的服务与连接状态 · 自动刷新',0,194,width,12,workbench_muted)]
+		label('relay_overview_hint','运行中的服务与连接状态 · 自动刷新',0,194,width,12,workbench_colors.muted)]
 	columns := if width >= 620 { 4 } else { 2 }
 	cell := (width - f64(columns-1)*12)/f64(columns)
 	titles := ['原生 Relay 连接','应用 WebSocket','活动资源通道','失败请求']
@@ -112,8 +112,8 @@ fn relay_overview_view(app &Workshop, width f64, remote bool) []ui2.Element {
 		rows << relay_metric('relay_metric_${i}',titles[i],values[i],hints[i],ui2.rect(f64(i%columns)*(cell+12),232+f64(i/columns)*112,cell,100))
 	}
 	mut y := 232.0 + f64(4/columns)*112 + 8
-	rows << label('relay_services_title','环境中的服务',0,y,width-160,14,workbench_ink)
-	rows << ui2.label('relay_services_updated',if data.checked_at != '' {'更新 '+data.checked_at} else {'等待运行时'},ui2.rect(width-160,y,160,25),ui2.TextStyle{size:11,color:workbench_muted,align:.right})
+	rows << label('relay_services_title','环境中的服务',0,y,width-160,14,workbench_colors.ink)
+	rows << ui2.label('relay_services_updated',if data.checked_at != '' {'更新 '+data.checked_at} else {'等待运行时'},ui2.rect(width-160,y,160,25),ui2.TextStyle{size:11,color:workbench_colors.muted,align:.right})
 	y += 36
 	services := relay_service_rows(data)
 	if !data.known {
@@ -131,28 +131,28 @@ fn relay_overview_view(app &Workshop, width f64, remote bool) []ui2.Element {
 	if data.websocket_error != '' || !live.known {
 		message := [data.websocket_error,if !live.known {live.error} else {''}].filter(it != '').join(' · ')
 		if message != '' {
-			rows << ui2.label('relay_overview_error',message,ui2.rect(0,y,width,42),ui2.TextStyle{size:12,color:workbench_warning,lines:2})
+			rows << ui2.label('relay_overview_error',message,ui2.rect(0,y,width,42),ui2.TextStyle{size:12,color:workbench_colors.warning,lines:2})
 			y += 50
 		}
 	}
 	if !remote {
 		rows << button('takeover_open','应用本地接管…',0,y,168,false,app.projects.len > 0)
-		rows << label('relay_takeover_scope','按应用设置流量规则',182,y+4,width-182,11,workbench_muted)
+		rows << label('relay_takeover_scope','按应用设置流量规则',182,y+4,width-182,11,workbench_colors.muted)
 		y += 54
 	}
-	rows << label('relay_recent_title','最近事件',0,y+5,width-154,14,workbench_ink)
+	rows << label('relay_recent_title','最近事件',0,y+5,width-154,14,workbench_colors.ink)
 	rows << button('workspace_relay_logs','完整日志 →',width-142,y,142,false,true)
 	y += 46
 	mut events := []host.RelayLiveEvent{}
 	for i := live.data.diagnostics.events.len-1; i >= 0 && events.len < 6; i-- { events << live.data.diagnostics.events[i] }
 	if events.len == 0 {
-		rows << label('relay_recent_empty','暂无原生 Relay 事件；WebSocket 应用输出请查看完整日志。',0,y,width,12,workbench_muted)
+		rows << label('relay_recent_empty','暂无原生 Relay 事件；WebSocket 应用输出请查看完整日志。',0,y,width,12,workbench_colors.muted)
 	} else {
 		for i,event in events {
 			f := event.fields
-			rows << ui2.view('relay_recent_${i}',ui2.rect(0,y,width,64),ui2.BoxStyle{bg:workbench_sidebar,radius:6},[
-				label('relay_recent_${i}_summary',relay_event_line(event).all_before('\n'),12,7,width-24,12,workbench_ink),
-				label('relay_recent_${i}_scope',f['relay_id'] + if f['route'] != '' {' · '+f['route']} else {''},12,34,width-24,11,workbench_muted),
+			rows << ui2.view('relay_recent_${i}',ui2.rect(0,y,width,64),ui2.BoxStyle{bg:workbench_colors.sidebar,radius:6},[
+				label('relay_recent_${i}_summary',relay_event_line(event).all_before('\n'),12,7,width-24,12,workbench_colors.ink),
+				label('relay_recent_${i}_scope',f['relay_id'] + if f['route'] != '' {' · '+f['route']} else {''},12,34,width-24,11,workbench_colors.muted),
 			])
 			y += 72
 		}

@@ -302,27 +302,27 @@ fn development_mcp_view(app &Workshop, width f64) []ui2.Element {
 		app.development_apps.map(development_app_title(it))
 	}
 	mut rows := [
-		label('mcp_heading', '模型开发 · MCP', 0, 34, width - 130, 24, workbench_ink),
+		label('mcp_heading', '模型开发 · MCP', 0, 34, width - 130, 24, workbench_colors.ink),
 		button('mcp_back', '返回工作台', width - 130, 34, 130, false, true),
-		label('mcp_description', 'MCP 仅支持本机应用开发，暂不支持远端运行环境。', 0, 82, width, 13, workbench_ink),
+		label('mcp_description', 'MCP 仅支持本机应用开发，暂不支持远端运行环境。', 0, 82, width, 13, workbench_colors.ink),
 		label('mcp_scope', if app.environment_id != '' {
 			'请在左侧切换到本机，再选择应用开启 MCP。'
 		} else {
 			'启停会影响当前运行环境中的全部应用。'
-		}, 0, 114, width, 13, workbench_muted),
-		label('mcp_environment', '运行环境：' + app.workspace_name(), 0, 154, width, 13, workbench_ink),
+		}, 0, 114, width, 13, workbench_colors.muted),
+		label('mcp_environment', '运行环境：' + app.workspace_name(), 0, 154, width, 13, workbench_colors.ink),
 	]
 	if app.environment_id != '' {
-		rows << label('mcp_remote_unsupported', '远端运行环境暂不支持 MCP 开发', 0, 210, width, 18, workbench_ink)
-		rows << label('mcp_remote_apps', '远端应用仍可在应用页新建和安装。', 0, 250, width, 13, workbench_muted)
+		rows << label('mcp_remote_unsupported', '远端运行环境暂不支持 MCP 开发', 0, 210, width, 18, workbench_colors.ink)
+		rows << label('mcp_remote_apps', '远端应用仍可在应用页新建和安装。', 0, 250, width, 13, workbench_colors.muted)
 		rows << button('mcp_new_application', '新建远端应用…', 0, 294, 180, false, !busy && app.remote_id != '')
 		if running {
 			binding := app.development_service.selection()
-			rows << label('mcp_local_running', '本机 MCP 仍在运行，与当前远端环境无关。', 0, 358, width, 13, workbench_ink)
-			rows << label('mcp_binding', 'MCP 当前目标：' + binding.project.name + ' / ' + binding.application.label, 0, 394, width, 12, workbench_ink)
+			rows << label('mcp_local_running', '本机 MCP 仍在运行，与当前远端环境无关。', 0, 358, width, 13, workbench_colors.ink)
+			rows << label('mcp_binding', 'MCP 当前目标：' + binding.project.name + ' / ' + binding.application.label, 0, 394, width, 12, workbench_colors.ink)
 			rows << button('mcp_stop', '关闭本机 MCP', 0, 434, 180, false, !busy)
 			rows << button('mcp_remote_hub_target', '选择此环境作为 MCP Hub 目标', 0, 485, 280, false, !busy && app.server_snapshot.connected && app.server_snapshot.server_id == app.environment_id && app.server_snapshot.projects.any(it.id == app.remote_id))
-			rows << label('mcp_remote_hub_status', app.development_message, 0, 535, width, 12, workbench_muted)
+			rows << label('mcp_remote_hub_status', app.development_message, 0, 535, width, 12, workbench_colors.muted)
 		}
 		return rows
 	}
@@ -353,15 +353,15 @@ fn development_mcp_view(app &Workshop, width f64) []ui2.Element {
 	}
 	if source_mode {
 		binding := app.development_service.selection()
-		rows << label('mcp_source_root', '源码工作区：' + binding.project.workdir + '（原位开发，未安装）', 0, details_y, width, 12, workbench_ink)
+		rows << label('mcp_source_root', '源码工作区：' + binding.project.workdir + '（原位开发，未安装）', 0, details_y, width, 12, workbench_colors.ink)
 		details_y += 34
 	}
 	if !source_mode && selected.len == 1 {
-		rows << label('mcp_source_root', '项目目录：' + selected[0].root, 0, details_y, width, 12, workbench_ink)
+		rows << label('mcp_source_root', '项目目录：' + selected[0].root, 0, details_y, width, 12, workbench_colors.ink)
 		details_y += 34
 	}
 	if app.development_message != '' {
-		rows << label('mcp_status', app.development_message, 0, details_y, width, 12, workbench_muted)
+		rows << label('mcp_status', app.development_message, 0, details_y, width, 12, workbench_colors.muted)
 		details_y += 34
 	}
 	if running {
@@ -370,11 +370,11 @@ fn development_mcp_view(app &Workshop, width f64) []ui2.Element {
 			'MCP 工作区：' + app.development_project.workdir
 		} else {
 			'MCP 当前目标：' + binding.project.name + ' / ' + binding.application.label
-		}, 0, details_y, width, 12, workbench_ink)
+		}, 0, details_y, width, 12, workbench_colors.ink)
 		details_y += 34
-		rows << label('mcp_credentials_note', '连接配置含访问凭据，仅粘贴到受信任的 MCP 客户端。', 0, details_y, width, 12, workbench_ink)
+		rows << label('mcp_credentials_note', '连接配置含访问凭据，仅粘贴到受信任的 MCP 客户端。', 0, details_y, width, 12, workbench_colors.ink)
 		details_y += 36
-		config := ui2.text_area('mcp_connection_config', app.development_service.connection_config(), ui2.rect(0, details_y, width, 230), ui2.BoxStyle{ bg: workbench_sidebar }, ui2.TextStyle{ font_family: workbench_mono_font, size: 12 })
+		config := ui2.text_area('mcp_connection_config', app.development_service.connection_config(), ui2.rect(0, details_y, width, 230), ui2.BoxStyle{ bg: workbench_colors.sidebar }, ui2.TextStyle{ font_family: workbench_mono_font, size: 12 })
 		rows << ui2.Element{ ...config, readonly: true }
 		details_y += 254
 	}
@@ -399,12 +399,12 @@ fn development_mcp_view(app &Workshop, width f64) []ui2.Element {
 			rows << button('mcp_relay_revoke', '撤销 Relay 授权', 348, details_y + 94, 146, false, !busy)
 		}
 		if relay_config != '' {
-			config := ui2.text_area('mcp_relay_config', relay_config, ui2.rect(0, details_y + 144, width, 230), ui2.BoxStyle{ bg: workbench_sidebar }, ui2.TextStyle{ font_family: workbench_mono_font, size: 12 })
+			config := ui2.text_area('mcp_relay_config', relay_config, ui2.rect(0, details_y + 144, width, 230), ui2.BoxStyle{ bg: workbench_colors.sidebar }, ui2.TextStyle{ font_family: workbench_mono_font, size: 12 })
 			rows << ui2.Element{ ...config, readonly: true }
 		}
 		return rows
 	}
-	rows << label('mcp_recovery', '选择应用 → 预览修改 → 校验 → 应用 → 运行验证。', 0, details_y + 12, width, 12, workbench_muted)
+	rows << label('mcp_recovery', '选择应用 → 预览修改 → 校验 → 应用 → 运行验证。', 0, details_y + 12, width, 12, workbench_colors.muted)
 	return rows
 }
 

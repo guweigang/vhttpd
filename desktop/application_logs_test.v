@@ -16,7 +16,7 @@ fn test_application_log_source_switches_never_drop_application_scope() ! {
  for source in ['stdout','runtime','relay','application'] {
   assert app.handle_workspace_event('workspace_source_'+source)
   assert app.workspace_log_application == 'wechat' && app.workspace_logs_text == ''
-  root := ui2.screen(workbench_paper,workspace_logs_view(mut app,488,740))
+  root := ui2.screen(workbench_colors.paper,workspace_logs_view(mut app,488,740))
   ui2.validate_element_tree(root)!
   text := root.children.filter(it.id == 'workspace_logs')[0].text
   assert !text.contains('must-never-show') && !text.contains('stale')
@@ -36,7 +36,7 @@ fn test_old_or_failed_runtime_never_falls_back_to_process_output_for_an_app() {
 
 fn test_unsupported_runtime_exposes_upgrade_without_mixed_output() ! {
 	mut app := Workshop{workspace_log_application:'wechat',remote_snapshot:host.RemoteSnapshot{workspace:host.RuntimeWorkspace{application_logs_unsupported:true,application_logs_errors:{'wechat':'当前运行包尚不支持应用日志（HTTP 404）'}}},environment_id:'fixture'}
-	root := ui2.screen(workbench_paper,workspace_logs_view(mut app,488,740))
+	root := ui2.screen(workbench_colors.paper,workspace_logs_view(mut app,488,740))
 	ui2.validate_element_tree(root)!
 	assert menu_button_enabled(root,'runtime')
 }

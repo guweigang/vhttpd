@@ -86,7 +86,7 @@ fn (app &Workshop) workbench_menus(root ui2.Element) []ui2.Menu {
 	mut selected := ''
 	if local && app.projects.len > 0 && app.selected >= 0 && app.selected < app.projects.len { selected = app.projects[app.selected].name }
 	if !local { for profile in app.environment_profiles() { if profile.id == app.remote_id { selected = profile.name } } }
-	remote_controls := if !local && selected != '' { ui2.screen(workbench_paper, remote_instances_view(app, 708)) } else { ui2.screen(workbench_paper, []) }
+	remote_controls := if !local && selected != '' { ui2.screen(workbench_colors.paper, remote_instances_view(app, 708)) } else { ui2.screen(workbench_colors.paper, []) }
 	can_remote := available && !app.server_busy && !app.remote_snapshot.busy && selected != ''
 	can_view := available && !app.new_project && selected != ''
 	mut file_items := [
@@ -103,6 +103,11 @@ fn (app &Workshop) workbench_menus(root ui2.Element) []ui2.Menu {
 		ui2.MenuItem{...menu_row('language:zh-CN', '简体中文', true, ''), checked: workbench_language_preference == 'zh-CN'},
 		ui2.MenuItem{...menu_row('language:en', 'English', true, ''), checked: workbench_language_preference == 'en'},
 	]
+	appearance_items := [
+		ui2.MenuItem{...menu_row('appearance:system', '跟随系统', true, ''), checked: workbench_appearance_mode == .system},
+		ui2.MenuItem{...menu_row('appearance:light', '浅色', true, ''), checked: workbench_appearance_mode == .light},
+		ui2.MenuItem{...menu_row('appearance:dark', '深色', true, ''), checked: workbench_appearance_mode == .dark},
+	]
 	mut view_items := []ui2.MenuItem{}
 	for i, action in ['overview', 'applications', 'relay', 'configuration', 'logs'] {
 		title := ['运行环境总览', '应用', 'Relay', '配置', '运行日志'][i]
@@ -111,7 +116,7 @@ fn (app &Workshop) workbench_menus(root ui2.Element) []ui2.Menu {
 	view_items << [ui2.menu_separator(),
 		menu_row('config_diff', '待生效配置差异', app.local_command_enabled('config_diff'), ''),
 		menu_row('history_open', '已生效版本历史', app.local_command_enabled('history_open'), ''),
-		ui2.menu_separator(), ui2.submenu('Language / 语言', language_items)]
+		ui2.menu_separator(), ui2.submenu('外观', appearance_items), ui2.submenu('Language / 语言', language_items)]
 	mut menus := [
 		ui2.Menu{title: '文件', items: file_items},
 		ui2.Menu{title: '编辑', items: edit_menu_rows(root)},
@@ -207,6 +212,12 @@ fn handle_workbench_menu(event string) bool {
 	for menu in menus { if item := menu_find(menu.items, event) { allowed = item.enabled; break } }
 	if !allowed { return true }
 	action := event['menu:'.len..]
+	if action.starts_with('appearance:') {
+		if mode := ui2.component_theme_mode_from_name(action.all_after('appearance:')) {
+			choose_workbench_appearance(mode)
+		}
+		return true
+	}
 	if app.desktop_update_open && action != 'desktop_updates'
 		&& action !in ['about', 'help', 'shortcuts', 'minimize', 'zoom', 'fullscreen']
 		&& !action.starts_with('language:') && !action.starts_with('edit_') {

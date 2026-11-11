@@ -137,17 +137,17 @@ fn (mut app Workshop) handle_runtime_event(event string) bool {
 
 fn runtime_local_view(app &Workshop, width f64) []ui2.Element {
 	can_switch := !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [.starting, .stopping]
-	mut rows := [label('runtime_title', host.local_environment_name()+' · 默认运行包', 0, 0, width, 20, workbench_ink),
-		label('runtime_version', if app.runtime_info.ready { 'vhttpd ' + app.runtime_info.version } else if app.runtime_checked { '运行包不可用' } else { '正在识别版本…' }, 0, 36, width, 16, workbench_ink),
-		label('runtime_source', '来源：' + ui_text(app.runtime_info.source), 0, 68, width, 12, workbench_muted),
-		ui2.label('runtime_path', app.binary, ui2.rect(0, 94, width, 52), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3}),
+	mut rows := [label('runtime_title', host.local_environment_name()+' · 默认运行包', 0, 0, width, 20, workbench_colors.ink),
+		label('runtime_version', if app.runtime_info.ready { 'vhttpd ' + app.runtime_info.version } else if app.runtime_checked { '运行包不可用' } else { '正在识别版本…' }, 0, 36, width, 16, workbench_colors.ink),
+		label('runtime_source', '来源：' + ui_text(app.runtime_info.source), 0, 68, width, 12, workbench_colors.muted),
+		ui2.label('runtime_path', app.binary, ui2.rect(0, 94, width, 52), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 3}),
 		state_notice('runtime_notice', if app.runtime_busy { '正在准备运行包' } else if app.runtime_error { '运行包未就绪' } else if app.runtime_info.ready { '运行包已就绪' } else { '准备运行包' }, app.runtime_message, ui2.rect(0, 158, width, 96), if app.runtime_error { 'warning' } else if app.runtime_info.ready && !app.runtime_busy { 'good' } else { 'info' }),
 		button('runtime_download', if app.runtime_busy { '正在处理…' } else { '下载官方运行包' }, 0, 276, width, !app.runtime_info.ready, can_switch),
 		button('binary', '选择已解压包中的 vhttpd…', 0, 322, width, false, can_switch),
 		button('runtime_refresh', '刷新版本', 0, 378, (width - 12) / 2, false, !app.runtime_busy),
 		button('runtime_bundled', '使用内置版本', (width + 12) / 2, 378, (width - 12) / 2, false, can_switch),
-		ui2.label('runtime_release_hint', '这里设置本机默认版本，用于之后启动的本机运行环境。请先停止当前环境，再选择完整运行包。', ui2.rect(0, 432, width, 54), ui2.TextStyle{size: 11, color: workbench_muted, lines: 3})]
+		ui2.label('runtime_release_hint', '这里设置本机默认版本，用于之后启动的本机运行环境。请先停止当前环境，再选择完整运行包。', ui2.rect(0, 432, width, 54), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 3})]
 	if app.runtime_busy { rows << button('runtime_cancel', '取消操作', 0, 500, 110, false, true) }
-	if app.runtime_resume_start { rows << ui2.label('runtime_resume', '项目已保留。运行包就绪后自动继续启动。', ui2.rect(0, 550, width, 48), ui2.TextStyle{size: 12, color: workbench_ink, lines: 2}) }
+	if app.runtime_resume_start { rows << ui2.label('runtime_resume', '项目已保留。运行包就绪后自动继续启动。', ui2.rect(0, 550, width, 48), ui2.TextStyle{size: 12, color: workbench_colors.ink, lines: 2}) }
 	return rows
 }

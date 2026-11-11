@@ -20,7 +20,7 @@ fn test_relay_overview_has_structured_services_and_preserves_application_actions
 	data := host.RuntimeWorkspace{known:true,relays:[host.ApplicationItem{id:'bodytest_database',kind:'hub'}],applications:[host.RuntimeApplication{id:'paseo',label:'Paseo',listeners:[host.ApplicationListener{id:'paseo',protocol:'websocket',host:'127.0.0.1',port:19901}]}]}
 	mut app := Workshop{snapshot:host.Snapshot{workspace:data}}
 	for width in [488.0,708.0] {
-		root := ui2.screen(workbench_paper,relay_overview_view(&app,width,false))
+		root := ui2.screen(workbench_colors.paper,relay_overview_view(&app,width,false))
 		ui2.validate_element_tree(root)!
 		assert !relay_view_has_id(root,'workspace_relay_connections')
 		assert relay_view_has_id(root,'workspace_application_paseo')

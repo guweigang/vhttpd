@@ -14,7 +14,19 @@ fn configure_workbench_window(_handle voidptr) {
 	// its value; treating that callback argument as an ObjC object crashes.
 	C.vhttpd_workbench_window_minimum(ui2.native_window_handle(), 760, 660)
 	ui2.on_window_resize(constrain_workbench_window)
+	update_workbench_native_appearance()
 	configure_platform_menus()
+}
+
+fn update_workbench_native_appearance() {
+	window := macos.Id(ui2.native_window_handle())
+	if window == unsafe { nil } { return }
+	appearance := match workbench_appearance_mode {
+		.light { macos.msg_id1(macos.get_class('NSAppearance'), 'appearanceNamed:', macos.nsstring('NSAppearanceNameAqua')) }
+		.dark { macos.msg_id1(macos.get_class('NSAppearance'), 'appearanceNamed:', macos.nsstring('NSAppearanceNameDarkAqua')) }
+		.system { macos.Id(unsafe { nil }) }
+	}
+	macos.msg_void1(window, 'setAppearance:', appearance)
 }
 
 fn constrain_workbench_window(_width int, _height int) {
