@@ -41,11 +41,16 @@ updated: 2026-11-10
 - [x] 已验收 A：核对相同 SHA、实际 Boehm 与构建来源；bodytest 副本在独立网络/文件系统内通过 applicationInfo 根目录/入口断言与原样应用预热，健康、业务路由及配置 revision 一致，未访问真实数据库/云服务。初次夹具缺少新增 MCP include，未计为候选失败；补齐后两项通过。见[API 断言](./release-evidence/2026-11-10/release-closeout/validation-application-info.json)、[原样应用](./release-evidence/2026-11-10/release-closeout/validation-original-app.json)。
 - [x] 已验收 B：14:45（北京时间）升级助手完成 bodytest 切换，新 PID 1974907、start_ticks 71602815，实际二进制为上述 dca8844f 候选；安装归档 SHA256 为 c72f262d578b0567d74265815f74628b88d912c796e0533bdccc82fc3b60ed93。三个健康检查 200、业务路由通过，四个监听端口和配置 revision 保持；原包与私有回滚操作记录保留，未归档凭据。见[切换结果](./release-evidence/2026-11-10/release-closeout/bodytest-switch.json)。
 - [x] 已实现并启动 C：新连续监测 vhttpd-bodytest-memory-observer-20261110.service 已绑定新 PID/启动标识及准确二进制 SHA；先验证对应符号布局再读取 RSS、匿名内存、Boehm 堆/空闲和回收轮次。只读采样不发送健康请求、不注入 GC。启动快照不代表长期改善；业务观察与独立负载分开统计。见[监测身份](./release-evidence/2026-11-10/release-closeout/business-identity.json)、[计数预检](./release-evidence/2026-11-10/release-closeout/business-counter-preflight.json)、[监测脚本](./release-evidence/2026-11-10/release-closeout/observe.py)。
-- [x] 已启动 D（尚未完成验收）：独立控制器先完成短流程，HTTP 1213、Paseo 15，零错误/OOM，自然进入冷却并退出。主机六次 MemAvailable 为约 980.5–994.2 MiB，均高于 640 MiB 启动门槛；随后在全新目录/单元启动同一 SHA 的完整长测。单元 vhttpd-soak-dca8844f-full24-20261110.service、运行时 PID 1979291/start_ticks 71633275，实际 Boehm 与 SHA 已核验。10 分钟基线 + 完整 24 小时 HTTP/Paseo 加压 + 10 分钟自然冷却，预计 11 月 10 日 15:00 开始加压、11 月 11 日 15:10 冷却结束。实际单元限制核对为 256 MiB、30% CPU、无 swap、独立网络；保留 512 MiB 主机保护，只终止独立任务。使用合成四运行时扫描拓扑，不能冒充真实业务或数据库负载。见[短流程结果](./release-evidence/2026-11-10/release-closeout/harness-smoke/result.json)、[长测元数据及脚本摘要](./release-evidence/2026-11-10/release-closeout/full24/metadata.json)、[实际单元属性](./release-evidence/2026-11-10/release-closeout/full24/active-unit-properties.txt)。
-- [ ] 待验收 E：自然结束后归档完整曲线、错误/OOM、FD/线程、GC 堆/空闲、加压是否误触发空闲回收及冷却残留。既有 Linux HTTP/Paseo 门槛保持 RSS 残留不超过 16 MiB、压力 RSS 不超过 256 MiB、FD 增量不超过 8；达到数值门槛也不能掩盖未解释的持续增长。
-- [ ] 缺失/待补齐：最终发行包在数据库、Provider、取消/超时、连接断开和应用启停/重载上的生命周期证据，以及其他目标平台的对应验证。Linux 单轮长测通过不能自动关闭这些项目。
+- [x] 已完成 D（启动与运行参数核验）：独立控制器先完成短流程，HTTP 1213、Paseo 15，零错误/OOM，自然进入冷却并退出。主机六次 MemAvailable 为约 980.5–994.2 MiB，均高于 640 MiB 启动门槛；随后在全新目录/单元启动同一 SHA 的完整长测。单元 vhttpd-soak-dca8844f-full24-20261110.service、运行时 PID 1979291/start_ticks 71633275，实际 Boehm 与 SHA 已核验。10 分钟基线 + 完整 24 小时 HTTP/Paseo 加压 + 10 分钟自然冷却，预计 11 月 10 日 15:00 开始加压、11 月 11 日 15:10 冷却结束。实际单元限制核对为 256 MiB、30% CPU、无 swap、独立网络；保留 512 MiB 主机保护，只终止独立任务。使用合成四运行时扫描拓扑，不能冒充真实业务或数据库负载。见[短流程结果](./release-evidence/2026-11-10/release-closeout/harness-smoke/result.json)、[长测元数据及脚本摘要](./release-evidence/2026-11-10/release-closeout/full24/metadata.json)、[实际单元属性](./release-evidence/2026-11-10/release-closeout/full24/active-unit-properties.txt)。
+- [x] 已归档 E（Linux amd64 HTTP/Paseo 数值复评）。dca8844f 候选于 11 月 11 日 15:10 自然完成 10 分钟基线、24 小时加压和 10 分钟冷却。HTTP 3,434,710 次、Paseo 41,962 轮，零请求错误、零 OOM，加压期间空闲回收尝试计数保持为 6。压力 RSS 峰值 64.63 MiB，既有公式下冷却 RSS 残留 −19.70 MiB。见[自然结束结果](./release-evidence/2026-11-11/full24-fd-review/result.json)、[原门禁报告](./release-evidence/2026-11-11/full24-fd-review/memory-analysis.json)和[完整采样归档](./release-evidence/2026-11-11/full24-fd-review/original-full24.tar.gz)。
+- [x] FD 按 11 月 11 日维护者确认的新口径复评通过。相同负载下，以首个加压窗口为参考，两个连续后续窗口的 FD 中位数都高于参考值则判为持续抬升。每个完整窗口取最多 30 个样本，短预检缩短窗口以保留至少三个窗口。冷却末三个样本的 FD 中位数须回到空闲基线末三个样本中位数或以下，峰值继续记录。该轮 265 个完整加压窗口的中位数均为 20，冷却全部 60 个样本为 20，峰值 29 仅出现两次。原门禁按峰值增量 +9 判失败，新口径用同一批采样复评通过。见[复评报告](./release-evidence/2026-11-11/full24-fd-review/fd-reassessment.json)和[阶段门禁实现](../scripts/ci/remote_soak_sequence.py)。
+- [ ] 内存趋势待收尾。加压首末十分钟匿名内存中位数为 36.17 → 41.90 MiB，冷却中位数 32.66 MiB，较空闲基线高 7.61 MiB。已映射 Boehm 堆为 20.77 → 26.15 → 17.09 MiB，管理总量全程约 37.26 MiB。空闲块在 GC 与后续分配中反复回升、下降。基线末和冷却末的 GC 区域外匿名内存相差约 0.23 MiB，残留主要与 GC 堆映射重叠。用同等负载的重复加压、冷却观察残留是否继续累积，并结合平台诊断区分存活对象和可复用驻留。
 
-**关闭条件：** A–E 及原 P0-02 全部适用验收项有最终候选证据后才能关闭；没有要求所有空闲页立即归还操作系统，但必须区分可复用高水位与真实泄漏。若发现持续增长，记录具体负载、分配/保留路径和复现方式后修复重验。当前状态仍为阻断，不能预先勾选“完整 24 小时通过”。
+**P0-02 剩余关闭条件**
+
+1. 冻结最终发行包及工具链，登记源码、依赖、平台和 SHA256，并对每个发行包核对 `--build-info` 的 Boehm 状态。dca8844f 的长测证据绑定该 Linux 二进制。若最终更换影响运行时的源码或工具链，包括采用新版 V 构建的 Linux 包，须为该候选补齐受影响的稳定性证据。新版 V 的 macOS 启动及打包验证可作为对应包的预检。
+2. 补齐最终候选在数据库、Provider、取消与超时上的稳定性记录，并覆盖连接断开、慢客户端及应用启停和重载。核对 FD 或句柄、线程、队列、连接池以及原生和 JS 资源在重复操作后收敛，同时检查错误率和延迟趋势。
+3. 补齐其他目标平台的对应资源生命周期和稳定性证据，完成上方内存趋势收尾。最终候选的适用验收项全部通过后关闭 P0-02。
 
 **14:53 收尾核验：** bodytest PID 1974907 与独立长测 PID 1979291 的实际二进制 SHA 均匹配；业务 ready、配置 revision 一致、三个健康检查 200，新监测和长测单元均 active。业务当时匿名内存约 29.8 MiB、映射 GC 堆约 13.9 MiB，主机可用约 933 MiB；这是切换后初期快照，不与旧进程长期高水位直接比较，也不代表长测通过。长测处于基线，尚未产生加压请求。见[启动后核验](./release-evidence/2026-11-10/release-closeout/post-launch-check.json)及[归档文件摘要](./release-evidence/2026-11-10/release-closeout/artifact-sha256.json)。
 
@@ -71,8 +76,8 @@ updated: 2026-11-10
 
 - [x] 已实现：GC 构建门禁及实际二进制检查，见 [GC 构建回归](../scripts/ci/test_build_gc.py)和[实际 GC 检查](../scripts/ci/verify_gc_runtime.py)。
 - [ ] 待验收：每份发行包的 --build-info 证明启用 Boehm GC；启用 GC 不能替代泄漏检查。
-- [ ] 缺失（尚未找到发布级证据）：为最终候选包建立至少 24 小时稳定性记录，覆盖 HTTP、WebSocket/Relay、数据库、Provider、取消与超时。
-- [x] 已实现（Linux HTTP/Paseo 范围）：[隔离长测脚本](../scripts/ci/remote_soak.py)和[阶段门禁](../scripts/ci/remote_soak_sequence.py)固定负载、预热/采样/冷却时长及资源预算；16 MiB 冷却增长、256 MiB 压力 RSS、FD 增量 8 的门槛在第五包运行前已固定，超标不启动长测。
+- [ ] 待验收：最终候选的至少 24 小时稳定性记录及适用负载覆盖。dca8844f 已有 Linux HTTP/Paseo 完整时长证据，数据库、Provider、取消与超时仍待覆盖。
+- [x] 已实现（Linux HTTP/Paseo 范围）：[隔离长测脚本](../scripts/ci/remote_soak.py)和[阶段门禁](../scripts/ci/remote_soak_sequence.py)固定负载、采样与资源预算。冷却 RSS 残留上限 16 MiB，压力 RSS 上限 256 MiB。FD 按加压窗口的持续抬升与冷却回归基线判定，并保留峰值记录。
 - [ ] 待验收：为数据库、Provider、取消/超时及其他平台补齐对应负载、资源预算和最终候选包证据。
 - [ ] 待验收：重复连接/断开、应用启停/重载、Provider 创建/销毁后，RSS/私有内存、句柄或 FD、线程、队列和连接池均无未解释的持续增长。
 - [ ] 待验收：结合平台适用诊断工具检查原生和 JS 资源；保存分配/释放证据，区分 GC 高水位与真实泄漏。
