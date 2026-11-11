@@ -12,6 +12,11 @@ on:
         description: 'Optional full source commit SHA for development packages'
         type: string
         required: false
+      package_platform:
+        description: 'Platform selection for development packages'
+        type: choice
+        options: [all, linux, macos]
+        default: all
   push:
     branches:
       - main
@@ -43,7 +48,7 @@ jobs:
   build:
     if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr' || inputs.validation == 'package'
     name: ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"linux-amd64":"ubuntu-24.04","linux-arm64":"ubuntu-24.04-arm","macos-amd64":"macos-15-intel","macos-arm64":"macos-15"}')[matrix.target] }}
     timeout-minutes: 360
     env:
       VJOBS: 2
@@ -57,15 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            target: linux-amd64
-          - os: ubuntu-24.04-arm
-            target: linux-arm64
-          - os: macos-15-intel
-            target: macos-amd64
-          - os: macos-15
-            target: macos-arm64
+        target: ${{ github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && (inputs.package_platform == 'linux' && fromJSON('["linux-amd64","linux-arm64"]') || inputs.package_platform == 'macos' && fromJSON('["macos-amd64","macos-arm64"]')) || fromJSON('["linux-amd64","linux-arm64","macos-amd64","macos-arm64"]') }}
 
     steps:
       - name: Validate package source selection
