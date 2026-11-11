@@ -148,7 +148,7 @@ pub fn (state &DispatchConnState) begin_cleanup() bool {
 pub struct EventDispatch {
 pub:
 	owner   ?EventDispatcher
-	call_fn fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse = unsafe { nil }
+	call_fn ?fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
 }
 
 pub struct HubConn {
@@ -469,7 +469,7 @@ pub interface EventDispatcher {
 }
 
 pub fn (dispatch EventDispatch) dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
-	if dispatch.call_fn != unsafe { nil } { return dispatch.call_fn(frame) }
+	if callback := dispatch.call_fn { return callback(frame) }
 	if owner := dispatch.owner { return owner.dispatch_event(frame) }
 	return error('websocket_dispatch_missing')
 }

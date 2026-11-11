@@ -49,31 +49,31 @@ pub interface RuntimePort {
 pub struct RuntimeContext {
 pub:
 	owner               ?RuntimePort
-	emit_fn             fn (string, map[string]string) = unsafe { nil }
+	emit_fn             ?fn (string, map[string]string)
 	ingress_run         ?&IngressRun
-	dispatch_targets_fn fn (string, string) []HubDispatchTarget = unsafe { nil }
-	presence_fn         fn (string) PresenceSnapshot            = unsafe { nil }
-	rooms_fn            fn (string) []string                    = unsafe { nil }
-	metadata_fn         fn (string) map[string]string           = unsafe { nil }
-	register_conn_fn    fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState, ?&IngressRun) = unsafe { nil }
-	conn_open_fn        fn (string) bool                     = unsafe { nil }
-	mark_closing_fn     fn (string, &DispatchConnState) bool = unsafe { nil }
-	flush_pending_fn    fn (string) = unsafe { nil }
-	can_cleanup_fn      fn (string, &DispatchConnState) bool    = unsafe { nil }
-	cleanup_conn_fn     fn (string, &DispatchConnState)         = unsafe { nil }
-	unregister_conn_fn  fn (string, &DispatchConnState)         = unsafe { nil }
-	send_to_fn          fn (string, string, string) bool        = unsafe { nil }
-	join_fn             fn (string, string) bool                = unsafe { nil }
-	leave_fn            fn (string, string) bool                = unsafe { nil }
-	set_meta_fn         fn (string, string, string) bool        = unsafe { nil }
-	clear_meta_fn       fn (string, string) bool                = unsafe { nil }
-	broadcast_fn        fn (string, string, string, string) int = unsafe { nil }
-	build_frame_fn      fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, PresenceSnapshot) transport.WorkerWebSocketFrame = unsafe { nil }
-	dispatch_event_fn   fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse        = unsafe { nil }
-	command_result_fn   fn ([]transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult = unsafe { nil }
-	followup_failure_fn fn (string, string, string, map[string]string, map[string]string, string, string, string, []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame = unsafe { nil }
-	close_owned_fn      fn (string, &DispatchConnState, int, string) = unsafe { nil }
-	close_target_fn     fn (string, int, string)                     = unsafe { nil }
+	dispatch_targets_fn ?fn (string, string) []HubDispatchTarget
+	presence_fn         ?fn (string) PresenceSnapshot
+	rooms_fn            ?fn (string) []string
+	metadata_fn         ?fn (string) map[string]string
+	register_conn_fn    ?fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState, ?&IngressRun)
+	conn_open_fn        ?fn (string) bool
+	mark_closing_fn     ?fn (string, &DispatchConnState) bool
+	flush_pending_fn    ?fn (string)
+	can_cleanup_fn      ?fn (string, &DispatchConnState) bool
+	cleanup_conn_fn     ?fn (string, &DispatchConnState)
+	unregister_conn_fn  ?fn (string, &DispatchConnState)
+	send_to_fn          ?fn (string, string, string) bool
+	join_fn             ?fn (string, string) bool
+	leave_fn            ?fn (string, string) bool
+	set_meta_fn         ?fn (string, string, string) bool
+	clear_meta_fn       ?fn (string, string) bool
+	broadcast_fn        ?fn (string, string, string, string) int
+	build_frame_fn      ?fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, PresenceSnapshot) transport.WorkerWebSocketFrame
+	dispatch_event_fn   ?fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+	command_result_fn   ?fn ([]transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult
+	followup_failure_fn ?fn (string, string, string, map[string]string, map[string]string, string, string, string, []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame
+	close_owned_fn      ?fn (string, &DispatchConnState, int, string)
+	close_target_fn     ?fn (string, int, string)
 }
 
 // Trace metadata shares the event sink; it never owns a second file.
@@ -89,8 +89,8 @@ pub fn (rt RuntimeContext) with_ingress(run ?&IngressRun) RuntimeContext {
 }
 
 pub fn (rt RuntimeContext) dispatch_targets(room string, except_id string) []HubDispatchTarget {
-	if rt.dispatch_targets_fn != unsafe { nil } {
-		return rt.dispatch_targets_fn(room, except_id)
+	if callback := rt.dispatch_targets_fn {
+		return callback(room, except_id)
 	}
 	if owner := rt.owner {
 		return owner.dispatch_targets(room, except_id)
@@ -99,8 +99,8 @@ pub fn (rt RuntimeContext) dispatch_targets(room string, except_id string) []Hub
 }
 
 pub fn (rt RuntimeContext) presence(conn_id string) PresenceSnapshot {
-	if rt.presence_fn != unsafe { nil } {
-		return rt.presence_fn(conn_id)
+	if callback := rt.presence_fn {
+		return callback(conn_id)
 	}
 	if owner := rt.owner {
 		return owner.presence(conn_id)
@@ -109,8 +109,8 @@ pub fn (rt RuntimeContext) presence(conn_id string) PresenceSnapshot {
 }
 
 pub fn (rt RuntimeContext) rooms(conn_id string) []string {
-	if rt.rooms_fn != unsafe { nil } {
-		return rt.rooms_fn(conn_id)
+	if callback := rt.rooms_fn {
+		return callback(conn_id)
 	}
 	if owner := rt.owner {
 		return owner.rooms(conn_id)
@@ -119,8 +119,8 @@ pub fn (rt RuntimeContext) rooms(conn_id string) []string {
 }
 
 pub fn (rt RuntimeContext) metadata(conn_id string) map[string]string {
-	if rt.metadata_fn != unsafe { nil } {
-		return rt.metadata_fn(conn_id)
+	if callback := rt.metadata_fn {
+		return callback(conn_id)
 	}
 	if owner := rt.owner {
 		return owner.metadata(conn_id)
@@ -129,8 +129,8 @@ pub fn (rt RuntimeContext) metadata(conn_id string) map[string]string {
 }
 
 pub fn (rt RuntimeContext) register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState) {
-	if rt.register_conn_fn != unsafe { nil } {
-		rt.register_conn_fn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers,
+	if callback := rt.register_conn_fn {
+		callback(conn_id, worker_socket, method, req_id, trace_id, path, query, headers,
 			remote_addr, client, lifecycle, rt.ingress_run)
 		return
 	}
@@ -143,8 +143,8 @@ pub fn (rt RuntimeContext) register_conn(conn_id string, worker_socket string, m
 }
 
 pub fn (rt RuntimeContext) conn_open(conn_id string) bool {
-	if rt.conn_open_fn != unsafe { nil } {
-		return rt.conn_open_fn(conn_id)
+	if callback := rt.conn_open_fn {
+		return callback(conn_id)
 	}
 	if owner := rt.owner {
 		return owner.conn_open(conn_id)
@@ -153,8 +153,8 @@ pub fn (rt RuntimeContext) conn_open(conn_id string) bool {
 }
 
 pub fn (rt RuntimeContext) mark_closing(conn_id string, lifecycle &DispatchConnState) bool {
-	if rt.mark_closing_fn != unsafe { nil } {
-		return rt.mark_closing_fn(conn_id, lifecycle)
+	if callback := rt.mark_closing_fn {
+		return callback(conn_id, lifecycle)
 	}
 	if owner := rt.owner {
 		return owner.mark_closing(conn_id, lifecycle)
@@ -163,8 +163,8 @@ pub fn (rt RuntimeContext) mark_closing(conn_id string, lifecycle &DispatchConnS
 }
 
 pub fn (rt RuntimeContext) flush_pending(conn_id string) {
-	if rt.flush_pending_fn != unsafe { nil } {
-		rt.flush_pending_fn(conn_id)
+	if callback := rt.flush_pending_fn {
+		callback(conn_id)
 		return
 	}
 	if owner := rt.owner {
@@ -175,8 +175,8 @@ pub fn (rt RuntimeContext) flush_pending(conn_id string) {
 }
 
 pub fn (rt RuntimeContext) cleanup_conn(conn_id string, lifecycle &DispatchConnState) {
-	if rt.cleanup_conn_fn != unsafe { nil } {
-		rt.cleanup_conn_fn(conn_id, lifecycle)
+	if callback := rt.cleanup_conn_fn {
+		callback(conn_id, lifecycle)
 		return
 	}
 	if owner := rt.owner {
@@ -187,8 +187,8 @@ pub fn (rt RuntimeContext) cleanup_conn(conn_id string, lifecycle &DispatchConnS
 }
 
 pub fn (rt RuntimeContext) unregister_conn(conn_id string, lifecycle &DispatchConnState) {
-	if rt.unregister_conn_fn != unsafe { nil } {
-		rt.unregister_conn_fn(conn_id, lifecycle)
+	if callback := rt.unregister_conn_fn {
+		callback(conn_id, lifecycle)
 		return
 	}
 	if owner := rt.owner {
@@ -199,8 +199,8 @@ pub fn (rt RuntimeContext) unregister_conn(conn_id string, lifecycle &DispatchCo
 }
 
 pub fn (rt RuntimeContext) send_to(conn_id string, data string, opcode string) bool {
-	if rt.send_to_fn != unsafe { nil } {
-		return rt.send_to_fn(conn_id, data, opcode)
+	if callback := rt.send_to_fn {
+		return callback(conn_id, data, opcode)
 	}
 	if owner := rt.owner {
 		return owner.send_to(conn_id, data, opcode)
@@ -209,8 +209,8 @@ pub fn (rt RuntimeContext) send_to(conn_id string, data string, opcode string) b
 }
 
 pub fn (rt RuntimeContext) join(conn_id string, room string) bool {
-	if rt.join_fn != unsafe { nil } {
-		return rt.join_fn(conn_id, room)
+	if callback := rt.join_fn {
+		return callback(conn_id, room)
 	}
 	if owner := rt.owner {
 		return owner.join(conn_id, room)
@@ -219,8 +219,8 @@ pub fn (rt RuntimeContext) join(conn_id string, room string) bool {
 }
 
 pub fn (rt RuntimeContext) leave(conn_id string, room string) bool {
-	if rt.leave_fn != unsafe { nil } {
-		return rt.leave_fn(conn_id, room)
+	if callback := rt.leave_fn {
+		return callback(conn_id, room)
 	}
 	if owner := rt.owner {
 		return owner.leave(conn_id, room)
@@ -229,8 +229,8 @@ pub fn (rt RuntimeContext) leave(conn_id string, room string) bool {
 }
 
 pub fn (rt RuntimeContext) set_meta(conn_id string, key string, value string) bool {
-	if rt.set_meta_fn != unsafe { nil } {
-		return rt.set_meta_fn(conn_id, key, value)
+	if callback := rt.set_meta_fn {
+		return callback(conn_id, key, value)
 	}
 	if owner := rt.owner {
 		return owner.set_meta(conn_id, key, value)
@@ -239,8 +239,8 @@ pub fn (rt RuntimeContext) set_meta(conn_id string, key string, value string) bo
 }
 
 pub fn (rt RuntimeContext) clear_meta(conn_id string, key string) bool {
-	if rt.clear_meta_fn != unsafe { nil } {
-		return rt.clear_meta_fn(conn_id, key)
+	if callback := rt.clear_meta_fn {
+		return callback(conn_id, key)
 	}
 	if owner := rt.owner {
 		return owner.clear_meta(conn_id, key)
@@ -249,8 +249,8 @@ pub fn (rt RuntimeContext) clear_meta(conn_id string, key string) bool {
 }
 
 pub fn (rt RuntimeContext) broadcast(room string, data string, opcode string, except_id string) int {
-	if rt.broadcast_fn != unsafe { nil } {
-		return rt.broadcast_fn(room, data, opcode, except_id)
+	if callback := rt.broadcast_fn {
+		return callback(room, data, opcode, except_id)
 	}
 	if owner := rt.owner {
 		return owner.broadcast(room, data, opcode, except_id)
@@ -259,8 +259,8 @@ pub fn (rt RuntimeContext) broadcast(room string, data string, opcode string, ex
 }
 
 pub fn (rt RuntimeContext) build_frame(event string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, presence PresenceSnapshot) transport.WorkerWebSocketFrame {
-	if rt.build_frame_fn != unsafe { nil } {
-		return rt.build_frame_fn(event, method, path, query, headers, remote_addr, req_id, trace_id,
+	if callback := rt.build_frame_fn {
+		return callback(event, method, path, query, headers, remote_addr, req_id, trace_id,
 			opcode, data, code, reason, rooms, metadata, presence)
 	}
 	if owner := rt.owner {
@@ -271,8 +271,8 @@ pub fn (rt RuntimeContext) build_frame(event string, method string, path string,
 }
 
 pub fn (rt RuntimeContext) dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
-	if rt.dispatch_event_fn != unsafe { nil } {
-		return rt.dispatch_event_fn(frame)
+	if callback := rt.dispatch_event_fn {
+		return callback(frame)
 	}
 	if owner := rt.owner {
 		return owner.dispatch_event(frame)
@@ -281,8 +281,8 @@ pub fn (rt RuntimeContext) dispatch_event(frame transport.WorkerWebSocketFrame) 
 }
 
 pub fn (rt RuntimeContext) command_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
-	if rt.command_result_fn != unsafe { nil } {
-		return rt.command_result_fn(commands)
+	if callback := rt.command_result_fn {
+		return callback(commands)
 	}
 	if owner := rt.owner {
 		return owner.command_result(commands)
@@ -291,8 +291,8 @@ pub fn (rt RuntimeContext) command_result(commands []transport.WorkerWebSocketFr
 }
 
 pub fn (rt RuntimeContext) followup_failure(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame {
-	if rt.followup_failure_fn != unsafe { nil } {
-		return rt.followup_failure_fn(conn_id, method, path, query, headers, remote_addr, req_id,
+	if callback := rt.followup_failure_fn {
+		return callback(conn_id, method, path, query, headers, remote_addr, req_id,
 			trace_id, failures)
 	}
 	if owner := rt.owner {
@@ -303,8 +303,8 @@ pub fn (rt RuntimeContext) followup_failure(conn_id string, method string, path 
 }
 
 pub fn (rt RuntimeContext) close_target(conn_id string, code int, reason string) {
-	if rt.close_target_fn != unsafe { nil } {
-		rt.close_target_fn(conn_id, code, reason)
+	if callback := rt.close_target_fn {
+		callback(conn_id, code, reason)
 		return
 	}
 	if owner := rt.owner {
@@ -315,8 +315,8 @@ pub fn (rt RuntimeContext) close_target(conn_id string, code int, reason string)
 }
 
 pub fn (rt RuntimeContext) close_owned_target(conn_id string, lifecycle &DispatchConnState, code int, reason string) {
-	if rt.close_owned_fn != unsafe { nil } {
-		rt.close_owned_fn(conn_id, lifecycle, code, reason)
+	if callback := rt.close_owned_fn {
+		callback(conn_id, lifecycle, code, reason)
 		return
 	}
 	if owner := rt.owner {
@@ -823,8 +823,8 @@ pub fn hub_snapshot(mut hub HubState, details bool, limit int, offset int, room_
 }
 
 pub fn (rt RuntimeContext) emit(kind string, fields map[string]string) {
-	if rt.emit_fn != unsafe { nil } {
-		rt.emit_fn(kind, fields)
+	if callback := rt.emit_fn {
+		callback(kind, fields)
 		return
 	}
 	if owner := rt.owner {
@@ -835,7 +835,7 @@ pub fn (rt RuntimeContext) emit(kind string, fields map[string]string) {
 }
 
 pub fn (rt RuntimeContext) can_cleanup(id string, lifecycle &ws.DispatchConnState) bool {
-	if rt.can_cleanup_fn != unsafe { nil } { return rt.can_cleanup_fn(id, lifecycle) }
+	if callback := rt.can_cleanup_fn { return callback(id, lifecycle) }
 	if owner := rt.owner { return owner.can_cleanup(id, lifecycle) }
 	panic('websocket runtime operation missing: can_cleanup')
 }

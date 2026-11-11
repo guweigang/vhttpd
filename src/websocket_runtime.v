@@ -8,9 +8,9 @@ import net.websocket
 
 struct WebSocketKernelPort {
 	owner             ?WebSocketKernelHost
-	emit_fn           fn (string, map[string]string) = unsafe { nil }
-	build_frame_fn    fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, ws.PresenceSnapshot) transport.WorkerWebSocketFrame = unsafe { nil }
-	dispatch_event_fn fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse = unsafe { nil }
+	emit_fn           ?fn (string, map[string]string)
+	build_frame_fn    ?fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, ws.PresenceSnapshot) transport.WorkerWebSocketFrame
+	dispatch_event_fn ?fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
 }
 
 interface WebSocketKernelHost {
@@ -20,8 +20,8 @@ interface WebSocketKernelHost {
 }
 
 pub fn (kernel WebSocketKernelPort) emit(kind string, fields map[string]string) {
-	if kernel.emit_fn != unsafe { nil } {
-		kernel.emit_fn(kind, fields)
+	if callback := kernel.emit_fn {
+		callback(kind, fields)
 		return
 	}
 	if owner := kernel.owner {
@@ -32,8 +32,8 @@ pub fn (kernel WebSocketKernelPort) emit(kind string, fields map[string]string) 
 }
 
 pub fn (kernel WebSocketKernelPort) build_frame(event string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, presence ws.PresenceSnapshot) transport.WorkerWebSocketFrame {
-	if kernel.build_frame_fn != unsafe { nil } {
-		return kernel.build_frame_fn(event, method, path, query, headers, remote_addr, req_id, trace_id, opcode, data, code, reason, rooms, metadata, presence)
+	if callback := kernel.build_frame_fn {
+		return callback(event, method, path, query, headers, remote_addr, req_id, trace_id, opcode, data, code, reason, rooms, metadata, presence)
 	}
 	if owner := kernel.owner {
 		return owner.build_frame(event, method, path, query, headers, remote_addr, req_id, trace_id, opcode, data, code, reason, rooms, metadata, presence)
@@ -44,7 +44,7 @@ pub fn (kernel WebSocketKernelPort) build_frame(event string, method string, pat
 pub fn (kernel WebSocketKernelPort) dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
 	memidle.begin()
 	defer { memidle.end() }
-	if kernel.dispatch_event_fn != unsafe { nil } { return kernel.dispatch_event_fn(frame) }
+	if callback := kernel.dispatch_event_fn { return callback(frame) }
 	if owner := kernel.owner { return owner.dispatch_event(frame) }
 	panic('websocket kernel operation missing: dispatch_event')
 }
