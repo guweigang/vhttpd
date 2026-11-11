@@ -42,10 +42,15 @@ fn test_workbench_appearance_updates_controls_and_menu() ! {
 		}
 		assert app.update_settings_config().theme == workbench_component_theme
 		primary := button('primary', 'Primary', 0, 0, 120, true, true)
-		assert primary.box.bg == workbench_colors.accent
-		assert primary.children[0].text_style.color == workbench_colors.on_accent
-		assert primary.box.bg != primary.children[0].text_style.color
-		disabled := button('disabled', 'Disabled', 0, 0, 120, false, false)
+		sidebar_primary := sidebar_button('sidebar_primary', 'Primary', ui2.rect(0, 0, 120, 34), true, false, true, .center)
+		for element in [primary, sidebar_primary] {
+			assert element.box.bg == 0x2563eb
+			assert element.children[0].text_style.color == 0xffffff
+		}
+		assert primary.box.border_color == primary.box.bg
+		assert button('secondary', 'Secondary', 0, 0, 120, false, true).box.border_color == workbench_colors.line
+		disabled := button('disabled', 'Disabled', 0, 0, 120, true, false)
+		assert disabled.box.border_color == workbench_colors.line
 		assert disabled.box.bg != disabled.children[0].text_style.color
 
 		menus := app.workbench_menus(ui2.screen(workbench_colors.paper, []))

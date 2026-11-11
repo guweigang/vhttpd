@@ -5,6 +5,8 @@ import os
 import time
 import ui2
 
+const workbench_primary_blue = u32(0x2563eb)
+
 struct WorkbenchColors {
 	paper               u32 = 0xffffff
 	sidebar             u32 = 0xf4f7fb
@@ -12,8 +14,9 @@ struct WorkbenchColors {
 	muted               u32 = 0x627184
 	line                u32 = 0xe0e7f0
 	green               u32 = 0x2c6149
-	accent              u32 = 0x2563eb
-	on_accent           u32 = 0xffffff
+	accent              u32 = workbench_primary_blue
+	primary_background  u32 = workbench_primary_blue
+	primary_foreground  u32 = 0xffffff
 	soft_accent         u32 = 0xeaf1ff
 	focus               u32 = 0x1e40af
 	disabled_background u32 = 0xe9edf2
@@ -41,7 +44,6 @@ fn dark_workbench_colors(theme ui2.ComponentTheme) WorkbenchColors {
 		line:                theme.border
 		green:               theme.success
 		accent:              theme.primary
-		on_accent:           theme.primary_foreground
 		soft_accent:         0x2b3848
 		focus:               theme.primary
 		disabled_background: theme.muted

@@ -978,21 +978,21 @@ fn button(id string, title string, x f64, y f64, width f64, primary bool, enable
 	bg := if !enabled {
 		workbench_colors.disabled_background
 	} else if primary {
-		workbench_colors.accent
+		workbench_colors.primary_background
 	} else {
 		workbench_colors.paper
 	}
 	color := if !enabled {
 		workbench_colors.disabled_foreground
 	} else if primary {
-		workbench_colors.on_accent
+		workbench_colors.primary_foreground
 	} else {
 		workbench_colors.ink
 	}
 	return painted_button(id, title, ui2.rect(x, y, width, 34), ui2.BoxStyle{
 		bg:            bg
 		radius:        6
-		border_color:  workbench_colors.line
+		border_color:  if primary && enabled { bg } else { workbench_colors.line }
 		border_left:   1
 		border_right:  1
 		border_top:    1
@@ -1004,14 +1004,14 @@ fn sidebar_button(id string, title string, frame ui2.Rect, primary bool, selecte
 	bg := if selected || (primary && !enabled) {
 		workbench_colors.soft_accent
 	} else if primary {
-		workbench_colors.accent
+		workbench_colors.primary_background
 	} else {
 		workbench_colors.sidebar
 	}
 	color := if !enabled {
 		workbench_colors.disabled_foreground
 	} else if primary {
-		workbench_colors.on_accent
+		workbench_colors.primary_foreground
 	} else {
 		workbench_colors.ink
 	}
