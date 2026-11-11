@@ -39,12 +39,12 @@ function Menu-Shortcut([byte]$key) {
 }
 $bar=[WorkbenchMenuCheck]::GetMenu($window)
 if ([WorkbenchMenuCheck]::GetMenuItemCount($bar) -ne 6) {throw 'Expected six top-level workbench menus'}
-foreach ($title in @('运行环境','编辑','进程','位置与连接','查看','帮助')) {Menu-Index $bar $title | Out-Null}
-$environments=[WorkbenchMenuCheck]::GetSubMenu((Menu-At 3),0)
+foreach ($title in @('文件','编辑','运行环境','查看','管理','帮助')) {Menu-Index $bar $title | Out-Null}
+$environments=[WorkbenchMenuCheck]::GetSubMenu((Menu-At 2),0)
 Menu-Invoke $environments '本机 Windows'
-$environments=[WorkbenchMenuCheck]::GetSubMenu((Menu-At 3),0)
+$environments=[WorkbenchMenuCheck]::GetSubMenu((Menu-At 2),0)
 if (([WorkbenchMenuCheck]::GetMenuState($environments,0,0x400) -band 8) -eq 0) {throw 'Environment menu checkmark did not update'}
-if (Menu-Enabled (Menu-At 2) '启动') {throw 'Empty project enables start'}
+if (Menu-Enabled (Menu-At 2) '启动运行环境') {throw 'Empty project enables start'}
 Menu-Invoke (Menu-At 0) '新建运行环境…'
 $field=[WorkbenchUiCheck]::Focus($window)
 if ([WorkbenchUiCheck]::Class($field) -ne 'Edit') {throw 'Menu New did not focus the project form'}

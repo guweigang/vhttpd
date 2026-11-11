@@ -338,13 +338,26 @@ Assert-FormLayout 'ssh-password' 5
 # Only verify native ES_PASSWORD; never enter or capture a user credential.
 $secure=@([WorkbenchUiCheck]::Children($window) | Where-Object { [WorkbenchUiCheck]::Class($_) -eq 'Edit' -and ([WorkbenchUiCheck]::GetWindowLongPtrW($_,-16).ToInt64() -band 0x20) -ne 0 })
 if ($secure.Count -ne 1) {throw 'Password input lost native masking'}
-Invoke-WorkbenchButton 'Relay 连接库'
+# Keep the menu checks on an empty registry. The last shortcut opens a fresh form.
+. "$PSScriptRoot/verify_windows_menus.ps1" -DesktopProcessId $DesktopProcessId -OutputDirectory $OutputDirectory
+
+# The Relay library now opens from an environment's workspace tab.
+# Create a local registration in the isolated profile without launching vhttpd.
+$autoStart = [WorkbenchUiCheck]::Find($window,'创建后立即启动，并打开浏览器 Admin UI','Button')
+if ($autoStart -eq [IntPtr]::Zero) {throw 'Automatic startup checkbox is missing'}
+[WorkbenchUiCheck]::SendMessageW($autoStart,0xF5,[IntPtr]::Zero,[IntPtr]::Zero) | Out-Null
+Start-Sleep -Milliseconds 300
+Invoke-WorkbenchButton '创建项目'
+$config = Join-Path $env:VHTTPD_DESKTOP_DATA_DIR 'my-vhttpd/vhttpd.toml'
+$deadline=(Get-Date).AddSeconds(8)
+while (!(Test-Path $config) -and (Get-Date) -lt $deadline) {Start-Sleep -Milliseconds 100}
+if (!(Test-Path $config)) {throw 'Relay acceptance environment was not created'}
+Menu-Invoke (Menu-At 3) 'Relay'
+Invoke-WorkbenchButton '从已保存连接选择…'
 Invoke-WorkbenchButton '+ 新建连接'
 Assert-FormLayout 'shared-relay' 4
 Invoke-WorkbenchButton '运行包'
 Save-Window $window 'form-runtime'
 $script:formChecks | ConvertTo-Json -Depth 4 | Set-Content "$OutputDirectory/form-layout-acceptance.json"
-
-. "$PSScriptRoot/verify_windows_menus.ps1" -DesktopProcessId $DesktopProcessId -OutputDirectory $OutputDirectory
 
 if (!(Get-Content $env:VHTTPD_DESKTOP_CI_READY -Raw).Contains('CJK glyphs verified')) {throw 'Process-private font probe was not verified'}

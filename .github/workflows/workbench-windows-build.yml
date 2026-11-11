@@ -33,10 +33,10 @@ jobs:
         run: |
           & cl /nologo /O2 /W4 /utf-8 /std:c11 desktop/ci/windows_askpass.c /Fe:askpass-compile-probe.exe /link /SUBSYSTEM:WINDOWS Ws2_32.lib Shell32.lib
           if ($LASTEXITCODE -ne 0) { throw 'Native GUI askpass helper compilation failed' }
-      - name: Parse portable package scripts
+      - name: Parse Windows package and UI checks
         shell: pwsh
         run: |
-          foreach ($file in @('desktop/ci/package_windows.ps1','desktop/ci/verify_windows_package.ps1')) {
+          foreach ($file in @('desktop/ci/package_windows.ps1','desktop/ci/verify_windows_package.ps1','desktop/ci/verify_windows_ui.ps1','desktop/ci/verify_windows_menus.ps1')) {
             $tokens = $null; $errors = $null
             [Management.Automation.Language.Parser]::ParseFile("$PWD/$file", [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { $errors | Format-List; throw "PowerShell parse failed: $file" }
@@ -179,7 +179,7 @@ jobs:
           '{"language":"zh-CN"}' | Set-Content "$env:VHTTPD_DESKTOP_DATA_DIR/language.json" -Encoding utf8NoBOM
           '[{"id":"aaaaaaaaaaaaaaaaaaaaaaaa","name":"CI Menu Host","ssh_host":"127.0.0.1","ssh_user":"fixture","ssh_port":22,"auth_method":"password"}]' | Set-Content "$env:VHTTPD_DESKTOP_DATA_DIR/remote-servers.json" -Encoding utf8
           $env:VHTTPD_DESKTOP_CI_READY = "$output/desktop-window-ready.txt"
-          $process = Start-Process "$output/vhttpd-workbench.exe" -WorkingDirectory $output -PassThru -RedirectStandardOutput "$output/desktop-stdout.log" -RedirectStandardError "$output/desktop-stderr.log"
+          $process = Start-Process "$output/vhttpd-workbench.exe" -WorkingDirectory $output -PassThru -RedirectStandardOutput "$output/desktop-stdout.log" -RedirectStandardError "$output/desktop-stderr.log" -Environment @{ USERPROFILE = $env:VHTTPD_DESKTOP_DATA_DIR }
           try {
             $deadline = (Get-Date).AddSeconds(30)
             while (!(Test-Path $env:VHTTPD_DESKTOP_CI_READY) -and !$process.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $process.Refresh() }
