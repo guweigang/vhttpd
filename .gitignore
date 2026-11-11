@@ -34,3 +34,6 @@ examples/codexbot-app-ts/config/bot.local.json
 examples/codexbot-app-ts/.var/
 
 /tests/protocol/node_modules/
+
+# Generated release validation artifacts
+/design-docs/release-evidence/
