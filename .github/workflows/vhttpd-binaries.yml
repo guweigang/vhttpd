@@ -4,10 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       validation:
-        description: 'PR gates, full nightly matrix, production E2E, or Windows MSVC acceptance'
+        description: 'PR gates, development packages, full nightly, production E2E, or Windows acceptance'
         type: choice
-        options: [pr, nightly, e2e, windows]
+        options: [pr, package, nightly, e2e, windows]
         default: pr
+      source_commit:
+        description: 'Optional full source commit SHA for development packages'
+        type: string
+        required: false
   push:
     branches:
       - main
@@ -37,7 +41,7 @@ jobs:
     uses: ./.github/workflows/vhttpd-windows.yml
 
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
+    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr' || inputs.validation == 'package'
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 360
@@ -64,10 +68,20 @@ jobs:
             target: macos-arm64
 
     steps:
+      - name: Validate package source selection
+        if: github.event_name == 'workflow_dispatch' && inputs.validation == 'package'
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          if [[ -n "$SOURCE_COMMIT" && ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Package source_commit must be a full Git commit SHA.' >&2
+            exit 1
+          fi
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && inputs.source_commit || github.event.pull_request.head.sha || github.sha }}
 
       - uses: ./.github/actions/setup-runtime
 
@@ -77,7 +91,12 @@ jobs:
           python3 scripts/ci/test_pinned_vjsx.py
           make test-build-gc
 
+      - name: Run ownership checks for development packaging
+        if: github.event_name == 'workflow_dispatch' && inputs.validation == 'package'
+        run: make lint-safety
+
       - name: Run fast unit tests
+        if: github.event_name != 'workflow_dispatch' || inputs.validation != 'package'
         shell: bash
         run: |
           set -euo pipefail
