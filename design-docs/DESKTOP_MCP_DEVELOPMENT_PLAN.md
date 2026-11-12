@@ -192,7 +192,7 @@ Desktop 提供两种入口。已有应用从环境与应用选择器进入，按
 | `vhttpd-deploy` | Desktop 主机连接和目标选择；应用组件构建、预检、发布、验证与回滚；运行时升级的兼容检查和重启影响 | 远端发布及运行时升级阶段 |
 | `vhttpd-debug` | 按应用与请求查日志、本地复现；检查远端现场；接管预检、验证流量归属、释放并确认远端恢复 | 远端诊断及接管阶段 |
 
-每个 Skill 的 `SKILL.md` 放触发条件、操作顺序、失败分支和验收标准。`vhttpd-deploy` 和 `vhttpd-debug` 已提供当前可执行的工作流。查询、预检、提交和恢复使用本机管理 MCP。Desktop 展示需要用户确认的远端操作。2026-11-04 18:07（上海时间）在 DSH 实际加载了两份 Skill，并调用目标查询、历史操作查询和本机状态及日志工具。应用发布、运行时升级及各自的回滚已通过下文的 DSH 验收，远端接管的启动、释放及业务流量验证也已通过。 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) · [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)API 签名、配置字段、允许的 import 和示例由与运行包匹配的开发契约维护。第一阶段发布一个可安装的 `vhttpd-develop` Skill，MCP 从同一份发布内容提供工作流。ChatGPT 网页通过工具按主题读取；支持本地 Skills 的客户端可加载同一版本。首批契约覆盖模板实际使用的入口、请求和响应 API、模块边界，以及一条 HTTP 和一条 JSON API 示例。 [vjsx Facade Reference](./VJSX_FACADE_REFERENCE.md)
+每个 Skill 的 `SKILL.md` 放触发条件、操作顺序、失败分支和验收标准。`vhttpd-deploy` 和 `vhttpd-debug` 已提供当前可执行的工作流。查询、预检、提交和恢复使用本机管理 MCP。Desktop 展示需要用户确认的远端操作。2026-11-04 18:07（上海时间）在 DSH 实际加载了两份 Skill，并调用目标查询、历史操作查询和本机状态及日志工具。应用发布、运行时升级及各自的回滚已通过下文的 DSH 验收，远端接管的启动、释放及业务流量验证也已通过。 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) · [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)API 签名、配置字段、允许的 import 和示例由与运行包匹配的开发契约维护。第一阶段发布一个可安装的 `vhttpd-develop` Skill，MCP 从同一份发布内容提供工作流。ChatGPT 网页通过工具按主题读取；支持本地 Skills 的客户端可加载同一版本。首批契约覆盖模板实际使用的入口、请求和响应 API、模块边界，以及一条 HTTP 和一条 JSON API 示例。 [vjsx Facade Reference](./VJSX_FACADE_REFERENCE.md)
 
 ### 微信云开发兼容项目
 
@@ -281,7 +281,7 @@ DSH 另通过 11 项拒绝检查，覆盖绝对/越界路径、符号链接、�
 
 两个工具均归为需要编辑授权的探针，因为 WebSocket 消息可能修改业务状态；只读 Relay 不提供本机探针。远端另由 Desktop 确认具体目标、监听器、协议及路径。协议失败不会重启或修改配置，不自动重放已发送的消息。已知配置秘密继续由既有脱敏逻辑处理，业务样本本身仍按应用数据看待。
 
-实现见 [本机协议传输](../desktop/host/protocol_probe.v)、[远端执行](../desktop/host/mcp_inspect.v)、[远端 stdlib 传输](../desktop/host/remote_scripts/protocol_probe.py)、[工具规格](../desktop/devmcp/protocol_probe.v) 和 [调试 Skill](../desktop/skills/vhttpd-debug/SKILL.md)。远端执行复用 Desktop 的 SSH 管理会话；这不改变公网 MCP 的 HTTP → vhttpd WebSocket Relay → 本机 Desktop 链路。
+实现见 [本机协议传输](../desktop/host/protocol_probe.v)、[远端执行](../desktop/host/mcp_inspect.v)、[远端 stdlib 传输](../desktop/host/remote_scripts/protocol_probe.py)、[工具规格](../desktop/devmcp/protocol_probe.v) 和 [调试 Skill](../src/development_guidance/vhttpd-workbench/references/debug.md)。远端执行复用 Desktop 的 SSH 管理会话；这不改变公网 MCP 的 HTTP → vhttpd WebSocket Relay → 本机 Desktop 链路。
 
 已安装 DSH 的真实 dsh-mcp-client 使用实际 Desktop 界面签发的本机 Streamable HTTP 连接，对本机及原 Ubuntu mcp-shared-config-qa 均调用三种探针：SSE 返回 protocol-first/protocol-second，WebSocket 返回 echo:connected 与 echo:protocol-qa，业务 MCP 初始化并发现 echo。两端复用原 0.9.0/0.9.1 运行包；未新建实例、VM 或 Hub，未修改 bodytest。业务接口由临时 vjsx 应用提供；这里的 SSE 为有限响应，持续 chunked 和截止采样另由真实 socket 回归覆盖。本机另验证 7 项参数/归属/路径拒绝和一个错误 MCP 路径的结构化失败。
 
@@ -315,7 +315,7 @@ config_history_capture 可保存手工维护、正在运行且确认生效的配
 
 历史 version_id 在 Desktop 关闭重开后保留，旧 plan_id 和操作记录不保留。新恢复准备要求当前环境运行且生效，通过版本 ID 生成五分钟计划，展示安全前后配置，固定完整源 revision、boot、目标和授权代次。独立预检后经 Desktop 确认执行，先返回 accepted，再轮询；每次应用和恢复重启整个环境。恢复原变更或撤销历史恢复支持受管实例停止后的精确源恢复。并发修改不覆盖。历史写入失败时须核对实时状态，不能把“已生效但保存历史失败”当成已回滚。
 
-DSH 实测分两段完成，服务端始终为实际安装运行的 Workbench Update QA.app，连接由界面签发。写流程使用已安装 DSH 的真实 dsh-mcp-client、Streamable HTTP；模型对话另实际调用 skill 重新加载 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 与 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，正确说明新工具、历史持久化/会话计划的区别、已有 GUI/手工配置、异步验证、全环境重启和受保护范围。未将连接器写流程描述为模型自主完成。
+DSH 实测分两段完成，服务端始终为实际安装运行的 Workbench Update QA.app，连接由界面签发。写流程使用已安装 DSH 的真实 dsh-mcp-client、Streamable HTTP；模型对话另实际调用 skill 重新加载 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 与 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，正确说明新工具、历史持久化/会话计划的区别、已有 GUI/手工配置、异步验证、全环境重启和受保护范围。未将连接器写流程描述为模型自主完成。
 
 - 复用原本机隔离 pipeqa 环境、现有 Ubuntu mcp-shared-config-qa 实例和两端运行包（本机 0.9.0、远端 0.9.1），未升级运行包、创建实例/VM/Hub 或改动 bodytest。手工设置 qa-shared/routes.toml 与 response.toml，不含 MCP 创建标记。
 - DSH 从完整基线保存版本，在一次两文件计划中修改匹配路径、插入 GET 方法、修改 fixed-response 响应并删除可选数值字段。旧路径变为 404，新路径返回 200 / shared-after；HEAD 返回 404。本机与远端均验证。
@@ -348,7 +348,7 @@ remove_fields 支持 mode、carrier、node_id、path、listener、autostart、ma
 
 多文件候选通过既有 Admin changeset 校验与发布。停机本机恢复复用 FileStore 的全量暂存、原文复查及普通失败补偿；远端恢复在核对全部成员、路径、完整 revision 和原文后先暂存全部文件，再替换，普通失败回退已替换文件。它们不声明跨文件崩溃原子性或 Desktop 重启后的恢复能力。计划和恢复记录仍限当前 Desktop 会话；全部应用和恢复会重启整个目标环境。
 
-实际验收使用更新后的 Workbench Update QA.app，界面绑定原 pipeqa 并签发管理连接；已安装 DSH 的真实 dsh-mcp-client 经 Streamable HTTP 执行写流程。DSH 桌面对话另实际调用 skill 重新加载新版 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 与 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，正确解释转换条件、自动删除、来源定位、冲突、旧包兼容性和恢复，并给出不含凭据的示例。完整写流程属于连接器验收，不将它记为模型自主执行全部写操作。
+实际验收使用更新后的 Workbench Update QA.app，界面绑定原 pipeqa 并签发管理连接；已安装 DSH 的真实 dsh-mcp-client 经 Streamable HTTP 执行写流程。DSH 桌面对话另实际调用 skill 重新加载新版 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 与 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，正确解释转换条件、自动删除、来源定位、冲突、旧包兼容性和恢复，并给出不含凭据的示例。完整写流程属于连接器验收，不将它记为模型自主执行全部写操作。
 
 - 复用本机原隔离环境与 Ubuntu 已有 mcp-shared-config-qa 实例，没有新建 VM、远端实例或独立 Hub 进程，没有改动 bodytest。两端 legacyedit 都预置为手工 mode.toml + options.toml，不带 MCP 标记。Relay 载体仍由本机 vhttpd 主动连接远端 55311 WebSocket；SSH 只用于 Desktop 管理。
 - DSH 经正常运行包预检、升级和回滚流程，在同一远端实例临时选择本批 Linux Boehm 构建。基线 HTTP → 远端 Hub → WebSocket → 本机 pipeqa 返回 200 / pipeline-ok。
@@ -377,7 +377,7 @@ Desktop 主程序、内置运行时和两份 Skills 已更新，更新前包保�
 
 编辑采用 TOML 标量位置替换，并用完整解析结果核对选定字段以外的配置保持一致。普通表、带引号的表名、inline 和 dotted 写法均有验证；缺少的允许字段会在对应作用域插入。保留注释、空白、私有值和其他配置。恢复保留整个原文件字节，并固定全环境版本，避免覆盖并发修改。应用、恢复和既有启停一样会重启环境中的全部应用；公开应用 Relay 不获得这些管理权限。
 
-已更新并安装 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 和 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)。DSH 桌面对话实际重新调用 skill 工具加载两份文案，正确识别无需 MCP 标记、include 来源、独立预检门槛、凭据引用、并发冲突和停机恢复，并列出结构变更限制。Skill 格式验证与 DSH 安装包实际加载器检查均通过；Desktop guidance_get(deploy) 返回同源新流程。
+已更新并安装 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 和 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)。DSH 桌面对话实际重新调用 skill 工具加载两份文案，正确识别无需 MCP 标记、include 来源、独立预检门槛、凭据引用、并发冲突和停机恢复，并列出结构变更限制。Skill 格式验证与 DSH 安装包实际加载器检查均通过；Desktop guidance_get(deploy) 返回同源新流程。
 
 实际工具验收使用更新后的 Workbench Update QA.app 界面绑定 pipeqa 并签发的管理连接，由已安装 DSH 的 dsh-mcp-client 经 Streamable HTTP 执行。该部分记录为 DSH 连接器执行，模型对话另验证 Skill，不将全部写流程记为模型自主完成。测试脚本预置手工配置，不通过 MCP 创建或标记待编辑 Relay。
 
@@ -403,7 +403,7 @@ Desktop 主程序、内置运行时和两份 Skills 已更新，更新前包保�
 
 失败以 configuration、carrier、transport、database、response、runtime 分层。database 表示数据库连接、认证或执行失败的安全合并类别，不能仅凭此类别断言密码错误。transport 表示路由、远端导出、载体变化或超时等未完成交付，结果不明时先检查运行事件。固定查询成功证明链路和驱动能够执行常量查询，不代表应用表结构、迁移、其他语句权限或业务数据正确。
 
-已更新 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 与 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，并安装到 DSH。DSH 桌面对话实际调用 skill 工具重新加载两份文案，正确说明固定查询、载体复用、临时客户端关闭、六层诊断及业务验证边界。两份 Skill 格式校验与 DSH 安装包的实际 Skill 加载器均通过，Desktop guidance_get(debug) 也返回新流程。
+已更新 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 与 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，并安装到 DSH。DSH 桌面对话实际调用 skill 工具重新加载两份文案，正确说明固定查询、载体复用、临时客户端关闭、六层诊断及业务验证边界。两份 Skill 格式校验与 DSH 安装包的实际 Skill 加载器均通过，Desktop guidance_get(debug) 也返回新流程。
 
 实际 MCP 验收使用更新后的 Workbench Update QA.app 界面绑定隔离 pipeqa 并签发的连接，DSH 安装包内真实 dsh-mcp-client 经 Streamable HTTP 调用工具。该部分属于连接器执行，模型对话另验收 Skills，不将全部写流程记作模型自主完成。测试配置由受控脚本预置。
 
@@ -432,7 +432,7 @@ Desktop 主程序、内置运行时和两份 Skills 已更新，更新前包保�
 
 预检编译整个环境并固定配置 revision、boot identity、目标和授权代次。配置与启停需要 Desktop 确认，先返回 accepted，再查询操作终态。当前运行包没有单 Agent 的 Admin 启停接口，因此工具持久化 autostart 并重启整个既有环境，影响其中全部应用。该批创建和启停工具只编辑带 MCP 归属标记的配置块；已有人工配置现可使用上方新增的独立编辑、预检、应用与恢复流程。配置恢复保留精确原始字节，要求当前完整源 revision 与预期一致；两端均支持托管实例停机后的受保护恢复。首次提交前计划有效五分钟，每个会话最多 64 个计划、128 条操作；重启 Desktop 后需重新对账。
 
-实际验收使用更新后的 Workbench Update QA.app，由界面绑定隔离 pipeqa 应用并签发连接配置。已安装 DSH 的 dsh-mcp-client 通过 Streamable HTTP 执行完整写流程；模型对话另外实际调用 skill 工具重新加载了新版 [vhttpd-deploy](../desktop/skills/vhttpd-deploy/SKILL.md) 和 [vhttpd-debug](../desktop/skills/vhttpd-debug/SKILL.md)，核对工具组合、主动连接方向、环境重启、凭据引用和恢复要求。本轮写流程证据属于 DSH 客户端连接器层，不将其描述为模型自主执行全部写操作。
+实际验收使用更新后的 Workbench Update QA.app，由界面绑定隔离 pipeqa 应用并签发连接配置。已安装 DSH 的 dsh-mcp-client 通过 Streamable HTTP 执行完整写流程；模型对话另外实际调用 skill 工具重新加载了新版 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 和 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，核对工具组合、主动连接方向、环境重启、凭据引用和恢复要求。本轮写流程证据属于 DSH 客户端连接器层，不将其描述为模型自主执行全部写操作。
 
 - 复用本机既有 0.9.0 运行包和 Ubuntu 既有 mcp-shared-config-qa 0.9.1 实例。未新建 VM、Hub 进程或远端实例，也未改动 bodytest。远端临时增加 55311 单端口，WebSocket 路径 /vhttpd/relay，HTTP 验证路径 /__relay/ordinaryqa。
 - DSH 创建并更新本机连接记录、复制到远端共享连接库；正确凭据探测通过，错误凭据被拒绝。创建 Agent 配置后验证未注册；启动后验证 registered；远端 HTTP 请求经过 WebSocket Relay 到本机 pipeqa，返回 HTTP 200 和 pipeline-ok。活跃连接期间再次探测，没有替换业务载体。
