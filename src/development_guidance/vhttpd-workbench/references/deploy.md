@@ -1,7 +1,3 @@
----
-name: vhttpd-deploy
-description: Manage vhttpd hosts, runtime packages, application releases and ordinary Relay connections through Desktop MCP. Use for configuring, verifying and recovering these deployments.
----
 # Deploy with vhttpd Desktop
 
 Use the local management MCP. Start with `context_get` and keep the returned `binding_revision` for the rest of the workflow. Call `targets_list` and select a target by its ID. Call `target_status` to check the registered environment, runtime version, readiness, application inventory and known operations. Use `target_applications_list` for live installation IDs and versions and `target_history_list` for known release and upgrade records. `target_diagnostics_get` and `target_logs_query` provide runtime and application evidence after publication. If the host or runtime is disconnected, connect through Desktop. Use the Desktop trust prompt for a first connection.

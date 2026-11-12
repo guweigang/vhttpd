@@ -1,7 +1,3 @@
----
-name: vhttpd-debug
-description: Diagnose a vhttpd application with Desktop MCP and Workbench. Use for local reproduction, request and log correlation, remote inspection, and authorized account-scoped takeover.
----
 # Debug a vhttpd application
 
 Call `context_get` to confirm the bound application and capture its `binding_revision`. For remote work, use the local management connection and call `targets_list` then `target_status` for the environment. Keep local source, local runtime and remote installation identities distinct in your notes.
