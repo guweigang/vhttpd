@@ -71,7 +71,7 @@ pub fn create_application_source(name string, template_id string, port int) !Pro
 		'wechat-cloud-functions' { 'Edit cloudfunctions/<name>/index.js and use app.mjs as the application entry.' }
 		else { 'Use app.mts as the entry and config/bot.example.json as the provider reference.' }
 	}
-	files['AGENTS.md'] = '# Application development\n\n- Template: ${template_id}. Start at component.toml and follow the configured entries.\n- ${entry_hint}\n- Use vhttpd-develop and confirm compatibility with the selected runtime.\n- Smoke test: ${options[0].probe}.\n'
+	files['AGENTS.md'] = '# Application development\n\n- Template: ${template_id}. Start at component.toml and follow the configured entries.\n- ${entry_hint}\n- Use the vhttpd-workbench Skill’s development reference and confirm compatibility with the selected runtime.\n- Smoke test: ${options[0].probe}.\n'
 	for path, content in files {
 		target := os.join_path(root, path)
 		os.mkdir_all(os.dir(target), mode: 0o700)!

@@ -110,10 +110,10 @@ fn assert_capability_catalog(service &Service, session string, tools_body string
 		mut arguments := json.decode[map[string]json.Any](args)!
 		arguments['topic'] = json.Any(topic)
 		guide := tool_value(tool(service, session, 'guidance_get', json.encode(arguments))!)!
-		assert guide.contains('desktop_package') && guide.contains(if topic == 'workflow' {
-			'"guidance_version":"2"'
-		} else {
-			'"guidance_version":"1"'
+		assert guide.contains('desktop_package') && guide.contains(match topic {
+			'workflow' { '"guidance_version":"3"' }
+			'deploy', 'debug' { '"guidance_version":"2"' }
+			else { '"guidance_version":"1"' }
 		}), topic
 	}
 }

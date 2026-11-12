@@ -188,25 +188,25 @@ fn (d &DevelopmentState) guidance(m &Manager, selection DevelopmentSelection, to
 fn desktop_development_guidance(selection DevelopmentSelection, topic string, version string) !string {
 	content := match topic {
 		'workflow' {
-			$embed_file('../../src/development_guidance/vhttpd-develop/SKILL.md').to_string()
+			$embed_file('../../src/development_guidance/vhttpd-workbench/references/develop.md').to_string()
 		}
 		'pipeline' {
-			$embed_file('../../src/development_guidance/vhttpd-develop/references/pipeline.md').to_string()
+			$embed_file('../../src/development_guidance/contracts/pipeline.md').to_string()
 		}
 		'wechat-cloud-functions' {
-			$embed_file('../../src/development_guidance/vhttpd-develop/references/wechat-cloud-functions.md').to_string()
+			$embed_file('../../src/development_guidance/contracts/wechat-cloud-functions.md').to_string()
 		}
 		'codexbot' {
-			$embed_file('../../src/development_guidance/vhttpd-develop/references/codexbot.md').to_string()
+			$embed_file('../../src/development_guidance/contracts/codexbot.md').to_string()
 		}
-		'deploy' { $embed_file('../skills/vhttpd-deploy/SKILL.md').to_string() }
-		'debug' { $embed_file('../skills/vhttpd-debug/SKILL.md').to_string() }
+		'deploy' { $embed_file('../../src/development_guidance/vhttpd-workbench/references/deploy.md').to_string() }
+		'debug' { $embed_file('../../src/development_guidance/vhttpd-workbench/references/debug.md').to_string() }
 		else { return error('unknown_guidance_topic') }
 	}
 	return json.encode({
 		'topic':                  topic
 		'source':                 'desktop_package'
-		'guidance_version':       if topic == 'workflow' { '2' } else { '1' }
+		'guidance_version':       match topic { 'workflow' { '3' } 'deploy', 'debug' { '2' } else { '1' } }
 		'desktop_version':        version
 		'target_runtime_version': selection.runtime_version
 		'content':                content

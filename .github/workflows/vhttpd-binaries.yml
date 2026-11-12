@@ -149,8 +149,7 @@ jobs:
           bundle="vhttpd-${{ matrix.target }}"
           mkdir -p "$bundle/scripts" "$bundle/runtime"
           cp "$VHTTPD_BIN" "$bundle/vhttpd"
-          mkdir -p "$bundle/skills"
-          cp -R src/development_guidance/vhttpd-develop desktop/skills/vhttpd-deploy desktop/skills/vhttpd-debug "$bundle/skills/"
+          python3 desktop/package_guidance.py "$bundle"
           python3 - "$bundle/runtime-manifest.json" "${{ matrix.target }}" <<'PY_MANIFEST'
           import json, os, pathlib, subprocess, sys
           lock = dict(line.split('=', 1) for line in pathlib.Path('scripts/ci/toolchain.env').read_text().splitlines() if line and not line.startswith('#'))

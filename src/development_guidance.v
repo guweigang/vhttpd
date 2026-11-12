@@ -2,8 +2,8 @@ module main
 
 import json2 as json
 
-const development_skill = $embed_file('development_guidance/vhttpd-develop/SKILL.md')
-const development_vjsx_reference = $embed_file('development_guidance/vhttpd-develop/references/vjsx.md')
+const development_skill = $embed_file('development_guidance/vhttpd-workbench/references/develop.md')
+const development_vjsx_reference = $embed_file('development_guidance/contracts/vjsx.md')
 
 fn packaged_development_guide(topic string) !string {
 	content := match topic {
