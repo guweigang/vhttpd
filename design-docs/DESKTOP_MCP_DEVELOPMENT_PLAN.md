@@ -20,7 +20,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 | --- | --- | --- |
 | 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定；`source_workspace_get/prepare/bind/unbind` 原位绑定空目录及已有源码，无需安装，已通过实际 Desktop 与 DSH 验收 | 源码绑定、已安装应用和平台管理分别授权。源码会话不自动授予安装或远端发布权限；文件类型与私有文件限制沿用开发工具边界 |
 | vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | Bearer、TLS 和 IPv6 已完成客户端复验；Basic、X-API-Key 及 Linux 远端变量引用已通过实调；11/10 Digest GET 与 mTLS stream 探针及随包 Skill 已通过 WorkBuddy 成功、拒绝、恢复验收。Digest 其他模式、mTLS 其他协议专项及其他认证与高级协议待扩展。凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
-| 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，三个已安装的 DSH Skills | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
+| 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，统一的 `vhttpd-workbench` Skill | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
 | Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
 | 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包管理、应用安装及历史查询；共享多字段配置修改和跨会话历史恢复均已通过当前 Desktop 与 DSH 验收 | 配置中受保护值、来源成员及组件身份变更的 MCP 专用契约 |
 | Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；普通 Relay 连接库、配置、启停和恢复；手工 Relay 的字段编辑、Hub/Agent 转换、字段删除、多 include 来源变更及精确恢复；MySQL 专项探针，均有实际 Desktop 与 DSH 验收 | 非 WebSocket 载体、任意嵌套 options 修改及业务表、迁移和具体应用数据的专项验证 |
@@ -30,7 +30,7 @@ Agent 需要能发现目标版本提供的能力，查到使用契约，并在�
 
 - MCP 是发现和执行入口。扩展 `context_get` 绑定上下文，并提供可按能力域查询的目录。每项返回稳定 ID、目标版本、schema 或指引入口、所需授权、对应工具、当前可用性和原因。目录区分运行时支持、Desktop 支持、已对当前会话开放三个状态。运行中的数据以目标实时能力为准，离线时使用对应运行包并注明来源。
 - 配置型能力优先复用 schema、变更集和通用验证。主机连接、运行包操作、远端发布、共享配置变更、Relay 和接管使用有类型的工具，复用 Desktop Host/Worker 或 vhttpd Admin 的既有实现。写操作使用明确目标、预检、可查询的操作记录，并声明恢复方式。凭据、授权授予和可见的交互确认由 Desktop 提供，Agent 能查询所缺的授权和完成后的状态。
-- Skills 说明如何选择和组合工具。现有三个 Skill 保持稳定入口，`vhttpd-develop` 根据项目形态读取开发契约，`vhttpd-deploy` 按应用发布、环境配置、运行包或 Relay 选择操作，`vhttpd-debug` 按配置、应用、协议和远端流量定位问题。主题指引随运行包或 Desktop 版本发布，由 `guidance_get` 提供同源内容。项目 `AGENTS.md` 记录实际入口、约束、目标和验证命令。
+- `vhttpd-workbench` Skill 说明如何选择和组合工具，按需读取开发、部署或调试参考。主题指引随运行包或 Desktop 版本发布，由 `guidance_get` 提供同源内容。项目 `AGENTS.md` 记录实际入口、约束、目标和验证命令。
 - 公网 Relay 与本机 MCP 使用同一能力模型，按工作区、运行目标和操作授予权限。应用编辑会话与平台管理会话分别授权。能力目录显示当前可用范围，Worker 执行时再次校验授权和绑定代次。
 
 ### 按项目形态验收
@@ -184,15 +184,17 @@ Desktop 提供两种入口。已有应用从环境与应用选择器进入，按
 
 由应用模板生成，已有应用可维护自己的版本。写入入口、应用清单和允许编辑的目录、目标兼容范围、生成文件、可重复运行的验收请求及预期响应、适用 Skill。可以记录应用特有的业务规则与测试数据约定。运行目标、实时状态和实际能力以 `context_get` 为准。项目指引只作为开发上下文，授权由 Desktop 及 Worker 执行。MCP 通过 `guidance_get` 的项目主题返回该文件；缺失时返回空状态及适用的平台工作流。
 
-### 平台 Skills
+### 平台 Skill
 
-| Skill | 编写内容 | 交付阶段 |
+[统一的 vhttpd-workbench Skill](../src/development_guidance/vhttpd-workbench/SKILL.md) 是客户端安装和发现的唯一入口。根 `SKILL.md` 只写触发条件、通用约束和分流规则；`agents/openai.yaml` 提供显示名称。根据任务按需读一份参考。
+
+| 任务 | 随 Skill 安装的参考 | Desktop MCP `guidance_get` 主题 |
 | --- | --- | --- |
-| `vhttpd-develop` | 根据目标包和 profile 查支持的 API；选择模板，核对入口、模块、import 和宿主能力；按 revision 编辑、校验、启动并用业务请求验证；查日志和恢复 | 第一阶段 |
-| `vhttpd-deploy` | Desktop 主机连接和目标选择；应用组件构建、预检、发布、验证与回滚；运行时升级的兼容检查和重启影响 | 远端发布及运行时升级阶段 |
-| `vhttpd-debug` | 按应用与请求查日志、本地复现；检查远端现场；接管预检、验证流量归属、释放并确认远端恢复 | 远端诊断及接管阶段 |
+| 开发、绑定源码、编辑与验证 | [develop.md](../src/development_guidance/vhttpd-workbench/references/develop.md) | `workflow` |
+| 主机、发布、运行包与 Relay | [deploy.md](../src/development_guidance/vhttpd-workbench/references/deploy.md) | `deploy` |
+| 诊断、认证探针与恢复 | [debug.md](../src/development_guidance/vhttpd-workbench/references/debug.md) | `debug` |
 
-每个 Skill 的 `SKILL.md` 放触发条件、操作顺序、失败分支和验收标准。`vhttpd-deploy` 和 `vhttpd-debug` 已提供当前可执行的工作流。查询、预检、提交和恢复使用本机管理 MCP。Desktop 展示需要用户确认的远端操作。2026-11-04 18:07（上海时间）在 DSH 实际加载了两份 Skill，并调用目标查询、历史操作查询和本机状态及日志工具。应用发布、运行时升级及各自的回滚已通过下文的 DSH 验收，远端接管的启动、释放及业务流量验证也已通过。 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) · [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)API 签名、配置字段、允许的 import 和示例由与运行包匹配的开发契约维护。第一阶段发布一个可安装的 `vhttpd-develop` Skill，MCP 从同一份发布内容提供工作流。ChatGPT 网页通过工具按主题读取；支持本地 Skills 的客户端可加载同一版本。首批契约覆盖模板实际使用的入口、请求和响应 API、模块边界，以及一条 HTTP 和一条 JSON API 示例。 [vjsx Facade Reference](./VJSX_FACADE_REFERENCE.md)
+新打包的运行包在 `skills/vhttpd-workbench` 放完整 Skill，原有 vjsx 和三份项目技术契约独立放在 `guidance/`。运行包的 `develop`、`vjsx` 和 Desktop 的原有指引主题名保持兼容。历史验收记录里的三个 Skill 名称对应当时的安装布局。
 
 ### 微信云开发兼容项目
 
