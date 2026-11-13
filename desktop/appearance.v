@@ -97,9 +97,6 @@ fn apply_workbench_appearance() {
 	} else {
 		WorkbenchColors{}
 	}
-	$if windows {
-		update_workbench_windows_appearance(ui2.native_window_handle())
-	}
 }
 
 fn set_workbench_appearance_mode(mode ui2.ComponentThemeMode) {

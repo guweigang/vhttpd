@@ -2,25 +2,6 @@
 #define VHTTPD_WORKBENCH_WINDOW_WINDOWS_H
 #include <windows.h>
 #include <commctrl.h>
-#include <dwmapi.h>
-
-static void vhttpd_workbench_set_windows_appearance(void *window, int dark) {
-    HWND hwnd = (HWND)window;
-    if (!hwnd) return;
-    HIGHCONTRASTW contrast = {sizeof(HIGHCONTRASTW)};
-    BOOL use_dark = dark && !(SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0)
-        && (contrast.dwFlags & HCF_HIGHCONTRASTON));
-    if (FAILED(DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark, sizeof(use_dark)))) {
-        // Older Windows 10 builds used attribute 19 for the same setting.
-        DwmSetWindowAttribute(hwnd, 19, &use_dark, sizeof(use_dark));
-    }
-    // Explicit colours also work when the system is light and the app is dark.
-    COLORREF caption = use_dark ? RGB(40,40,40) : 0xffffffff;
-    COLORREF text = use_dark ? RGB(237,237,237) : 0xffffffff;
-    DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
-    DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &text, sizeof(text));
-    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_FRAME | RDW_NOCHILDREN | RDW_NOERASE);
-}
 
 static const wchar_t vhttpd_workbench_font_family[] = L"Sarasa Term SC";
 
