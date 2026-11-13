@@ -10,6 +10,15 @@
  
  $if !ui2_custom_rendering ? {
  
+@@ -290,7 +293,7 @@
+ 	}
+ }
+ 
+-fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
++fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64, checkbox int)
+ 
+ fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
+ 
 @@ -301,6 +304,12 @@
  fn C.ui2_win_set_bitmap(hwnd voidptr, path &u16, width int, height int) voidptr
  
@@ -37,6 +46,15 @@
  	symbol_font_attempted bool
  	hover_bindings        map[u64]string // window handle -> action of a hoverable element
  	hovered               []string       // hovered actions, outermost first
+@@ -596,7 +612,7 @@
+ }
+ 
+ fn windows_uses_transparent_button_paint(kind Kind, box BoxStyle) bool {
+-	return box.transparent && kind in [.button, .toggle_button]
++	return kind == .checkbox || (box.transparent && kind in [.button, .toggle_button])
+ }
+ 
+ // Whether a window leaves the background behind it alone. A label paints none of its
 @@ -754,16 +770,33 @@
  
  pub fn refresh() {
@@ -265,6 +283,15 @@
  		win_wm_refresh {
  			refresh()
  			return 0
+@@ -2404,7 +2526,7 @@
+ 	}
+ 	style := st.node_text_styles[key] or { TextStyle{} }
+ 	C.ui2_win_paint_transparent_button(hwnd, style.color, box.radius, box.border_color,
+-		box.border_left, box.border_top, box.border_right, box.border_bottom)
++		box.border_left, box.border_top, box.border_right, box.border_bottom, windows_bool(kind == .checkbox))
+ 	return 1
+ }
+ 
 --- a/windows/native_helpers_windows.h
 +++ b/windows/native_helpers_windows.h
 @@ -222,6 +222,10 @@
@@ -408,7 +435,62 @@
  }
  
  static inline int ui2_win_placeholder_matches(void *hwnd, const wchar_t *expected) {
-@@ -1913,11 +1960,50 @@
+@@ -1856,7 +1903,7 @@
+ static inline void ui2_win_paint_transparent_button(void *hwnd_ptr,
+ 		unsigned int foreground, double radius, unsigned int border_color,
+ 		double border_left, double border_top, double border_right,
+-		double border_bottom) {
++		double border_bottom, int checkbox) {
+ 	HWND hwnd = (HWND)hwnd_ptr;
+ 	if (hwnd == NULL) return;
+ 	PAINTSTRUCT paint;
+@@ -1887,14 +1934,40 @@
+ 			HFONT font = (HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0);
+ 			HGDIOBJ old_font = font == NULL ? NULL : SelectObject(dc, font);
+ 			int old_mode = SetBkMode(dc, TRANSPARENT);
+-			COLORREF old_color = SetTextColor(dc, IsWindowEnabled(hwnd)
+-				? ui2_win_color(foreground) : GetSysColor(COLOR_GRAYTEXT));
++			COLORREF color = IsWindowEnabled(hwnd)
++				? ui2_win_color(foreground) : GetSysColor(COLOR_GRAYTEXT);
++			COLORREF old_color = SetTextColor(dc, color);
+ 			RECT text_rect = rect;
+-			if ((SendMessageW(hwnd, BM_GETSTATE, 0, 0) & BST_PUSHED) != 0) {
++			LRESULT state = SendMessageW(hwnd, BM_GETSTATE, 0, 0);
++			if (checkbox) {
++				TEXTMETRICW metrics;
++				int size = GetTextMetricsW(dc, &metrics) ? metrics.tmHeight - 2 : 13;
++				if (size < 11) size = 11;
++				int y = (rect.bottom - size) / 2;
++				RECT mark = {1, y, 1 + size, y + size};
++				HBRUSH stroke = CreateSolidBrush(color);
++				if (stroke != NULL) {
++					FrameRect(dc, &mark, stroke);
++					DeleteObject(stroke);
++				}
++				if (state & BST_CHECKED) {
++					HPEN pen = CreatePen(PS_SOLID, size >= 16 ? 2 : 1, color);
++					if (pen != NULL) {
++						HGDIOBJ old_pen = SelectObject(dc, pen);
++						POINT tick[] = {{mark.left + size / 4, y + size / 2},
++							{mark.left + size * 2 / 5, y + size * 7 / 10},
++							{mark.left + size * 4 / 5, y + size / 4}};
++						Polyline(dc, tick, 3);
++						SelectObject(dc, old_pen);
++						DeleteObject(pen);
++					}
++				}
++				text_rect.left = mark.right + size / 2;
++			} else if (state & BST_PUSHED) {
+ 				OffsetRect(&text_rect, 1, 1);
+ 			}
+-			DrawTextW(dc, text, length, &text_rect, DT_CENTER | DT_VCENTER
+-				| DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
++			DrawTextW(dc, text, length, &text_rect, (checkbox ? DT_LEFT : DT_CENTER)
++				| DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+ 			SetTextColor(dc, old_color);
+ 			SetBkMode(dc, old_mode);
+ 			if (old_font != NULL) SelectObject(dc, old_font);
+@@ -1913,11 +1986,50 @@
  	if (hwnd != NULL) InvalidateRect((HWND)hwnd, NULL, TRUE);
  }
  
@@ -462,7 +544,7 @@
  }
  
  static inline void *ui2_win_set_bitmap(void *hwnd_ptr, const wchar_t *path,
-@@ -1930,16 +2016,47 @@
+@@ -1930,16 +2042,47 @@
  			width > 0 ? width : 0, height > 0 ? height : 0,
  			LR_LOADFROMFILE | LR_CREATEDIBSECTION);
  	}
@@ -512,7 +594,7 @@
  }
  
  // Each axis of a Scroll element is kept on a standard scroll bar of its window, which
-@@ -1957,7 +2074,11 @@
+@@ -1957,7 +2100,11 @@
  	info.nMax = content > 0 ? content - 1 : 0;
  	info.nPage = (UINT)(page > 0 ? page : 0);
  	info.nPos = position;
