@@ -38,6 +38,7 @@ public static class WorkbenchUiCheck {
  public static string Text(IntPtr hwnd) { var b=new StringBuilder(2048); GetWindowTextW(hwnd,b,b.Capacity); return b.ToString(); }
  public static string Class(IntPtr hwnd) { var b=new StringBuilder(128); GetClassNameW(hwnd,b,b.Capacity); return b.ToString(); }
  public static IntPtr[] Children(IntPtr root) {var items=new List<IntPtr>();EnumChildWindows(root,(h,d)=>{items.Add(h);return true;},IntPtr.Zero);return items.ToArray();}
+ [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr GetProp(IntPtr hwnd,string name);
  public static IntPtr Find(IntPtr root,string text,string kind) { IntPtr result=IntPtr.Zero; EnumChildWindows(root,(h,d)=>{ if(Text(h)==text && String.Equals(Class(h),kind,StringComparison.OrdinalIgnoreCase)) {result=h;return false;}return true;},IntPtr.Zero);return result; }
  public static IntPtr Popup(IntPtr root) { IntPtr result=IntPtr.Zero;EnumThreadWindows(GetWindowThreadProcessId(root,IntPtr.Zero),(h,d)=>{if(Class(h)=="#32768" && IsWindowVisible(h)){result=h;return false;}return true;},IntPtr.Zero);return result; }
  public static IntPtr Focus(IntPtr root) { var i=new Gui();i.Size=(uint)Marshal.SizeOf(i);if(!GetGUIThreadInfo(GetWindowThreadProcessId(root,IntPtr.Zero),ref i))throw new Exception("Cannot read UI focus");return i.Focus; }
@@ -272,10 +273,20 @@ try {
   if ($pixels -lt [Math]::Max(8,[Math]::Floor($baseline*0.6))) { throw 'Button caption disappeared while pressed; see caption-frames.json' }
  }
 } finally {
- [WorkbenchUiCheck]::SendMessageW($create,0x202,[IntPtr]::Zero,$position) | Out-Null
+ if ($CaptionOnly) {
+  [WorkbenchUiCheck]::SendMessageW($create,0x202,[IntPtr]::Zero,$position) | Out-Null
+ } else {
+  [WorkbenchUiCheck]::PostMessageW($create,0x202,[IntPtr]::Zero,$position) | Out-Null
+ }
 }
 if ($CaptionOnly) { return }
-Start-Sleep -Milliseconds 500
+# Capture across the actual page transition. The fixed sidebar must stay painted.
+for ($frame=0; $frame -lt 10; $frame++) {
+ $ink=Measure-BrandInk ("page-switch-brand-{0:D2}" -f $frame)
+ if ($ink -lt $script:brandInk*0.8) {throw 'Switching pages blanked existing sidebar content'}
+ Start-Sleep -Milliseconds 16
+}
+Start-Sleep -Milliseconds 350
 $first = [WorkbenchUiCheck]::Focus($window)
 if ($first -eq [IntPtr]::Zero -or [WorkbenchUiCheck]::Class($first) -ne 'Edit') { throw 'New-project form did not focus its first input' }
 if (([WorkbenchUiCheck]::GetWindowLongPtrW($first,-20).ToInt64() -band 0x200) -ne 0) {throw 'Input has an extra native client-edge border'}
@@ -286,7 +297,7 @@ Start-Sleep -Milliseconds 300
 $next = [WorkbenchUiCheck]::Focus($window)
 if ($next -eq $first -or [WorkbenchUiCheck]::Class($next) -ne 'Edit') { throw 'Tab did not advance to the next form input' }
 Save-Window $window 'desktop-new-project'
-@{ single_input_border='passed'; solid_focus_outline='passed'; work_area='passed'; title_font_bounds='passed'; window_icons='passed'; create_button='passed'; initial_form_focus='passed'; tab_navigation='passed'; pressed_caption_frames='passed' } | ConvertTo-Json | Set-Content "$OutputDirectory/ui-acceptance.json"
+@{ single_input_border='passed'; solid_focus_outline='passed'; work_area='passed'; title_font_bounds='passed'; window_icons='passed'; create_button='passed'; initial_form_focus='passed'; tab_navigation='passed'; pressed_caption_frames='passed'; page_switch_sidebar_frames='passed' } | ConvertTo-Json | Set-Content "$OutputDirectory/ui-acceptance.json"
 
 function Invoke-WorkbenchButton($title) {
  $button=[WorkbenchUiCheck]::Find($window,$title,'UI2Container')
@@ -340,6 +351,37 @@ $secure=@([WorkbenchUiCheck]::Children($window) | Where-Object { [WorkbenchUiChe
 if ($secure.Count -ne 1) {throw 'Password input lost native masking'}
 # Keep the menu checks on an empty registry. The last shortcut opens a fresh form.
 . "$PSScriptRoot/verify_windows_menus.ps1" -DesktopProcessId $DesktopProcessId -OutputDirectory $OutputDirectory
+
+function Assert-LogoAlpha($theme) {
+ $view=Menu-At 3
+ $appearance=[WorkbenchMenuCheck]::GetSubMenu($view,(Menu-Index $view '外观'))
+ Menu-Invoke $appearance $theme
+ $mark=@([WorkbenchUiCheck]::Children($window) | Where-Object {
+  [WorkbenchUiCheck]::GetProp($_,'UI2AlphaBitmap') -ne [IntPtr]::Zero -and [WorkbenchUiCheck]::IsWindowVisible($_)
+ })
+ if ($mark.Count -ne 1) {throw 'Expected one visible alpha PNG logo'}
+ $r=New-Object WorkbenchUiCheck+Rect
+ [WorkbenchUiCheck]::GetWindowRect($mark[0],[ref]$r) | Out-Null
+ $bitmap=New-Object Drawing.Bitmap ($r.Right-$r.Left+4),($r.Bottom-$r.Top)
+ $graphics=[Drawing.Graphics]::FromImage($bitmap)
+ try {
+  $graphics.CopyFromScreen($r.Left-4,$r.Top,0,0,$bitmap.Size)
+  $background=$bitmap.GetPixel(1,1)
+  if ($bitmap.GetPixel(5,1).ToArgb() -ne $background.ToArgb()) {throw 'PNG logo corner does not match the sidebar background'}
+  $blue=0
+  for ($y=0;$y -lt $bitmap.Height;$y++) {for ($x=4;$x -lt $bitmap.Width;$x++) {
+   $c=$bitmap.GetPixel($x,$y)
+   if ($c.B -gt 120 -and $c.B -gt ($c.R+45)) {$blue++}
+  }}
+  if ($blue -lt 12) {throw 'PNG logo has no visible brand artwork'}
+  Save-Window $window "logo-alpha-$theme"
+  return $background.ToArgb()
+ } finally {$graphics.Dispose();$bitmap.Dispose()}
+}
+$light=Assert-LogoAlpha '浅色'
+$dark=Assert-LogoAlpha '深色'
+if ($light -eq $dark) {throw 'Logo did not follow the appearance change'}
+Assert-LogoAlpha '浅色' | Out-Null
 
 # The Relay library now opens from an environment's workspace tab.
 # Create a local registration in the isolated profile without launching vhttpd.

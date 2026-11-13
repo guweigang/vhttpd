@@ -1,7 +1,6 @@
 module main
 
 import ui2
-import os
 
 fn C.vhttpd_workbench_prepare_windows_display()
 fn C.vhttpd_workbench_windows_scale() f64
@@ -94,12 +93,6 @@ fn handle_windows_field_event(event string) bool {
 	id := event[prefix.len..].all_before(':')
 	if id != '' { ui2.focus(id); ui2.refresh() }
 	return true
-}
-
-fn windows_brand_asset(path string) string {
-	percent := int(windows_display_scale() * 100 + 0.5)
-	candidate := path.replace('.bmp', '-${percent}.bmp')
-	return if percent != 100 && os.is_file(candidate) { candidate } else { path }
 }
 
 fn C.vhttpd_workbench_choose_environment(voidptr, voidptr, int, int, int, int, u32, u32, u32, u32, u32) int

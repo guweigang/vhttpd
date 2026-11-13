@@ -314,7 +314,6 @@ fn main() {
 	C.atexit(cleanup)
 	$if windows {
 		C.vhttpd_workbench_prepare_windows_display()
-		app.brand_mark = windows_brand_asset(app.brand_mark)
 	}
 	app.refresh_workbench_menus(ui2.screen(workbench_colors.paper, []))
 	$if !windows {

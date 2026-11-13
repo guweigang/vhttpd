@@ -163,7 +163,6 @@ jobs:
           python desktop/build_font_decoder.py "$output/resources/vhttpd-fontdecode.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Font decoder build failed' }
           Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
-          ./desktop/ci/prepare_windows_brand.ps1 -Source "$PWD/admin/ui/brand/mark.png" -Destination "$output/resources/vhttpd-mark.bmp"
           foreach ($pattern in @('libcrypto-*.dll', 'libssl-*.dll')) {
             $dlls = @(Get-ChildItem "$env:OPENSSL_ROOT_DIR/bin" -Filter $pattern -File)
             if ($dlls.Count -eq 0) { throw "Missing OpenSSL runtime DLL: $pattern" }
