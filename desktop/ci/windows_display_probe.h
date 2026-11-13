@@ -20,3 +20,8 @@ static int vhttpd_probe_unchanged_children(void *window, int reset) {
     }
     return count;
 }
+
+static int vhttpd_probe_edit_needs_repaint(void *window) {
+    HWND edit = FindWindowExW((HWND)window, NULL, L"Edit", NULL);
+    return edit == NULL || GetUpdateRect(edit, NULL, FALSE);
+}

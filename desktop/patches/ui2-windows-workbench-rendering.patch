@@ -51,14 +51,16 @@
  }
  
  // Whether a window leaves the background behind it alone. A label paints none of its
-@@ -754,16 +766,32 @@
+@@ -754,16 +766,27 @@
  
  pub fn refresh() {
  	mut st := windows_state()
 -	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
+-		return
+-	}
 +	if st.root == unsafe { nil } || st.rendering || st.building_screen || voidptr(st.build_screen) == unsafe { nil } {
- 		return
- 	}
++		return
++	}
 +	st.building_screen = true
  	declared := st.build_screen()
 +	st.building_screen = false
@@ -76,16 +78,11 @@
  		return
  	}
  	st.rendering = true
-+	// Keep the root visible during native layout. Newly exposed controls and
-+	// transparent captions need a complete repaint after the tree is committed.
-+	repaint_frame := !st.has_declared_tree || declared != st.last_declared_tree
 +	st.rendered_frames++
-+	st.last_declared_tree = declared
-+	st.has_declared_tree = true
  	st.views = map[string]voidptr{}
  	st.view_keys = map[string]string{}
  	st.view_kinds = map[string]Kind{}
-@@ -784,17 +812,55 @@
+@@ -784,17 +807,104 @@
  	st.toggle_views = map[u64]voidptr{}
  	mut active := map[string]bool{}
  	if root.kind == .screen {
@@ -99,9 +96,11 @@
  	}
  	windows_remove_stale(active)
 +	windows_install_pending_menu()
-+	if repaint_frame {
-+		C.ui2_win_redraw_frame(st.root)
++	if st.has_declared_tree && declared != st.last_declared_tree {
++		windows_redraw_changed_regions(st.root, st.last_declared_tree, declared)
 +	}
++	st.last_declared_tree = declared
++	st.has_declared_tree = true
  	st.rendering = false
 -	C.ui2_win_invalidate(st.root)
  	// Content can move under a cursor that stays put.
@@ -127,7 +126,54 @@
 +
 +fn C.ui2_win_redraw_subtree(voidptr)
 +
-+fn C.ui2_win_redraw_frame(voidptr)
++fn C.ui2_win_redraw_region(hwnd voidptr, left int, top int, right int, bottom int)
++
++fn windows_structure_changed(previous Element, current Element) bool {
++	if previous.id != current.id || previous.key != current.key || previous.kind != current.kind
++		|| previous.hidden != current.hidden || previous.children.len != current.children.len {
++		return true
++	}
++	for i, child in previous.children {
++		if windows_structure_changed(child, current.children[i]) {
++			return true
++		}
++	}
++	return false
++}
++
++fn windows_redraw_region(hwnd voidptr, frame Rect) {
++	C.ui2_win_redraw_region(hwnd, int(frame.x), int(frame.y), int(frame.x + frame.width),
++		int(frame.y + frame.height))
++}
++
++fn windows_redraw_changed_regions(hwnd voidptr, previous Element, current Element) {
++	// Theme changes already invalidate the entire tree in windows_update_root_box.
++	if previous.box != current.box {
++		return
++	}
++	if previous.kind != .screen || current.kind != .screen {
++		if windows_structure_changed(previous, current) {
++			windows_redraw_region(hwnd, previous.frame)
++			windows_redraw_region(hwnd, current.frame)
++		}
++		return
++	}
++	// A replaced page can expose previously covered pixels. Repaint its old
++	// and new client rectangles after native layout, leaving the sidebar alone.
++	for i, child in previous.children {
++		if i >= current.children.len {
++			windows_redraw_region(hwnd, child.frame)
++		} else if windows_structure_changed(child, current.children[i]) {
++			windows_redraw_region(hwnd, child.frame)
++			if child.frame != current.children[i].frame {
++				windows_redraw_region(hwnd, current.children[i].frame)
++			}
++		}
++	}
++	for i in previous.children.len .. current.children.len {
++		windows_redraw_region(hwnd, current.children[i].frame)
++	}
++}
 +
 +// Host status polls are distinct from input, scrolling and animation refreshes.
 +pub fn request_poll_refresh() {
@@ -144,7 +190,7 @@
  }
  
  pub fn request_refresh() {
-@@ -1236,11 +1302,16 @@
+@@ -1236,11 +1346,16 @@
  	} else {
  		el.text_style
  	}
@@ -162,7 +208,7 @@
  	}
  	st.node_text_styles[key] = visual_text_style
  	st.node_ids[key] = el.id
-@@ -1267,7 +1338,7 @@
+@@ -1267,7 +1382,7 @@
  		...el
  		box: visual_box
  		text_style: visual_text_style
@@ -171,7 +217,7 @@
  	if el.kind == .label {
  		windows_place_label(key, hwnd, Element{
  			...el
-@@ -1463,9 +1534,12 @@
+@@ -1463,9 +1578,12 @@
  	return label.replace('&', '&&')
  }
  
@@ -187,7 +233,17 @@
  	C.ui2_win_show(hwnd, windows_bool(!el.hidden))
  	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
  	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
-@@ -1509,19 +1583,22 @@
+@@ -1479,7 +1597,8 @@
+ 			if declared_changed || windows_native_text(text_hwnd) != el.text {
+ 				windows_set_native_text(text_hwnd, el.text)
+ 			}
+-			if el.kind in [.checkbox, .switch_control, .toggle_button] {
++			if el.kind in [.checkbox, .switch_control, .toggle_button]
++				&& C.ui2_win_get_checked(hwnd) != windows_bool(el.checked) {
+ 				C.ui2_win_set_checked(hwnd, windows_bool(el.checked))
+ 			}
+ 		}
+@@ -1509,19 +1628,22 @@
  			unsafe { free(wide_placeholder) }
  		}
  		.image {
@@ -216,7 +272,7 @@
  				st.node_image_path[key] = image_sig
  			}
  		}
-@@ -1536,11 +1613,34 @@
+@@ -1536,11 +1658,34 @@
  	// The tooltip goes on the outer window, which is the declared frame, and on the
  	// control inside it, which is what the pointer actually lands on.
  	windows_update_tooltip(key, hwnd, text_hwnd, el.tooltip)
@@ -254,7 +310,7 @@
  }
  
  fn windows_update_tooltip(key string, hwnd voidptr, text_hwnd voidptr, tooltip string) {
-@@ -2339,6 +2439,12 @@
+@@ -2339,6 +2484,12 @@
  			}
  			return 0
  		}
@@ -267,7 +323,7 @@
  		win_wm_refresh {
  			refresh()
  			return 0
-@@ -2404,7 +2510,7 @@
+@@ -2404,7 +2555,7 @@
  	}
  	style := st.node_text_styles[key] or { TextStyle{} }
  	C.ui2_win_paint_transparent_button(hwnd, style.color, box.radius, box.border_color,
@@ -497,11 +553,11 @@
 +		RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
 +}
 +
-+static inline void ui2_win_redraw_frame(void *window) {
++static inline void ui2_win_redraw_region(void *window, int left, int top, int right, int bottom) {
 +	HWND hwnd = (HWND)window;
-+	if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return;
-+	RedrawWindow(hwnd, NULL, NULL,
-+		RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
++	if (!IsWindowVisible(hwnd) || IsIconic(hwnd) || right <= left || bottom <= top) return;
++	RECT region = {left, top, right, bottom};
++	RedrawWindow(hwnd, &region, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
 +}
 +
  static inline void ui2_win_invalidate_parent(void *hwnd) {
