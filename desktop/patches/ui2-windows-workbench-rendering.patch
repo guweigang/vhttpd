@@ -1,6 +1,6 @@
 --- a/windows/ui_windows.v
 +++ b/windows/ui_windows.v
-@@ -398,6 +398,11 @@
+@@ -400,6 +400,11 @@
  @[heap]
  struct WindowsState {
  mut:
@@ -12,7 +12,7 @@
  	symbol_font_attempted bool
  	hover_bindings        map[u64]string // window handle -> action of a hoverable element
  	hovered               []string       // hovered actions, outermost first
-@@ -756,6 +761,12 @@
+@@ -758,6 +763,12 @@
  		return
  	}
  	declared := st.build_screen()
@@ -25,10 +25,36 @@
  	root := windows_symbol_images_as_labels(apply_widget_animations(declared))
  	validate_element_tree(root) or {
  		eprintln('ui2: ${err}')
-@@ -795,6 +806,20 @@
+@@ -784,17 +795,41 @@
+ 	st.toggle_views = map[u64]voidptr{}
+ 	mut active := map[string]bool{}
+ 	if root.kind == .screen {
+-		st.node_boxes[''] = root.box
++		windows_update_root_box(root.box)
+ 		windows_render_children(st.root, root.children, '', 0, 0, mut active)
+ 	} else {
+-		st.node_boxes[''] = BoxStyle{}
++		windows_update_root_box(BoxStyle{})
+ 		windows_render_element(st.root, root, reconciliation_child_key('', 0, root), '', 0, 0, mut active)
+ 	}
+ 	windows_remove_stale(active)
+ 	st.rendering = false
+-	C.ui2_win_invalidate(st.root)
+ 	// Content can move under a cursor that stays put.
  	windows_update_hover()
- }
- 
++}
++
++fn windows_update_root_box(box BoxStyle) {
++	mut st := windows_state()
++	if previous := st.node_boxes[''] {
++		if previous == box { return }
++	}
++	st.node_boxes[''] = box
++	C.ui2_win_redraw_subtree(st.root)
++}
++
++fn C.ui2_win_redraw_subtree(voidptr)
++
 +// Host status polls are distinct from input, scrolling and animation refreshes.
 +pub fn request_poll_refresh() {
 +	st := windows_state()
@@ -41,12 +67,70 @@
 +pub fn windows_poll_refresh_stats() (u64, u64) {
 + st := windows_state()
 + return st.rendered_frames, st.poll_skipped
-+}
-+
+ }
+ 
  pub fn request_refresh() {
- 	st := windows_state()
- 	if st.root != unsafe { nil } {
-@@ -2337,6 +2362,12 @@
+@@ -1236,11 +1271,16 @@
+ 	} else {
+ 		el.text_style
+ 	}
++	mut paint_changed := must_create || (st.node_boxes[key] or { BoxStyle{} }) != visual_box
++		|| (st.node_text_styles[key] or { TextStyle{} }) != visual_text_style
+ 	st.node_boxes[key] = visual_box
+ 	if el.kind == .view && element_has_shape(el) {
+-		st.node_shapes[key] = windows_pack_shape(el)
++		packed_shape := windows_pack_shape(el)
++		if (st.node_shapes[key] or { WindowsShape{} }) != packed_shape { paint_changed = true }
++		st.node_shapes[key] = packed_shape
+ 	} else if key in st.node_shapes {
+ 		st.node_shapes.delete(key)
++		paint_changed = true
+ 	}
+ 	st.node_text_styles[key] = visual_text_style
+ 	st.node_ids[key] = el.id
+@@ -1267,7 +1307,7 @@
+ 		...el
+ 		box: visual_box
+ 		text_style: visual_text_style
+-	}, x_offset, y_offset, must_create)
++	}, x_offset, y_offset, must_create, paint_changed)
+ 	if el.kind == .label {
+ 		windows_place_label(key, hwnd, Element{
+ 			...el
+@@ -1463,9 +1503,12 @@
+ 	return label.replace('&', '&&')
+ }
+ 
+-fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_offset int, created bool) {
+-	mut st := windows_state()
+-	C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(el.frame.x) + x_offset, int(el.frame.y) + y_offset, int(el.frame.width), int(el.frame.height))
++fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_offset int, created bool, paint_changed bool) {
++	mut st := windows_state()
++	// Label placement below already applies its final measured frame.
++	if el.kind != .label {
++		C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(el.frame.x) + x_offset, int(el.frame.y) + y_offset, int(el.frame.width), int(el.frame.height))
++	}
+ 	C.ui2_win_show(hwnd, windows_bool(!el.hidden))
+ 	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
+ 	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
+@@ -1536,11 +1579,13 @@
+ 	// The tooltip goes on the outer window, which is the declared frame, and on the
+ 	// control inside it, which is what the pointer actually lands on.
+ 	windows_update_tooltip(key, hwnd, text_hwnd, el.tooltip)
+-	if el.kind == .label {
++	if el.kind == .label && (paint_changed || declared_changed) {
++		// Transparent glyphs share their parent's background.
+ 		C.ui2_win_invalidate_parent(hwnd)
+ 		C.ui2_win_invalidate(text_hwnd)
+-	}
+-	C.ui2_win_invalidate(hwnd)
++	} else if paint_changed {
++		C.ui2_win_redraw_subtree(hwnd)
++	}
+ }
+ 
+ fn windows_update_tooltip(key string, hwnd voidptr, text_hwnd voidptr, tooltip string) {
+@@ -2339,6 +2384,12 @@
  			}
  			return 0
  		}
@@ -61,7 +145,7 @@
  			return 0
 --- a/windows/native_helpers_windows.h
 +++ b/windows/native_helpers_windows.h
-@@ -213,6 +213,12 @@
+@@ -222,6 +222,12 @@
  	} else {
  		RemovePropW(hwnd, ui2_win_accessible_button_property());
  	}
@@ -74,7 +158,7 @@
  	LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
  	LONG_PTR next_style = active ? style | WS_TABSTOP : style & ~((LONG_PTR)WS_TABSTOP);
  	if (style != next_style) {
-@@ -405,7 +411,9 @@
+@@ -414,7 +420,9 @@
  	}
  	if ((message == WM_SETFOCUS || message == WM_KILLFOCUS)
  		&& ui2_win_is_accessible_button(hwnd)) {
@@ -85,7 +169,7 @@
  	}
  	if ((message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
  		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & ui2_win_wheel_scroll_style(message, wparam)) == 0
-@@ -803,6 +811,10 @@
+@@ -812,6 +820,10 @@
  	PostQuitMessage(code);
  }
  
@@ -96,7 +180,7 @@
  static inline void ui2_win_post_refresh(void *hwnd) {
  	if (hwnd != NULL) PostMessageW((HWND)hwnd, UI2_WM_REFRESH, 0, 0);
  }
-@@ -833,6 +845,12 @@
+@@ -842,6 +854,12 @@
  
  static inline void ui2_win_set_frame(void *hwnd, int x, int y, int width, int height) {
  	if (hwnd != NULL) {
@@ -109,3 +193,101 @@
  		SetWindowPos((HWND)hwnd, NULL, x, y, width, height,
  			SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
  	}
+@@ -857,20 +875,26 @@
+ 
+ static inline void ui2_win_place_after(void *hwnd, void *previous) {
+ 	if (hwnd == NULL) return;
+-	(void)previous;
+-	// Rendering visits siblings from back to front. Moving each visited child to
+-	// the top gives later declarative siblings the same stacking priority used
+-	// by the other backends.
+-	SetWindowPos((HWND)hwnd, HWND_TOP,
++	HWND child = (HWND)hwnd;
++	HWND below = (HWND)previous;
++	// The renderer visits siblings from back to front. Move only a child whose
++	// neighbour is wrong, preserving the z-order of unchanged controls.
++	if (GetWindow(child, GW_HWNDNEXT) == below) return;
++	HWND above = below ? GetWindow(below, GW_HWNDPREV) : HWND_BOTTOM;
++	SetWindowPos(child, above,
+ 		0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+ }
+ 
+ static inline void ui2_win_show(void *hwnd, int visible) {
+-	if (hwnd != NULL) ShowWindow((HWND)hwnd, visible ? SW_SHOWNA : SW_HIDE);
++	if (hwnd != NULL && ((GetWindowLongPtrW((HWND)hwnd, GWL_STYLE) & WS_VISIBLE) != 0) != (visible != 0)) {
++		ShowWindow((HWND)hwnd, visible ? SW_SHOWNA : SW_HIDE);
++	}
+ }
+ 
+ static inline void ui2_win_enable(void *hwnd, int enabled) {
+-	if (hwnd != NULL) EnableWindow((HWND)hwnd, enabled);
++	if (hwnd != NULL && (IsWindowEnabled((HWND)hwnd) != 0) != (enabled != 0)) {
++		EnableWindow((HWND)hwnd, enabled);
++	}
+ }
+ 
+ typedef struct ui2_win_tooltip_binding {
+@@ -992,16 +1016,22 @@
+ static inline void ui2_win_set_edit_options(void *hwnd, const wchar_t *placeholder,
+ 		int readonly, int padding_left) {
+ 	if (hwnd == NULL) return;
+-	SendMessageW((HWND)hwnd, EM_SETREADONLY, readonly ? TRUE : FALSE, 0);
++	HWND edit = (HWND)hwnd;
++	int margin = padding_left < 0 ? 0 : padding_left;
++	int current_readonly = (GetWindowLongPtrW(edit, GWL_STYLE) & ES_READONLY) != 0;
++	if (current_readonly != (readonly != 0)) SendMessageW(edit, EM_SETREADONLY, readonly != 0, 0);
++	if (LOWORD(SendMessageW(edit, EM_GETMARGINS, 0, 0)) != margin) {
++		SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(margin, 0));
++	}
++	const wchar_t *old = (const wchar_t *)GetPropW(edit, ui2_win_placeholder_property());
++	if (wcscmp(old ? old : L"", placeholder ? placeholder : L"") == 0) return;
+ #ifdef EM_SETCUEBANNER
+ 	// Draw cue text in the control subclass. This remains reliable under Wine,
+ 	// where EM_SETCUEBANNER may report support without painting anything.
+ 	SendMessageW((HWND)hwnd, EM_SETCUEBANNER, TRUE, (LPARAM)L"");
+ #endif
+-	ui2_win_store_placeholder((HWND)hwnd, placeholder);
+-	SendMessageW((HWND)hwnd, EM_SETMARGINS, EC_LEFTMARGIN,
+-		MAKELPARAM(padding_left < 0 ? 0 : padding_left, 0));
+-	InvalidateRect((HWND)hwnd, NULL, TRUE);
++	ui2_win_store_placeholder(edit, placeholder);
++	InvalidateRect(edit, NULL, FALSE);
+ }
+ 
+ static inline int ui2_win_placeholder_matches(void *hwnd, const wchar_t *expected) {
+@@ -1913,10 +1943,20 @@
+ 	if (hwnd != NULL) InvalidateRect((HWND)hwnd, NULL, TRUE);
+ }
+ 
++static inline void ui2_win_redraw_subtree(void *hwnd) {
++	if (hwnd != NULL) RedrawWindow((HWND)hwnd, NULL, NULL,
++		RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
++}
++
+ static inline void ui2_win_invalidate_parent(void *hwnd) {
+ 	if (hwnd != NULL) {
+-		HWND parent = GetParent((HWND)hwnd);
+-		if (parent != NULL) InvalidateRect(parent, NULL, TRUE);
++		HWND child = (HWND)hwnd;
++		HWND parent = GetParent(child);
++		RECT region;
++		if (parent && GetWindowRect(child, &region)) {
++			MapWindowPoints(NULL, parent, (POINT *)&region, 2);
++			RedrawWindow(parent, &region, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
++		}
+ 	}
+ }
+ 
+@@ -1957,7 +1997,11 @@
+ 	info.nMax = content > 0 ? content - 1 : 0;
+ 	info.nPage = (UINT)(page > 0 ? page : 0);
+ 	info.nPos = position;
+-	SetScrollInfo(hwnd, bar, &info, TRUE);
++	SCROLLINFO previous = info;
++	if (!GetScrollInfo(hwnd, bar, &previous) || previous.nMin != info.nMin
++		|| previous.nMax != info.nMax || previous.nPage != info.nPage || previous.nPos != info.nPos) {
++		SetScrollInfo(hwnd, bar, &info, TRUE);
++	}
+ 	info.fMask = SIF_POS;
+ 	GetScrollInfo(hwnd, bar, &info);
+ 	return info.nPos;
