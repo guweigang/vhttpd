@@ -378,8 +378,25 @@ function Assert-LogoAlpha($theme) {
   return $background.ToArgb()
  } finally {$graphics.Dispose();$bitmap.Dispose()}
 }
+function Assert-CheckboxBackground($theme) {
+ $checkbox=[WorkbenchUiCheck]::Find($window,'创建后立即启动，并打开浏览器 Admin UI','Button')
+ if ($checkbox -eq [IntPtr]::Zero) {throw 'Native auto-start checkbox is missing'}
+ $r=New-Object WorkbenchUiCheck+Rect
+ [WorkbenchUiCheck]::GetWindowRect($checkbox,[ref]$r) | Out-Null
+ $bitmap=New-Object Drawing.Bitmap 2, 2
+ $graphics=[Drawing.Graphics]::FromImage($bitmap)
+ try {
+  # Compare blank space at the end of the row with the form directly above it.
+  $graphics.CopyFromScreen(($r.Right-20),($r.Top-2),0,0,$bitmap.Size)
+  $background=$bitmap.GetPixel(0,0).ToArgb()
+  $graphics.CopyFromScreen(($r.Right-20),([int](($r.Top+$r.Bottom)/2)),0,0,$bitmap.Size)
+  if ($bitmap.GetPixel(0,0).ToArgb() -ne $background) {throw "Checkbox has a contrasting row background in $theme"}
+ } finally {$graphics.Dispose();$bitmap.Dispose()}
+}
 $light=Assert-LogoAlpha '浅色'
+Assert-CheckboxBackground '浅色'
 $dark=Assert-LogoAlpha '深色'
+Assert-CheckboxBackground '深色'
 if ($light -eq $dark) {throw 'Logo did not follow the appearance change'}
 Assert-LogoAlpha '浅色' | Out-Null
 

@@ -28,11 +28,18 @@ fn runtime_catalog_task(platform string, target string, channel string, specifie
 fn (mut app Workshop) load_runtime_catalog() {
 	if app.runtime_catalog_busy { return }
 	platform := app.download_platform()
-	if platform == '' { app.runtime_catalog_error = '请先连接目标服务器。'; return }
-	app.runtime_catalog_busy = true
 	app.runtime_catalog_error = ''
 	app.runtime_selected_tag = ''
 	app.runtime_downloads = []host.RuntimeDownload{}
+	if platform == '' {
+		app.runtime_catalog_error = if app.runtime_server_id == '' {
+			'当前系统没有可安装的官方运行包。'
+		} else {
+			'请先连接目标服务器。'
+		}
+		return
+	}
+	app.runtime_catalog_busy = true
 	app.runtime_catalog_job = host.RuntimeJob{}
 	spawn runtime_catalog_task(platform, app.runtime_server_id, app.runtime_catalog_channel, app.runtime_catalog_ref, app.runtime_catalog_job, app.runtime_catalog_results)
 }

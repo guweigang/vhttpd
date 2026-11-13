@@ -62,7 +62,7 @@ pub fn save_runtime_selection(path string) ! {
 	defer { os.rm(temp) or {} }
 	fd := create_project_file(temp)!
 	write_project_contents(fd, json.encode(RuntimeSelection{ path: path }))!
-	os.mv(temp, target)!
+	replace_recovery_data(temp, target)!
 }
 
 fn (job RuntimeJob) command(executable string, args []string, limit_ms i64) !string {
@@ -171,8 +171,16 @@ fn official_asset_url(value string) bool {
 	return value.starts_with('https://github.com/guweigang/vhttpd/releases/download/') && !value.contains('?') && !value.contains('#') && !value.bytes().any(it < 33 || it == 127)
 }
 
+fn runtime_curl() string {
+	$if windows {
+		return windows_runtime_tool('curl.exe')
+	} $else {
+		return '/usr/bin/curl'
+	}
+}
+
 fn (job RuntimeJob) fetch(url string, path string, max_size i64) ! {
-	job.command('/usr/bin/curl', ['--fail', '--silent', '--show-error', '--location', '--proto',
+	job.command(runtime_curl(), ['--disable', '--fail', '--silent', '--show-error', '--location', '--proto',
 		'=https', '--proto-redir', '=https', '--connect-timeout', '15', '--max-time', '180',
 		'--max-filesize', max_size.str(), '--output', path, url], 185000)!
 	if !os.is_file(path) || os.file_size(path) > u64(max_size) {
@@ -241,8 +249,8 @@ pub fn download_runtime_release(tag string, job RuntimeJob) !string {
 	os.mkdir_all(root)!
 	temp := os.join_path(root, '.download-' + rand.bytes(12)!.hex())
 	os.mkdir(temp)!
-	os.chmod(temp, 0o700)!
 	defer { os.rmdir_all(temp) or {} }
+	$if !windows { os.chmod(temp, 0o700)! }
 	choice := resolve_runtime_download(platform, tag, job)!
 	zip := download_runtime_files(choice, temp, job)!
 	expected := checksum_for(os.read_file(zip + '.sha256')!, choice.archive.name)!
@@ -288,7 +296,11 @@ pub fn install_runtime_without_selection(archive string, expected string, tag st
 }
 
 fn install_runtime_archive_mode(archive string, expected string, tag string, job RuntimeJob, select_package bool) !string {
-	$if linux { return install_linux_runtime_mode(archive, expected, tag, job, select_package) }
+	$if linux {
+		return install_linux_runtime_mode(archive, expected, tag, job, select_package)
+	} $else $if windows {
+		return install_windows_runtime(archive, expected, tag, job, select_package)
+	}
 	if expected.len != 64 || !expected.bytes().all(it.is_hex_digit()) {
 		return error('缺少有效的 SHA256 校验值。')
 	}
@@ -338,10 +350,15 @@ fn install_runtime_archive_mode(archive string, expected string, tag string, job
 	info := inspect_runtime(binary, '', job)
 	if !info.ready { return error(info.message) }
 	job.command(binary, ['--help'], 10000)!
+	return publish_runtime_package(source, info.version, tag, select_package)
+}
+
+fn publish_runtime_package(source string, version string, tag string, select_package bool) !string {
 	if tag != '' { write_project_contents(create_project_file(os.join_path(source, '.release-tag'))!, normalize_runtime_tag(tag)!)! }
-	final := os.join_path(root, 'vhttpd-' + info.version + '-' + rand.bytes(6)!.hex())
+	root := os.join_path(workbench_data_dir(), 'runtimes')
+	final := os.join_path(root, 'vhttpd-' + version + '-' + rand.bytes(6)!.hex())
 	os.mv(source, final)!
-	installed := os.join_path(final, 'vhttpd')
+	installed := os.join_path(final, runtime_executable_name())
 	if select_package {
 		save_runtime_selection(installed) or {
 			os.rmdir_all(final) or {}

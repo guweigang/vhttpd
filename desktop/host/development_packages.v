@@ -26,7 +26,7 @@ fn development_package_paths(selected string, previous ...string) !map[string]st
 	for name in children {
 		if name.starts_with('.') { continue }
 		dir := os.join_path(root, name)
-		path := os.join_path(dir, 'vhttpd')
+		path := os.join_path(dir, runtime_executable_name())
 		if !os.is_link(dir) && !os.is_link(path) && os.is_executable(path) {
 			paths['sha256-' + sha256.hexhash(os.real_path(path))] = path
 		}
@@ -38,7 +38,7 @@ fn development_packages(m &Manager, call DevelopmentCall, args DevelopmentArgs) 
 	if !isnil(call.grant) { return error('local_session_required') }
 	if call.tool == 'runtime_releases_list' {
 		platform := if args.platform == '' { local_runtime_platform() } else { args.platform }
-		if platform !in ['macos-arm64', 'linux-amd64', 'linux-arm64'] { return error('unsupported_runtime_platform') }
+		if platform !in ['macos-arm64', 'linux-amd64', 'linux-arm64', 'windows-amd64'] { return error('unsupported_runtime_platform') }
 		choices := runtime_catalog(platform, args.channel, args.tag, RuntimeJob{})!
 		mut rows := []map[string]json.Any{}
 		for choice in choices {

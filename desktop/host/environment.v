@@ -52,11 +52,7 @@ fn bundled_workbench_binary(executable string) string {
 	$if macos {
 		return os.join_path(workbench_resources(executable), 'runtime', 'vhttpd')
 	} $else {
-		return os.join_path(os.dir(executable), 'runtime', if os.user_os() == 'windows' {
-			'vhttpd.exe'
-		} else {
-			'vhttpd'
-		})
+		return os.join_path(os.dir(executable), 'runtime', runtime_executable_name())
 	}
 }
 
@@ -70,7 +66,12 @@ pub fn local_environment_name() string {
 	}
 }
 
+fn runtime_executable_name() string {
+	return $if windows { 'vhttpd.exe' } $else { 'vhttpd' }
+}
+
 pub fn local_runtime_platform() string {
+	$if windows && amd64 { return 'windows-amd64' }
 	$if linux {
 		$if arm64 {
 			return 'linux-arm64'

@@ -217,6 +217,8 @@ jobs:
         run: python -m pip install --disable-pip-version-check paramiko==5.1.0
       - name: Verify extracted archive without development environment
         id: portable
+        env:
+          VHTTPD_RUNTIME_TEST_TAG: v0.9.0-dev.gb201542ab971
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         run: |
           ./desktop/ci/verify_windows_package.ps1 -Archive '${{ steps.package.outputs.archive }}' -ResultDirectory "$PWD/desktop/ci/results/windows-portable"

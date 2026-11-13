@@ -23,6 +23,22 @@ fn run_runtime_smoke(root string) ! {
 			os.unsetenv('VHTTPD_DESKTOP_BINARY')
 		}
 	}
+	$if windows {
+		tag := os.getenv('VHTTPD_RUNTIME_TEST_TAG')
+		if tag == '' { return error('Windows 运行包验收需要公开版本号。') }
+		platform := host.local_runtime_platform()
+		releases := host.runtime_catalog(platform, 'all', '', job)!
+		if !releases.any(it.tag == tag && it.platform == platform) {
+			return error('公开版本列表缺少 Windows 运行包。')
+		}
+		path := host.download_runtime_release(tag, job)!
+		info := host.inspect_runtime(path, os.executable(), job)
+		if !info.ready || !info.source.contains(tag) || host.selected_runtime(os.executable(), root)! != path {
+			return error('Windows 运行包版本或默认选择未保存。')
+		}
+		println('PASS Windows public catalog, explicit version, download, SHA256, portable runtime and persisted selection')
+		return
+	}
 	$if linux {
 		archive := os.getenv('VHTTPD_RUNTIME_TEST_ARCHIVE')
 		if archive == '' {
