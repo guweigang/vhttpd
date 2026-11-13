@@ -15,15 +15,9 @@ pub:
 }
 
 pub fn check_desktop_update(current string, job RuntimeJob) !DesktopUpdate {
-	mut platform := local_runtime_platform()
-	$if windows && amd64 {
-		platform = 'windows-amd64'
-	}
+	platform := local_runtime_platform()
 	if platform == '' { return error('当前平台没有可检查的 Desktop 下载包。') }
-	mut curl := '/usr/bin/curl'
-	$if windows {
-		curl = os.join_path(os.getenv_opt('WINDIR') or { 'C:\\Windows' }, 'System32', 'curl.exe')
-	}
+	curl := runtime_curl()
 	if !os.is_file(curl) { return error('系统缺少 curl，无法检查更新。') }
 
 	mut best := DesktopUpdate{version: current}

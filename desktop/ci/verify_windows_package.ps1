@@ -56,6 +56,14 @@ foreach ($attempt in 0..2) {
   throw "Packaged font smoke failed; see font-$attempt-stderr.log"
  }
 }
+if ($env:VHTTPD_RUNTIME_TEST_TAG) {
+ $runtime = Start-Process $hostExe -WorkingDirectory $extract -ArgumentList '--runtime-smoke' -PassThru -RedirectStandardOutput "$ResultDirectory/runtime-download.log" -RedirectStandardError "$ResultDirectory/runtime-download-stderr.log"
+ try {
+  if (!$runtime.WaitForExit(240000) -or $runtime.ExitCode -ne 0) {
+   throw 'Public Windows runtime download/installation failed; see runtime-download logs'
+  }
+ } finally { if (!$runtime.HasExited) { Stop-Process $runtime.Id -Force } }
+}
 # The server fixture is a CI tool only. All client operations use the actual
 # extracted Desktop and bundled ssh.exe under the restricted runtime PATH.
 $python = $fixturePython

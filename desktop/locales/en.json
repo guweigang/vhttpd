@@ -482,6 +482,7 @@
   "正在连接服务器并同步远端项目，再连接 Admin UI…": "Connecting to the server, syncing the project and connecting to Admin UI…",
   "服务器操作正在处理，请稍候。": "A server operation is in progress. Please wait.",
   "操作正在处理中，请稍候。": "An operation is in progress. Please wait.",
+  "当前系统没有可安装的官方运行包。": "No official runtime package is available for this system.",
   "请先连接目标服务器。": "Connect to the target server first.",
   "正在下载 ": "Downloading ",
   "← 返回运行包": "← Back to runtimes",

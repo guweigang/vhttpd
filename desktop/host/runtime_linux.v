@@ -50,19 +50,7 @@ fn install_linux_runtime_mode(archive string, expected string, tag string, job R
 	info := inspect_runtime(binary, '', job)
 	if !info.ready { return error(info.message) }
 	job.command(binary, ['--help'], 10000)!
-	if tag != '' {
-		write_project_contents(create_project_file(source + '/.release-tag')!, normalize_runtime_tag(tag)!)!
-	}
-	final := os.join_path(root, 'vhttpd-' + info.version + '-' + rand.bytes(6)!.hex())
-	os.mv(source, final)!
-	installed := os.join_path(final, 'vhttpd')
-	if select_package {
-		save_runtime_selection(installed) or {
-			os.rmdir_all(final) or {}
-			return err
-		}
-	}
-	return installed
+	return publish_runtime_package(source, info.version, tag, select_package)
 }
 
 pub fn linux_archive_checksum(path string) !string {

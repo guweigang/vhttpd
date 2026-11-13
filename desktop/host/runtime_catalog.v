@@ -31,10 +31,14 @@ fn runtime_download_for(release RuntimeRelease, platform string) !RuntimeDownloa
 	mut checks := RuntimeReleaseAsset{}
 	if platform == 'macos-arm64' {
 		archive, checks = runtime_assets_for(release, true)!
-	} else if platform in ['linux-amd64', 'linux-arm64'] {
-		for item in release.assets {
-			if item.name == 'vhttpd-${platform}.tar.gz' { archive = item }
-			if item.name == 'vhttpd-${platform}.tar.gz.sha256' { checks = item }
+	} else if platform in ['linux-amd64', 'linux-arm64', 'windows-amd64'] {
+		suffix := if platform == 'windows-amd64' { '.zip' } else { '.tar.gz' }
+		filename := 'vhttpd-${platform}${suffix}'
+		archives := release.assets.filter(it.name == filename)
+		checksums := release.assets.filter(it.name == filename + '.sha256')
+		if archives.len == 1 && checksums.len == 1 {
+			archive = archives[0]
+			checks = checksums[0]
 		}
 	} else { return error('不支持该运行平台。') }
 	if archive.size < 1 || archive.size > 268435456 || checks.size < 1 || checks.size > 1048576 || !official_asset_url(archive.browser_download_url) || !official_asset_url(checks.browser_download_url) {
