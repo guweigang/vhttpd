@@ -5,26 +5,32 @@ import os
 import time
 import ui2
 
+#include <windows.h>
+#include "@VMODROOT/desktop/ci/windows_display_probe.h"
+
+fn C.vhttpd_probe_unchanged_children(voidptr, int) int
+
 __global (
 	calls          int
 	first_count    int
 	initial_frames u64
+	polling        bool
 )
 
 fn build_probe() ui2.Element {
 	calls++
 	frames, skipped := ui2.windows_poll_refresh_stats()
-	if calls - first_count == 6 && (frames != initial_frames || skipped < 4) {
+	if polling && calls - first_count == 6 && (frames != initial_frames || skipped < 4) {
 		panic('unchanged polling repainted native controls')
 	}
-	if calls - first_count == 9 {
+	if polling && calls - first_count == 9 {
 		if frames != initial_frames + 1 {
 			panic('changed polling failed to update native controls')
 		}
-		os.write_file(os.getenv('VHTTPD_WINDOWS_PROBE_READY'), 'native HWND and unchanged/changed refresh passed') or { panic(err) }
+		os.write_file(os.getenv('VHTTPD_WINDOWS_PROBE_READY'), 'native HWND, unchanged explicit refresh, and unchanged/changed polling passed') or { panic(err) }
 	}
 	return ui2.screen(0xffffff, [
-		ui2.label('title', if calls - first_count >= 6 {
+		ui2.label('title', if polling && calls - first_count >= 6 {
 			'Updated · 更新'
 		} else {
 			'Stable · 稳定'
@@ -35,10 +41,18 @@ fn build_probe() ui2.Element {
 
 fn event(_ string) {}
 
-fn ready(_ voidptr) {
+fn ready(handle voidptr) {
+	if C.vhttpd_probe_unchanged_children(handle, 1) < 2 {
+		panic('native refresh probe has no controls')
+	}
+	ui2.refresh()
+	if C.vhttpd_probe_unchanged_children(handle, 0) != 0 {
+		panic('unchanged explicit refresh invalidated native controls')
+	}
 	first_count = calls
 	frames, _ := ui2.windows_poll_refresh_stats()
 	initial_frames = frames
+	polling = true
 	spawn poll_probe()
 }
 

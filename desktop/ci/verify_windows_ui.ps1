@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 public static class WorkbenchUiCheck {
+ [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd,uint attribute,out uint value,uint size);
  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left,Top,Right,Bottom; }
  [StructLayout(LayoutKind.Sequential)] public struct Gui { public uint Size,Flags; public IntPtr Active,Focus,Capture,Menu,Move,Caret; public Rect CaretRect; }
  [StructLayout(LayoutKind.Sequential)] public struct Monitor { public int Size; public Rect Screen,Work; public uint Flags; }
@@ -340,6 +341,30 @@ $secure=@([WorkbenchUiCheck]::Children($window) | Where-Object { [WorkbenchUiChe
 if ($secure.Count -ne 1) {throw 'Password input lost native masking'}
 # Keep the menu checks on an empty registry. The last shortcut opens a fresh form.
 . "$PSScriptRoot/verify_windows_menus.ps1" -DesktopProcessId $DesktopProcessId -OutputDirectory $OutputDirectory
+
+# Exercise the native caption when the workbench changes appearance in place.
+function Read-CaptionAttribute([uint32]$attribute) {
+ [uint32]$value=0
+ if ([WorkbenchUiCheck]::DwmGetWindowAttribute($window,$attribute,[ref]$value,4) -eq 0) {return $value}
+}
+function Select-Appearance($title) {
+ $view=Menu-At 3
+ $appearance=[WorkbenchMenuCheck]::GetSubMenu($view,(Menu-Index $view '外观'))
+ Menu-Invoke $appearance $title
+}
+Select-Appearance '深色'
+$darkMode=Read-CaptionAttribute 20
+if ($null -eq $darkMode) {$darkMode=Read-CaptionAttribute 19}
+if ($darkMode -ne 1) {throw 'Native title bar did not receive dark appearance'}
+$darkCaption=Read-CaptionAttribute 35
+if ($null -ne $darkCaption -and $darkCaption -ne 0x282828) {throw 'Native dark title bar did not receive the workbench caption colour'}
+Save-Window $window 'desktop-dark-caption'
+Select-Appearance '浅色'
+$lightMode=Read-CaptionAttribute 20
+if ($null -eq $lightMode) {$lightMode=Read-CaptionAttribute 19}
+if ($lightMode -ne 0) {throw 'Native title bar did not restore light appearance'}
+if ($null -ne $darkCaption -and (Read-CaptionAttribute 35) -ne [uint32]::MaxValue) {throw 'Native light title bar did not restore the default caption colour'}
+@{dark_mode=$darkMode;light_mode=$lightMode;dark_caption=$darkCaption} | ConvertTo-Json | Set-Content "$OutputDirectory/appearance-acceptance.json"
 
 # The Relay library now opens from an environment's workspace tab.
 # Create a local registration in the isolated profile without launching vhttpd.
