@@ -393,10 +393,43 @@ function Assert-CheckboxBackground($theme) {
   if ($bitmap.GetPixel(0,0).ToArgb() -ne $background) {throw "Checkbox has a contrasting row background in $theme"}
  } finally {$graphics.Dispose();$bitmap.Dispose()}
 }
+function Assert-FormCaption([string]$caption,[string]$theme) {
+ $label=@([WorkbenchUiCheck]::Children($window) | Where-Object {
+  [WorkbenchUiCheck]::Class($_) -eq 'Static' -and [WorkbenchUiCheck]::IsWindowVisible($_) -and
+    [WorkbenchUiCheck]::Text($_).TrimStart([char[]]@('○','●',' ')) -eq $caption
+ })
+ if ($label.Count -ne 1) {throw "Missing visible label HWND on $theme form - $caption"}
+ $r=New-Object WorkbenchUiCheck+Rect
+ [WorkbenchUiCheck]::GetWindowRect($label[0],[ref]$r) | Out-Null
+ # Skip the outer rows/columns so that an outline alone cannot pass.
+ $bitmap=New-Object Drawing.Bitmap ($r.Right-$r.Left-4),($r.Bottom-$r.Top-4)
+ $graphics=[Drawing.Graphics]::FromImage($bitmap)
+ try {
+  $graphics.CopyFromScreen(($r.Left+2),($r.Top+2),0,0,$bitmap.Size)
+  $ink=0
+  for ($y=0;$y -lt $bitmap.Height;$y++) {for ($x=0;$x -lt $bitmap.Width;$x++) {
+   $color=$bitmap.GetPixel($x,$y)
+   if (($theme -eq '深色' -and $color.R -ge 120 -and $color.G -ge 120) -or
+       ($theme -eq '浅色' -and $color.R -lt 125 -and $color.G -lt 145)) {$ink++}
+  }}
+  if ($ink -lt 18) {throw "Caption was present in the window tree but not painted on $theme form - $caption"}
+ } finally {$graphics.Dispose();$bitmap.Dispose()}
+}
+function Assert-NewFormPaint([string]$theme) {
+ Save-Window $window "new-form-paint-$theme"
+ foreach ($caption in @('新建运行环境','vjsx · HTTP 入门','vjsx · JSON API','基础运行环境（推荐）','选择目录…')) {
+  Assert-FormCaption $caption $theme
+ }
+ Assert-CheckboxBackground $theme
+}
 $light=Assert-LogoAlpha '浅色'
-Assert-CheckboxBackground '浅色'
+Assert-NewFormPaint '浅色'
 $dark=Assert-LogoAlpha '深色'
-Assert-CheckboxBackground '深色'
+Assert-NewFormPaint '深色'
+# Re-open in dark mode to exercise the page transition, not only theme changes.
+Menu-Key 0x1B
+Invoke-WorkbenchButton '+ 新建'
+Assert-NewFormPaint '深色'
 if ($light -eq $dark) {throw 'Logo did not follow the appearance change'}
 Assert-LogoAlpha '浅色' | Out-Null
 

@@ -19,20 +19,16 @@
  
  fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
  
-@@ -301,6 +304,12 @@
+@@ -301,6 +304,8 @@
  fn C.ui2_win_set_bitmap(hwnd voidptr, path &u16, width int, height int) voidptr
  
  fn C.ui2_win_clear_bitmap(hwnd voidptr)
 +
 +fn C.ui2_win_set_alpha_bitmap(hwnd voidptr, rgba &u8, width int, height int) voidptr
-+
-+fn C.ui2_win_begin_page_update(hwnd voidptr) int
-+
-+fn C.ui2_win_end_page_update(hwnd voidptr)
  
  fn C.ui2_win_set_scroll(hwnd voidptr, content int, position int, horizontal int) int
  
-@@ -400,6 +409,13 @@
+@@ -400,6 +405,13 @@
  @[heap]
  struct WindowsState {
  mut:
@@ -46,7 +42,7 @@
  	symbol_font_attempted bool
  	hover_bindings        map[u64]string // window handle -> action of a hoverable element
  	hovered               []string       // hovered actions, outermost first
-@@ -596,7 +612,7 @@
+@@ -596,7 +608,7 @@
  }
  
  fn windows_uses_transparent_button_paint(kind Kind, box BoxStyle) bool {
@@ -55,7 +51,7 @@
  }
  
  // Whether a window leaves the background behind it alone. A label paints none of its
-@@ -754,16 +770,33 @@
+@@ -754,16 +766,32 @@
  
  pub fn refresh() {
  	mut st := windows_state()
@@ -80,17 +76,16 @@
  		return
  	}
  	st.rendering = true
-+	// Keep the last complete frame visible while native controls are replaced.
-+	// Value, focus and scroll updates keep the ordinary per-control paint path.
-+	page_update := st.has_declared_tree && windows_page_changed(st.last_declared_tree, declared)
-+		&& C.ui2_win_begin_page_update(st.root) != 0
++	// Keep the root visible during native layout. Newly exposed controls and
++	// transparent captions need a complete repaint after the tree is committed.
++	repaint_frame := !st.has_declared_tree || declared != st.last_declared_tree
 +	st.rendered_frames++
 +	st.last_declared_tree = declared
 +	st.has_declared_tree = true
  	st.views = map[string]voidptr{}
  	st.view_keys = map[string]string{}
  	st.view_kinds = map[string]Kind{}
-@@ -784,17 +817,66 @@
+@@ -784,17 +812,55 @@
  	st.toggle_views = map[u64]voidptr{}
  	mut active := map[string]bool{}
  	if root.kind == .screen {
@@ -103,27 +98,14 @@
  		windows_render_element(st.root, root, reconciliation_child_key('', 0, root), '', 0, 0, mut active)
  	}
  	windows_remove_stale(active)
-+	if page_update {
-+		C.ui2_win_end_page_update(st.root)
-+	}
 +	windows_install_pending_menu()
++	if repaint_frame {
++		C.ui2_win_redraw_frame(st.root)
++	}
  	st.rendering = false
 -	C.ui2_win_invalidate(st.root)
  	// Content can move under a cursor that stays put.
  	windows_update_hover()
-+}
-+
-+fn windows_page_changed(previous Element, current Element) bool {
-+	if previous.kind != current.kind || previous.id != current.id || previous.key != current.key
-+		|| previous.hidden != current.hidden || previous.children.len != current.children.len {
-+		return true
-+	}
-+	for i, child in previous.children {
-+		if windows_page_changed(child, current.children[i]) {
-+			return true
-+		}
-+	}
-+	return false
 +}
 +
 +fn windows_install_pending_menu() {
@@ -145,6 +127,8 @@
 +
 +fn C.ui2_win_redraw_subtree(voidptr)
 +
++fn C.ui2_win_redraw_frame(voidptr)
++
 +// Host status polls are distinct from input, scrolling and animation refreshes.
 +pub fn request_poll_refresh() {
 +	st := windows_state()
@@ -160,7 +144,7 @@
  }
  
  pub fn request_refresh() {
-@@ -1236,11 +1318,16 @@
+@@ -1236,11 +1302,16 @@
  	} else {
  		el.text_style
  	}
@@ -178,7 +162,7 @@
  	}
  	st.node_text_styles[key] = visual_text_style
  	st.node_ids[key] = el.id
-@@ -1267,7 +1354,7 @@
+@@ -1267,7 +1338,7 @@
  		...el
  		box: visual_box
  		text_style: visual_text_style
@@ -187,7 +171,7 @@
  	if el.kind == .label {
  		windows_place_label(key, hwnd, Element{
  			...el
-@@ -1463,9 +1550,12 @@
+@@ -1463,9 +1534,12 @@
  	return label.replace('&', '&&')
  }
  
@@ -203,7 +187,7 @@
  	C.ui2_win_show(hwnd, windows_bool(!el.hidden))
  	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
  	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
-@@ -1509,19 +1599,22 @@
+@@ -1509,19 +1583,22 @@
  			unsafe { free(wide_placeholder) }
  		}
  		.image {
@@ -232,7 +216,7 @@
  				st.node_image_path[key] = image_sig
  			}
  		}
-@@ -1536,11 +1629,34 @@
+@@ -1536,11 +1613,34 @@
  	// The tooltip goes on the outer window, which is the declared frame, and on the
  	// control inside it, which is what the pointer actually lands on.
  	windows_update_tooltip(key, hwnd, text_hwnd, el.tooltip)
@@ -270,7 +254,7 @@
  }
  
  fn windows_update_tooltip(key string, hwnd voidptr, text_hwnd voidptr, tooltip string) {
-@@ -2339,6 +2455,12 @@
+@@ -2339,6 +2439,12 @@
  			}
  			return 0
  		}
@@ -283,7 +267,7 @@
  		win_wm_refresh {
  			refresh()
  			return 0
-@@ -2404,7 +2526,7 @@
+@@ -2404,7 +2510,7 @@
  	}
  	style := st.node_text_styles[key] or { TextStyle{} }
  	C.ui2_win_paint_transparent_button(hwnd, style.color, box.radius, box.border_color,
@@ -490,7 +474,7 @@
  			SetTextColor(dc, old_color);
  			SetBkMode(dc, old_mode);
  			if (old_font != NULL) SelectObject(dc, old_font);
-@@ -1913,11 +1986,50 @@
+@@ -1913,11 +1986,44 @@
  	if (hwnd != NULL) InvalidateRect((HWND)hwnd, NULL, TRUE);
  }
  
@@ -499,17 +483,11 @@
 +		RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
 +}
 +
-+static inline int ui2_win_begin_page_update(void *window) {
++static inline void ui2_win_redraw_frame(void *window) {
 +	HWND hwnd = (HWND)window;
-+	if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return 0;
-+	SendMessageW(hwnd, WM_SETREDRAW, FALSE, 0);
-+	return 1;
-+}
-+
-+static inline void ui2_win_end_page_update(void *window) {
-+	HWND hwnd = (HWND)window;
-+	SendMessageW(hwnd, WM_SETREDRAW, TRUE, 0);
-+	ui2_win_redraw_subtree(hwnd);
++	if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return;
++	RedrawWindow(hwnd, NULL, NULL,
++		RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
 +}
 +
  static inline void ui2_win_invalidate_parent(void *hwnd) {
@@ -544,7 +522,7 @@
  }
  
  static inline void *ui2_win_set_bitmap(void *hwnd_ptr, const wchar_t *path,
-@@ -1930,16 +2042,47 @@
+@@ -1930,16 +2036,47 @@
  			width > 0 ? width : 0, height > 0 ? height : 0,
  			LR_LOADFROMFILE | LR_CREATEDIBSECTION);
  	}
@@ -594,7 +572,7 @@
  }
  
  // Each axis of a Scroll element is kept on a standard scroll bar of its window, which
-@@ -1957,7 +2100,11 @@
+@@ -1957,7 +2094,11 @@
  	info.nMax = content > 0 ? content - 1 : 0;
  	info.nPage = (UINT)(page > 0 ? page : 0);
  	info.nPos = position;
