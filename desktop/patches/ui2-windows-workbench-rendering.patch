@@ -15,7 +15,7 @@
  }
  
 -fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
-+fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64, checkbox int)
++fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64, checkbox int, background u32)
  
  fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
  
@@ -272,7 +272,7 @@
  	style := st.node_text_styles[key] or { TextStyle{} }
  	C.ui2_win_paint_transparent_button(hwnd, style.color, box.radius, box.border_color,
 -		box.border_left, box.border_top, box.border_right, box.border_bottom)
-+		box.border_left, box.border_top, box.border_right, box.border_bottom, windows_bool(kind == .checkbox))
++		box.border_left, box.border_top, box.border_right, box.border_bottom, windows_bool(kind == .checkbox), box.bg)
  	return 1
  }
  
@@ -419,16 +419,30 @@
  }
  
  static inline int ui2_win_placeholder_matches(void *hwnd, const wchar_t *expected) {
-@@ -1856,7 +1903,7 @@
+@@ -1856,15 +1903,20 @@
  static inline void ui2_win_paint_transparent_button(void *hwnd_ptr,
  		unsigned int foreground, double radius, unsigned int border_color,
  		double border_left, double border_top, double border_right,
 -		double border_bottom) {
-+		double border_bottom, int checkbox) {
++		double border_bottom, int checkbox, unsigned int background) {
  	HWND hwnd = (HWND)hwnd_ptr;
  	if (hwnd == NULL) return;
  	PAINTSTRUCT paint;
-@@ -1887,14 +1934,40 @@
+ 	HDC dc = BeginPaint(hwnd, &paint);
+ 	if (dc != NULL) {
+-		ui2_win_paint_parent_background(hwnd, dc);
+ 		RECT rect;
+ 		GetClientRect(hwnd, &rect);
++		if (checkbox) {
++			// The row shares the form color. Only paint inside the checkbox HWND.
++			ui2_win_fill_background(dc, &rect, background, 0.0);
++		} else {
++			ui2_win_paint_parent_background(hwnd, dc);
++		}
+ 		HRGN clip = NULL;
+ 		if (radius > 0.5) {
+ 			int diameter = (int)(radius * 2.0 + 0.5);
+@@ -1887,14 +1939,40 @@
  			HFONT font = (HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0);
  			HGDIOBJ old_font = font == NULL ? NULL : SelectObject(dc, font);
  			int old_mode = SetBkMode(dc, TRANSPARENT);
@@ -474,7 +488,7 @@
  			SetTextColor(dc, old_color);
  			SetBkMode(dc, old_mode);
  			if (old_font != NULL) SelectObject(dc, old_font);
-@@ -1913,11 +1986,44 @@
+@@ -1913,11 +1991,44 @@
  	if (hwnd != NULL) InvalidateRect((HWND)hwnd, NULL, TRUE);
  }
  
@@ -522,7 +536,7 @@
  }
  
  static inline void *ui2_win_set_bitmap(void *hwnd_ptr, const wchar_t *path,
-@@ -1930,16 +2036,47 @@
+@@ -1930,16 +2041,47 @@
  			width > 0 ? width : 0, height > 0 ? height : 0,
  			LR_LOADFROMFILE | LR_CREATEDIBSECTION);
  	}
@@ -572,7 +586,7 @@
  }
  
  // Each axis of a Scroll element is kept on a standard scroll bar of its window, which
-@@ -1957,7 +2094,11 @@
+@@ -1957,7 +2099,11 @@
  	info.nMax = content > 0 ? content - 1 : 0;
  	info.nPage = (UINT)(page > 0 ? page : 0);
  	info.nPos = position;
