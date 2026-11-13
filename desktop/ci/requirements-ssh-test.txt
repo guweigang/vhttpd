@@ -1,0 +1,2 @@
+# Test fixture only; not part of the workbench distribution.
+paramiko==5.1.0

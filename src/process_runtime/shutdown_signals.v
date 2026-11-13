@@ -1,8 +1,12 @@
 module process_runtime
 
+
+$if !windows {
 import os
 import sync
+}
 
+$if !windows {
 @[typedef]
 struct C.vhttpd_signal_pipe {
 	read_fd  int
@@ -76,4 +80,6 @@ fn (mut owner ShutdownSignalOwner) install(handler fn (os.Signal), set_signal Si
 
 pub fn install_shutdown_signal_handler(handler fn (os.Signal)) ! {
 	unsafe { g_shutdown_signals.install(handler, os.signal_opt)! }
+}
+
 }

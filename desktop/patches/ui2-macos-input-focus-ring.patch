@@ -1,0 +1,12 @@
+--- a/appkit/ui_macos_darwin.v
++++ b/appkit/ui_macos_darwin.v
+@@ -2912,6 +2912,9 @@
+ 	// the box's fill, corners and border. Otherwise AppKit's rounded bezel is
+ 	// the field's look.
+ 	styled := box_draws_border(box)
++	// Styled fields already draw their own thin focus border. AppKit's
++	// exterior focus ring would add a thick halo outside that rounded box.
++	macos.msg_void_u64(field, 'setFocusRingType:', if styled { u64(1) } else { u64(0) })
+ 	macos.msg_void_bool(field, 'setBordered:', !styled)
+ 	macos.msg_void_bool(field, 'setBezeled:', !styled)
+ 	if !styled {

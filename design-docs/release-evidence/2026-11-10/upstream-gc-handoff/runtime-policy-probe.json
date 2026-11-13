@@ -1,0 +1,12 @@
+{
+  "utc": "2026-11-10T04:40:08Z",
+  "pid": 1871078,
+  "sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9",
+  "values": {
+    "GC_free_space_divisor": 1,
+    "GC_unmap_threshold": 7,
+    "GC_force_unmap_on_gcollect": 0
+  },
+  "GC_environment": {},
+  "scope": "Read-only immutable GC policy globals of independent test process; no debugger, injection or collection."
+}

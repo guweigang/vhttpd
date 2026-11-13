@@ -1,0 +1,255 @@
+{
+  "date": "2026-11-10",
+  "status": "this_batch_accepted",
+  "network_configuration_changed": false,
+  "v_old_used": false,
+  "compiler": "V 0.5.2 d13ccdd, -new-compiler, V_MACOS_V3_NO_FALLBACK=1",
+  "runtime_changed": false,
+  "scope": {
+    "digest": "ASCII, stream GET only; MD5/SHA-256, qop=auth; one challenge and one authenticated request; no redirects, nonce refresh or fallback",
+    "mtls": "configuration-selected unencrypted PEM client certificate/key, mandatory server chain/name validation; stream, WebSocket and MCP transports available, real peer acceptance currently stream only",
+    "remote_references": "same Linux target-owned resolver; no Mac or SSH environment fallback",
+    "server_authentication_policy": "not implemented by this batch; controlled Python peer verifies client transport; registered release-qa runtime remains stopped",
+    "remaining": [
+      "Digest auth-int/sess/userhash/non-ASCII and other protocols",
+      "OAuth/cookie/query",
+      "external or hardware key stores"
+    ],
+    "client_acceptance": "remote registered release-qa configuration, IPv4 loopback Python protocol peer, local Streamable HTTP Desktop MCP; not public Relay, inbound server authentication or full three-protocol mTLS acceptance"
+  },
+  "automatic_checks": {
+    "native_digest_vector_and_auth": "2 test files passed",
+    "native_openssl_protocol_tls_and_envelope": "4 test files passed",
+    "native_default_mbedtls_peer": "1 test file passed",
+    "python_macos": "9 tests passed on final delivery source",
+    "python_ubuntu": "9 tests passed final repeat",
+    "skill_format": "passed"
+  },
+  "linux_compiler": {
+    "used": false,
+    "branch": "local-dev",
+    "version": "0.5.2 d13ccdd",
+    "reason": "pre-existing tracked veb changes preserved; remote implementation and regression are Python"
+  },
+  "source_sha256": {
+    "desktop/host/protocol_probe.v": "9bf6abccadd55344ee074b7062492643c1bda5b50d97d33e2157f1dab3d557c4",
+    "desktop/host/protocol_probe_auth.v": "d6317913746ac97e6457605f43fbe6029579a43a3103ed92e3be7d6a36b7bfce",
+    "desktop/host/protocol_probe_digest.v": "f8614b2480a15d122d4b9d2341862c8740ee70065442f324cb898589e3ae399e",
+    "desktop/host/protocol_probe_digest_test.v": "9bf8e0f72621c3aee9a12f387f0103f47fb0f74da2d369e3f79861f63c855f87",
+    "desktop/host/protocol_probe_peer_test.v": "943a58db572c8f89e9244057b7e342cce9f9bb865f0918e15efe809557cb66df",
+    "desktop/host/remote_scripts/protocol_probe.py": "010f95de23ac8a1c1a8e166ce91fb91f50ea55b51f7c7076628af926f8ce93cb",
+    "desktop/host/remote_scripts/protocol_probe_config.py": "acf976a7d26a3ef2c554bd63b49f18641c9a079b24f2b198fd3c26569367ed46",
+    "desktop/devmcp/protocol_probe.v": "1cc46de27d3bf4f3b254fd245bd1362a139ea6abb1909708be79abc94805bd42",
+    "desktop/devmcp/server.v": "de5b6150af364f70353137654bac5282051879136712ae9cc99e0f19e6ae90f0",
+    "desktop/devmcp/relay_management.v": "bd6cd1f3c5776c9667931c597a6a985d3a4564712bb6148c7db9314e1bca6839",
+    "desktop/ci/protocol_probe_auth_fixture.py": "a2f11f80792af3960182af32e65459b32ced10884dce1d320ea0f5fb73449961",
+    "desktop/ci/test_protocol_probe_digest_mtls.py": "0c4d2ecfda46e5f9701ec8710f39faf95297a2171c5999551e4f7177adc980a1",
+    "desktop/ci/test_protocol_probe_references.py": "9e803e7480675c70644fa038076b73d5ff8983b44627856992e5166a6f523d7f",
+    "desktop/skills/vhttpd-debug/SKILL.md": "16f50b01f1493425e14f02efaffad8eaf325da5846498348208af10e2d39fbda"
+  },
+  "credentials_recorded": false,
+  "build": {
+    "standard_release_checks": "passed",
+    "compiler_fallback": false,
+    "installed": {
+      "actual_desktop_sha256": "683e45ac9c19d850e1122cc57dc0d3e713c80fa427e5257f16743f0233ec73d5",
+      "canonical_desktop_sha256": "11a7265c984c6b2806cdead12969d9abdf88200d25d2b172a13a1e63d892f1be",
+      "archive_sha256": "a504e3ac4a0350713aff516a94d46012340227bc2832774e38e897cb3488cbea",
+      "runtime_sha256": "567841c4f198b1a5e0233bc3f4e3cdd3c4f1d770e2b93a8ed9a710b9efb83518",
+      "runtime_unchanged": true,
+      "skill_sha256": "16f50b01f1493425e14f02efaffad8eaf325da5846498348208af10e2d39fbda",
+      "scoped_test_environment": true,
+      "original_environment_backup_retained": true
+    },
+    "clean_physical_mac_or_windows": "not validated"
+  },
+  "workbuddy": {
+    "version": "5.9.3",
+    "model": "Hy4",
+    "conversation": "vhttpd MCP 验收 vjsx 项目测试",
+    "transport": "localhost Streamable HTTP",
+    "catalog_tools": 109,
+    "context_get": "passed, revision 1",
+    "guidance_get_debug": "passed actual updated bundled Skill loaded",
+    "initial_target_discovery": {
+      "calls": 2,
+      "result": "remote_target_changed",
+      "accepted": false,
+      "cause": "isolated fixture TLS field was key instead of cert_key, preventing environment discovery; fixture corrected, product unchanged"
+    },
+    "corrected_discovery": "passed actual environment_discover and options at 09:41; initial invalid deferred tool name did not reach Desktop",
+    "success_refusal_recovery_probes": "passed",
+    "mac_lock": "manually unlocked; resumed fixture and acceptance completed",
+    "digest": {
+      "time": "2026-11-10 before 10:00 Asia/Shanghai",
+      "actual_calls": 6,
+      "cases": [
+        {
+          "path": "/digest",
+          "auth_ref": "digest_good",
+          "ok": true,
+          "status": 200,
+          "events": [
+            "digest-peer-ok"
+          ]
+        },
+        {
+          "path": "/digest",
+          "auth_ref": "digest_wrong",
+          "ok": false,
+          "stage": "authentication",
+          "failure": "probe_authentication_rejected_401"
+        },
+        {
+          "path": "/digest",
+          "auth_ref": "",
+          "ok": false,
+          "stage": "authentication",
+          "failure": "probe_authentication_rejected_401"
+        },
+        {
+          "path": "/unsupported",
+          "auth_ref": "digest_good",
+          "ok": false,
+          "stage": "authentication",
+          "failure": "probe_digest_challenge_unsupported"
+        },
+        {
+          "path": "/md5",
+          "auth_ref": "digest_good",
+          "ok": true,
+          "status": 200,
+          "events": [
+            "digest-peer-ok"
+          ]
+        },
+        {
+          "path": "/digest",
+          "auth_ref": "digest_good",
+          "ok": true,
+          "status": 200,
+          "events": [
+            "digest-peer-ok"
+          ],
+          "recovery": true
+        }
+      ],
+      "address_family": "ipv4",
+      "tls": false,
+      "protocol": "stream",
+      "content_type": "text/event-stream",
+      "algorithm_evidence": "fixture verifies SHA-256 on /digest and MD5 on /md5; probe result does not itself report algorithm; native RFC vectors separately passed"
+    },
+    "mtls_initial_failure": {
+      "actual_calls": 1,
+      "result": "target_redaction_context_unavailable",
+      "accepted": false,
+      "cause": "undetermined source read failure; same Desktop SSH master independently read both unchanged files with valid base64/TOML and no stderr afterwards; no TLS result claimed"
+    },
+    "mtls_final": {
+      "time": "2026-11-10 10:07 Asia/Shanghai",
+      "actual_calls": 5,
+      "fresh_options_query": "passed",
+      "cases": [
+        {
+          "auth_ref": "mtls_good",
+          "identity": "localhost",
+          "ok": true,
+          "status": 200,
+          "events": [
+            "mtls-peer-ok"
+          ],
+          "tls_verified": true
+        },
+        {
+          "auth_ref": "",
+          "identity": "localhost",
+          "ok": false,
+          "stage": "tls",
+          "failure": "probe_tls_verification_failed",
+          "tls_verified": false
+        },
+        {
+          "auth_ref": "mtls_wrong",
+          "identity": "localhost",
+          "ok": false,
+          "stage": "tls",
+          "failure": "probe_tls_verification_failed",
+          "tls_verified": false
+        },
+        {
+          "auth_ref": "mtls_good",
+          "identity": "wrong.invalid",
+          "ok": false,
+          "stage": "tls",
+          "failure": "probe_tls_verification_failed",
+          "tls_verified": false
+        },
+        {
+          "auth_ref": "mtls_good",
+          "identity": "localhost",
+          "ok": true,
+          "status": 200,
+          "events": [
+            "mtls-peer-ok"
+          ],
+          "tls_verified": true,
+          "recovery": true
+        }
+      ],
+      "address_family": "ipv4",
+      "tls": true,
+      "peer_tls_version": "TLS1.2",
+      "protocol": "stream",
+      "content_type": "text/event-stream",
+      "client_invalid_deferred_tool_name": "one nonexistent placeholder before case 3, did not reach Desktop; recorded separately"
+    },
+    "revocation": {
+      "actual_calls": 1,
+      "tool": "context_get",
+      "result": "Streamable HTTP error: Error POSTing to endpoint: {\"error\":\"internal_error\"}",
+      "context_returned": false,
+      "http_401_claimed": false
+    },
+    "temporary_connector_removed": true,
+    "original_miora_tools_retained": 8,
+    "actual_dialogue_completed": true
+  },
+  "peer_audit": {
+    "digest_requests": 10,
+    "digest_success": 3,
+    "mtls_success": 2,
+    "raw_credentials_logged": false
+  },
+  "local_cleanup": {
+    "original_desktop_environment_restored": true,
+    "final_build_retained": true,
+    "strict_signature_verified": true,
+    "temporary_mcp_port_closed": true,
+    "signed_binary_before_environment_restore": "683e45ac9c19d850e1122cc57dc0d3e713c80fa427e5257f16743f0233ec73d5",
+    "signed_binary_after_environment_restore": "e443d7d486c15f9af9d70f5cbbd1c43cf0aead5acd2ee6b0d663211c2369eb46",
+    "network_configuration_changed": false,
+    "actual_desktop_relaunched": true,
+    "original_environment": "ipv6-probe-qa",
+    "runtime": "stopped",
+    "mcp": "off",
+    "temporary_connector_removed": true,
+    "original_miora_tools_retained": 8
+  },
+  "remote_cleanup": {
+    "original_config_restored": true,
+    "sha256": "bcf1d19224489e1da6d37654463cf7cdb10ea94f6f0dacd3f54f040f99501c67",
+    "instance_markers_preserved": true,
+    "test_peer_stopped": true,
+    "test_ports_closed": true,
+    "runtime_left_stopped": true
+  },
+  "client_tool_acceptance_passed": true,
+  "source_snapshot_matches_workspace": true,
+  "artifact_integrity": {
+    "canonical_archive_and_app_match_accepted_build": true,
+    "source_snapshot_matches": true,
+    "actual_desktop_final_signed_binary_sha256": "e443d7d486c15f9af9d70f5cbbd1c43cf0aead5acd2ee6b0d663211c2369eb46"
+  },
+  "design_document_marked_complete": "this scoped batch only; overall capability coverage remains partial"
+}

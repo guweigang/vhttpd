@@ -1,0 +1,10 @@
+{
+  "appid": "wxe792447eff9fec19",
+  "compileType": "miniprogram",
+  "projectname": "vhttpd-wechat-local",
+  "setting": {
+    "es6": true,
+    "enhance": true
+  },
+  "description": "vhttpd Desktop 本机真实微信鉴权联调"
+}

@@ -1,0 +1,416 @@
+{
+  "utc": "2026-11-03T09:55:41.451881+00:00",
+  "method": "Window medians; first/last 10 minutes of pressure; 15-minute pressure bins. RSS includes resident file-backed pages.",
+  "fixed7": {
+    "elapsed_s": 6301.02,
+    "pressure_elapsed_s": 5701.02,
+    "first10min": {
+      "VmRSS": 77786.0,
+      "RssAnon": 50382.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    "last10min": {
+      "VmRSS": 77476.0,
+      "RssAnon": 50072.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    "change_kib": {
+      "VmRSS": -310.0,
+      "RssAnon": -310.0
+    },
+    "pressure_15min_bins": [
+      {
+        "from_pressure_min": 0.0,
+        "sample_count": 90,
+        "VmRSS": 77808.0,
+        "RssAnon": 50404.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 15.01,
+        "sample_count": 90,
+        "VmRSS": 77812.0,
+        "RssAnon": 50408.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 30.01,
+        "sample_count": 90,
+        "VmRSS": 77792.0,
+        "RssAnon": 50388.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 45.01,
+        "sample_count": 90,
+        "VmRSS": 77658.0,
+        "RssAnon": 50254.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 60.01,
+        "sample_count": 90,
+        "VmRSS": 77548.0,
+        "RssAnon": 50144.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 75.01,
+        "sample_count": 90,
+        "VmRSS": 77514.0,
+        "RssAnon": 50110.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 90.02,
+        "sample_count": 31,
+        "VmRSS": 77464,
+        "RssAnon": 50060,
+        "fd_count": 22,
+        "Threads": 22
+      }
+    ],
+    "last": {
+      "elapsed_seconds": 6301.02,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 153524,
+        "VmRSS": 77396,
+        "RssAnon": 49992,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 52253,
+        "start_ticks": 11632512
+      },
+      "host_available_kib": 730132,
+      "cgroup_memory_bytes": 165273600,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 249404,
+        "RssAnon": 242748,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 1077684,
+        "start_ticks": 601054
+      },
+      "http_ok": 227475,
+      "http_errors": 0,
+      "paseo_ok": 2774,
+      "paseo_errors": 0
+    },
+    "cgroup_stat_bytes": {
+      "anon": 72638464,
+      "file": 87199744,
+      "kernel": 5152768,
+      "file_dirty": 397312,
+      "file_writeback": 0,
+      "slab": 3822296
+    },
+    "result_available": false
+  },
+  "fixed6": {
+    "elapsed_s": 26174.34,
+    "pressure_elapsed_s": 25574.34,
+    "first10min": {
+      "VmRSS": 64852.0,
+      "RssAnon": 37608.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    "last10min": {
+      "VmRSS": 63748.0,
+      "RssAnon": 53560.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    "change_kib": {
+      "VmRSS": -1104.0,
+      "RssAnon": 15952.0
+    },
+    "pressure_15min_bins": [
+      {
+        "from_pressure_min": 0.0,
+        "sample_count": 90,
+        "VmRSS": 65442.0,
+        "RssAnon": 38198.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 15.0,
+        "sample_count": 90,
+        "VmRSS": 68574.0,
+        "RssAnon": 41330.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 30.01,
+        "sample_count": 90,
+        "VmRSS": 70138.0,
+        "RssAnon": 42894.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 45.01,
+        "sample_count": 90,
+        "VmRSS": 70224.0,
+        "RssAnon": 42980.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 60.01,
+        "sample_count": 90,
+        "VmRSS": 71246.0,
+        "RssAnon": 44002.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 75.01,
+        "sample_count": 90,
+        "VmRSS": 71246.0,
+        "RssAnon": 44002.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 90.01,
+        "sample_count": 90,
+        "VmRSS": 72664.0,
+        "RssAnon": 45420.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 105.02,
+        "sample_count": 90,
+        "VmRSS": 74380.0,
+        "RssAnon": 47136.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 120.02,
+        "sample_count": 90,
+        "VmRSS": 75344.0,
+        "RssAnon": 48100.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 135.02,
+        "sample_count": 90,
+        "VmRSS": 76158.0,
+        "RssAnon": 48914.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 150.02,
+        "sample_count": 90,
+        "VmRSS": 76880.0,
+        "RssAnon": 49636.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 165.03,
+        "sample_count": 90,
+        "VmRSS": 77428.0,
+        "RssAnon": 50184.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 180.03,
+        "sample_count": 90,
+        "VmRSS": 77672.0,
+        "RssAnon": 50606.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 195.03,
+        "sample_count": 90,
+        "VmRSS": 71876.0,
+        "RssAnon": 50986.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 210.03,
+        "sample_count": 90,
+        "VmRSS": 72194.0,
+        "RssAnon": 51298.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 225.04,
+        "sample_count": 90,
+        "VmRSS": 72396.0,
+        "RssAnon": 51500.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 240.04,
+        "sample_count": 90,
+        "VmRSS": 72624.0,
+        "RssAnon": 51728.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 255.04,
+        "sample_count": 90,
+        "VmRSS": 72954.0,
+        "RssAnon": 52058.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 270.05,
+        "sample_count": 90,
+        "VmRSS": 72742.0,
+        "RssAnon": 51846.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 285.05,
+        "sample_count": 90,
+        "VmRSS": 73142.0,
+        "RssAnon": 52246.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 300.05,
+        "sample_count": 90,
+        "VmRSS": 73456.0,
+        "RssAnon": 52560.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 315.05,
+        "sample_count": 90,
+        "VmRSS": 69024.0,
+        "RssAnon": 52700.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 330.06,
+        "sample_count": 90,
+        "VmRSS": 68886.0,
+        "RssAnon": 52870.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 345.06,
+        "sample_count": 90,
+        "VmRSS": 69054.0,
+        "RssAnon": 53038.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 360.06,
+        "sample_count": 90,
+        "VmRSS": 66590.0,
+        "RssAnon": 53110.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 375.06,
+        "sample_count": 90,
+        "VmRSS": 63626.0,
+        "RssAnon": 53302.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 390.07,
+        "sample_count": 90,
+        "VmRSS": 63684.0,
+        "RssAnon": 53468.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 405.07,
+        "sample_count": 90,
+        "VmRSS": 63672.0,
+        "RssAnon": 53480.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      {
+        "from_pressure_min": 420.07,
+        "sample_count": 38,
+        "VmRSS": 63756.0,
+        "RssAnon": 53568.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      }
+    ],
+    "last": {
+      "elapsed_seconds": 26174.34,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 135180,
+        "VmRSS": 63752,
+        "RssAnon": 53564,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 219522,
+        "start_ticks": 9646788
+      },
+      "host_available_kib": 728236,
+      "cgroup_memory_bytes": 231739392,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 249404,
+        "RssAnon": 242748,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 1077700,
+        "start_ticks": 601054
+      },
+      "http_ok": 1020923,
+      "http_errors": 0,
+      "paseo_ok": 12449,
+      "paseo_errors": 0
+    },
+    "cgroup_stat_bytes": {
+      "anon": 67117056,
+      "file": 156856320,
+      "kernel": 7290880,
+      "file_dirty": 479232,
+      "file_writeback": 0,
+      "slab": 6066752
+    },
+    "result_available": false
+  }
+}

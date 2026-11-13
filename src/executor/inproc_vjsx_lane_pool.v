@@ -1,6 +1,7 @@
 module executor
 
 import time
+import memidle
 
 pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 	mut state := e.state
@@ -21,6 +22,7 @@ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
 			continue
 		}
 		state.lanes[idx].inflight++
+		memidle.begin()
 		state.rr_index = (idx + 1) % state.lanes.len
 		return state.lanes[idx]
 	}
@@ -42,6 +44,7 @@ fn (e InProcVjsxExecutor) force_select_lane_by_id(lane_id string) !VjsxExecution
 			continue
 		}
 		state.lanes[idx].inflight++
+		memidle.begin()
 		return state.lanes[idx]
 	}
 	return error('inproc_vjsx_executor_lane_not_found')
@@ -68,6 +71,7 @@ fn (e InProcVjsxExecutor) select_lane_by_id(lane_id string) !VjsxExecutionLane {
 			return error('inproc_vjsx_executor_no_available_lane')
 		}
 		state.lanes[idx].inflight++
+		memidle.begin()
 		state.rr_index = (idx + 1) % state.lanes.len
 		return state.lanes[idx]
 	}
@@ -158,6 +162,7 @@ pub fn (e InProcVjsxExecutor) release_lane(lane_id string) {
 		}
 		if state.lanes[i].inflight > 0 {
 			state.lanes[i].inflight--
+			memidle.end()
 		}
 		break
 	}

@@ -81,6 +81,7 @@ fn (rt RelayPipelineRuntime) pipeline_descriptors(relay_id string) []dispatch.Pi
 fn (rt RelayPipelineRuntime) ingress_exchanges(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64) []dispatch.Exchange {
 	mut exchanges := []dispatch.Exchange{}
 	for descriptor in rt.pipeline_descriptors(relay_id) {
+		if frame.route != '' && frame.route != descriptor.id { continue }
 		req := relay.relay_ingress_request_from_frame(relay_id, carrier_id, frame, descriptor.id,
 			created_at_ms)
 		exchanges << dispatch.relay_ingress_exchange(req)

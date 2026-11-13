@@ -1,0 +1,7 @@
+{
+  "compared_files": 921,
+  "changes_from_first_private_package_source": [
+    "src/executor/inproc_vjsx_websocket_lane_query_runtime.v"
+  ],
+  "only_added_change_is_routing_query_patch": true
+}

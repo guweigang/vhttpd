@@ -470,6 +470,7 @@ fn compile_v1_protocol_resources(cfg VhttpdConfig, scope string, site_id string,
 			}
 			bool_options: {
 				'enabled': cfg.codex.enabled
+				'application_messages': cfg.codex.application_messages
 			}
 		}
 	}

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "make",
+    "prod",
+    "VHTTPD_BIN=/Users/guweigang/Source/vhttpd/.runtime/release-090-preflight/vhttpd",
+    "BUILD_STAGE_ROOT=/Users/guweigang/Source/vhttpd/.runtime/release-090-preflight/source",
+    "VPHP_V_GC=boehm",
+    "WITH_DB=1"
+  ],
+  "exit_code": 0,
+  "log": "07-isolated-prod-build.txt",
+  "compiler": "V 0.5.2 d13ccdd",
+  "candidate_frozen": false,
+  "binary_sha256": "c23137f5fe27ec58acdfa001b340c89d1a74ddce041384295cb975ad5cebb60a",
+  "build_info_exit_code": 0,
+  "build_info": "{\"gc\":\"boehm\",\"gc_enabled\":true,\"version\":\"0.9.0\"}\n",
+  "stderr": ""
+}

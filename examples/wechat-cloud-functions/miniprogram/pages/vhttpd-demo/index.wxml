@@ -1,8 +1,8 @@
 <view class="demo">
   <text class="eyebrow">COFFEE / BACKEND LAB</text>
   <view class="title">小程序直连 vhttpd + vjsx</view>
-  <view class="subtitle">wx.request → 自有服务 → exports.main → SQL</view>
-  <view class="notice" wx:if="{{local}}">本地调试 · 模拟身份，不代表微信真实鉴权。仅在开发者工具使用，不经过腾讯云函数。</view>
+  <view class="subtitle">wx.request → vhttpd → 云函数 → PostgreSQL</view>
+  <view class="notice" wx:if="{{local}}">本机联调 · 身份校验方式由服务端入口决定。仅在开发者工具使用，不经过腾讯云函数。</view>
   <view class="notice" wx:else>远端 HTTPS · 需要服务端真实微信鉴权，并配置小程序 request 合法域名。</view>
   <view class="card">
     <view class="label">服务地址</view>

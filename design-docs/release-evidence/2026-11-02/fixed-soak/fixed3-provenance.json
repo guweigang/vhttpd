@@ -1,0 +1,17 @@
+{
+  "base_commit": "d260cecd415a8640fb655819efd52caee32e5fc2",
+  "vjsx_commit": "259620f1981a3573777ec8cda72883b1866404a7",
+  "fix_file_sha256": "5b96c315f373726f3983145159a8a5df8672ba7c99597089baf36fcd6d3ba38d",
+  "diagnostic": true,
+  "not_official_release": true,
+  "patch_files_sha256": {
+    "src/executor/inproc_vjsx_websocket_callback_runtime.v": "5b96c315f373726f3983145159a8a5df8672ba7c99597089baf36fcd6d3ba38d",
+    "src/executor/inproc_vjsx_websocket_lane_query_runtime.v": "60a0b2f27856d2846bb985bc79e290a843e6e67de946e9b492b5f5c12d18c6d2",
+    "src/app_websocket_runtime.v": "be59bbb347bede5a4e5f19a303aaa3d3c94f6b9417c236cc35ca1817055aa140",
+    "src/websocket_runtime.v": "b433ae7f27716da60e9ee53f3585c593c4d50e23e972a12a7922f73cc3c616c4",
+    "src/ws/hub_runtime.v": "2cf2042ad88ba185e74598480d3ce62296d127cd664966150cb0553286044219",
+    "src/ws/types.v": "ee57ccbafcedb34f384fe04c2c2036d86f24e3aa21c257c522009981102aea63",
+    "src/ws/dispatch_session.v": "8880ecd2672f935c6eef810375d0d5f5fb681edc56160155628488ab90ef7138"
+  },
+  "fix_scope": "WebSocket event/query callback ownership and GC-owned hub/kernel dispatch contexts"
+}

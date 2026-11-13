@@ -1,0 +1,33 @@
+{
+  "run_order": [
+    [
+      "01-before",
+      "before"
+    ],
+    [
+      "02-after",
+      "after"
+    ]
+  ],
+  "baseline": 30,
+  "load": 240,
+  "cooldown": 180,
+  "load_split_seconds": {
+    "http": 60,
+    "paseo": 60,
+    "mixed": 120
+  },
+  "scope": "Single serial old/new pair, same SDK/scanner/compiler/native objects and exact upstream O2 GC object; ordinary Boehm, GC environment defaults. Synthetic topology, not real business replay. Additional read-only mapped-region snapshots at phase ends. One pair cannot establish general resident-memory benefit.",
+  "limits": {
+    "MemoryMax": "256M",
+    "MemorySwapMax": 0,
+    "CPUQuota": "30%",
+    "start_gate_mib": 640,
+    "host_guard_mib": 512
+  },
+  "before_sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9",
+  "roles": {
+    "01-before": "f6144d09 prior response-handoff candidate; writer allocated per request",
+    "02-after": "same vhttpd source plus per-worker private writer slot"
+  }
+}

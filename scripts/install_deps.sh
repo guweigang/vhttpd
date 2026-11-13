@@ -5,9 +5,7 @@ mode="${1:-core}"
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 
 os_name="$(uname -s)"
-home_vmodules="${HOME}/.vmodules"
-vjsx_dir="${home_vmodules}/vjsx"
-local_quickjs_dir=$(CDPATH= cd -- "${repo_root}/../quickjs" 2>/dev/null && pwd || true)
+vjsx_dir="${VJSX_DIR:-${repo_root}/.deps/vjsx}"
 
 log() {
   printf '[deps] %s\n' "$*"
@@ -20,13 +18,6 @@ fail() {
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
-}
-
-is_quickjs_ng_checkout() {
-  [ -n "$1" ] &&
-    [ -f "$1/quickjs.c" ] &&
-    [ -f "$1/quickjs-c-atomics.h" ] &&
-    grep -q 'QJS_VERSION_MAJOR' "$1/quickjs.h" 2>/dev/null
 }
 
 brew_install_if_missing() {
@@ -84,31 +75,14 @@ install_core_packages() {
 }
 
 ensure_vjsx_checkout() {
-  mkdir -p "$home_vmodules"
-  if [ -L "$vjsx_dir" ]; then
-    log "using existing vjsx symlink: ${vjsx_dir}"
-    return
-  fi
-  if [ -d "$vjsx_dir/.git" ]; then
-    log "using existing vjsx checkout: ${vjsx_dir}"
-    return
-  fi
-  if [ -e "$vjsx_dir" ]; then
-    fail "path exists but is not a vjsx checkout or symlink: ${vjsx_dir}"
-  fi
-  need_cmd git
-  log "cloning guweigang/vjsx into ${vjsx_dir}"
-  git clone --depth=1 https://github.com/guweigang/vjsx "$vjsx_dir"
+  VJSX_DIR="$vjsx_dir" bash "$repo_root/scripts/ensure-vjsx.sh" >/dev/null
+  log "using pinned vjsx checkout: ${vjsx_dir}"
 }
 
 ensure_vjsx_quickjs_source() {
   ensure_vjsx_checkout
   need_cmd git
   [ -x "${vjsx_dir}/scripts/ensure-quickjs.sh" ] || fail "missing ${vjsx_dir}/scripts/ensure-quickjs.sh"
-  if is_quickjs_ng_checkout "$local_quickjs_dir"; then
-    log "using local QuickJS source at ${local_quickjs_dir}"
-    return
-  fi
   log "ensuring vjsx managed QuickJS source"
   quickjs_path="$(VJS_QUICKJS_WORK_ROOT="$repo_root" "${vjsx_dir}/scripts/ensure-quickjs.sh")"
   log "using QuickJS source at ${quickjs_path}"

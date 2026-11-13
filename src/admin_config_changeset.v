@@ -124,6 +124,8 @@ fn (mut app App) admin_config_changeset_publish(id string) !AdminConfigChangeSet
 	bundle := app.admin_config_changeset_read(id)!
 	overrides := app.admin_config_changeset_overrides(bundle)!
 	root := bundle.config_path
+	deployment_lock := admin_project_write_lock(root)!
+	defer { os.rmdir(deployment_lock) or {} }
 	mut store := app.open_admin_state_store()!
 	store.publish_config_files(bundle.files, fn [root, overrides] () ! {
 		config.load_runtime_plan_with_overrides(root, overrides)!

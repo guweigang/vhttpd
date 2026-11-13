@@ -21,8 +21,27 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends build-essential ca-certificates default-libmysqlclient-dev libpq-dev libsqlite3-dev libgc-dev patchelf pkg-config libssl-dev zlib1g-dev ripgrep
+        packages=(build-essential ca-certificates default-libmysqlclient-dev libpq-dev libsqlite3-dev libgc-dev patchelf pkg-config libssl-dev zlib1g-dev ripgrep)
+        apt_options=(-o Acquire::http::Timeout=10 -o Acquire::https::Timeout=10)
+        if sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update &&
+           sudo apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"; then
+          exit 0
+        fi
+        # Keep Ubuntu archive signature verification when a runner mirror fails.
+        archive=ubuntu
+        if [[ "$(dpkg --print-architecture)" == arm64 ]]; then archive=ubuntu-ports; fi
+        . /etc/os-release
+        fallback="$RUNNER_TEMP/vhttpd-ubuntu-fallback.sources"
+        cat > "$fallback" <<EOF
+        Types: deb
+        URIs: https://mirrors.mit.edu/$archive
+        Suites: $VERSION_CODENAME $VERSION_CODENAME-updates $VERSION_CODENAME-security
+        Components: main restricted universe multiverse
+        Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+        EOF
+        apt_options+=(-o "Dir::Etc::sourcelist=$fallback" -o Dir::Etc::sourceparts=- -o Acquire::Retries=2)
+        sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
+        sudo apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"
     - name: Install native libraries (macOS)
       if: runner.os == 'macOS'
       shell: bash

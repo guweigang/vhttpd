@@ -182,7 +182,7 @@ const endpoints = {
     }
     function renderStatus() {
       const runtimeOK = !!state.data.runtime && !state.errors.runtime && !state.authRequired;
-      $("status").textContent = state.authRequired ? "登录已失效，请从 Mac 工作台重新打开管理界面。" :
+      $("status").textContent = state.authRequired ? "登录已失效，请从工作台重新打开管理界面。" :
         (runtimeOK ? "管理接口已连接" : "管理接口未连接，以下状态无法确认") +
         (state.refreshedAt ? " · 最近检查 " + state.refreshedAt.toLocaleTimeString() : "");
       $("stateDot").className = "state-dot " + (runtimeOK ? "ok" : "error");
@@ -1178,8 +1178,8 @@ const endpoints = {
       const relay = runtime && runtime.relay;
       const available = !!relay && !state.errors.runtime;
       $("relayAvailability").textContent = available
-        ? "Runtime snapshot. Refresh to read the latest connection and channel state."
-        : "Relay runtime unavailable. Start the instance and sign in to read its state.";
+        ? "运行时连接与通道快照；开启顶部自动刷新可持续观察。"
+        : "Relay 状态未确认；请启动实例并登录。";
       $("relayMetrics").innerHTML = available ? [
         metric("Configured Relays", relay.descriptor_count ?? "—", "this instance"),
         metric("Agents", relay.agent_count ?? "—", "runtime agents"),
@@ -1188,6 +1188,19 @@ const endpoints = {
         metric("Sessions", relay.session_count ?? "—", "runtime sessions"),
         metric("Pending Frames", relay.pending_frames ?? "—", "buffered frames")
       ].join("") : "";
+      const diagnostics = relay?.diagnostics;
+      $('relayDiagnosticStatus').textContent = !available ? '运行时不可用，不能确认执行位置。' : !diagnostics ? '当前运行包尚未提供执行诊断，请更新运行包。' :
+        '最近 '+(diagnostics.retained ?? 0)+' / '+(diagnostics.capacity ?? 256)+' 条事件 · 完成 '+(diagnostics.completed ?? 0)+' · 失败 '+(diagnostics.failed ?? 0)+' · '+(state.refreshedAt ? new Date(state.refreshedAt).toLocaleTimeString() : '尚未刷新')+'；实例重启后清空。HTTP 状态不代表业务操作一定成功。';
+      const recent = available ? asArray(diagnostics?.events).slice().reverse() : [];
+      const executionLabel = value => ({local:'本地执行',remote_to_local:'远端转交本地',remote_resource:'远端数据库'}[value] || value || '—');
+      $('relayRequests').innerHTML = table(['时间','执行位置 / 阶段','接口','结果 / 耗时','Relay / 通道','请求 ID'], recent.filter(e=>e.kind.startsWith('relay.takeover.')).slice(0,60).map(e=>{
+        const f=e.fields||{};
+        return [esc(new Date(e.at_ms).toLocaleTimeString()),esc(executionLabel(f.execution))+'<br>'+esc(f.phase||f.action||f.state),esc((f.method||'')+' '+(f.path||f.route||'')),esc(f.status||'—')+' · '+esc(f.duration_ms||'—')+' ms<br>'+esc(f.error_class||''),esc(f.relay_id)+'<br>'+esc(f.channel_id||'—'),esc(f.request_id||'—')];
+      }));
+      $('relayHistory').innerHTML = table(['时间','事件','Relay / 通道','路由 / 资源','操作 / 结果','请求 ID'], recent.filter(e=>!e.kind.startsWith('relay.takeover.')).slice(0,100).map(e=>{
+        const f=e.fields||{};
+        return [esc(new Date(e.at_ms).toLocaleTimeString()),esc(e.kind)+'<br>'+esc(f.phase||f.state||f.action||''),esc(f.relay_id)+'<br>'+esc(f.channel_id||'—'),esc(f.route||'')+'<br>'+esc(f.resource||''),esc(f.operation||f.relay_event||'')+' · '+esc(f.status||'')+' · '+esc(f.duration_ms||'—')+' ms<br>'+esc(f.error_class||''),esc(f.request_id||'—')];
+      }));
       $("relayAgents").innerHTML = table(["Relay", "Node", "State", "Attempts", "Next attempt", "Last error"], asArray(relay && relay.agents).map(agent => [
         esc(agent.relay_id), esc(agent.node_id), esc(agent.state), esc(agent.attempt),
         esc(agent.state === "backoff" && agent.next_attempt_at_ms > 0 ? new Date(agent.next_attempt_at_ms).toLocaleString() : "—"), esc(agent.last_error || "—")

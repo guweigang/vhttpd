@@ -1,76 +1,27 @@
 import fs from "fs";
+import * as path from "path";
+import { loadBotConfig } from "./loader.mjs";
 
-function env(name, fallbackValue) {
-  const value = process.env[name];
-  if (typeof value === "string" && value.trim() !== "") {
-    return value;
-  }
-  return fallbackValue;
-}
-
-function readCodexbotTomlApprovalPolicy() {
-  const cwd = typeof process?.cwd === "function" ? process.cwd() : ".";
-  const filePath = `${cwd.replace(/\/+$/, "")}/examples/codexbot-app-ts/codexbot.toml`;
-  try {
-    const text = fs.readFileSync(filePath, "utf8");
-    const codexSectionMatch = text.match(/^\[codex\]\s*([\s\S]*?)(?=^\[|\Z)/m);
-    const codexSection = codexSectionMatch?.[1] || "";
-    const policyMatch = codexSection.match(/^\s*approval_policy\s*=\s*"([^"]+)"/m);
-    const policy = typeof policyMatch?.[1] === "string" ? policyMatch[1].trim() : "";
-    return policy || "never";
-  } catch (_) {
-    return "never";
-  }
-}
-
-function envList(name, fallbackValue) {
-  const raw = env(name, fallbackValue);
-  return raw
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+// vhttpd supplies the original entry, even when modules run from a build mirror.
+const entry = process.argv[0];
+const config = loadBotConfig(entry);
 
 export function botDefaults() {
-  const defaults = {};
-  const tomlApprovalPolicy = readCodexbotTomlApprovalPolicy();
+  return config.defaults;
+}
 
-  defaults.projectKey = env("CODEXBOT_TS_DEFAULT_PROJECT", "vhttpd");
-  defaults.model = env("CODEXBOT_TS_DEFAULT_MODEL", "gpt-5.4");
-  defaults.supportedModels = envList(
-    "CODEXBOT_TS_SUPPORTED_MODELS",
-    "gpt-5.4,gpt-5.3-codex",
-  );
-  defaults.effort = env("CODEXBOT_TS_DEFAULT_EFFORT", "medium");
-  defaults.cwd = env("CODEXBOT_TS_DEFAULT_CWD", process.cwd());
-  defaults.projectRootDir = env("CODEXBOT_TS_PROJECT_ROOT", process.cwd());
-  defaults.dbPath = env(
-    "CODEXBOT_TS_DB_PATH",
-    `${process.cwd()}/tmp/codexbot-app-ts.sqlite`,
-  );
-  defaults.defaultCodexInstance = env(
-    "CODEXBOT_TS_DEFAULT_CODEX_INSTANCE",
-    "main",
-  );
-  defaults.defaultFeishuInstance = env(
-    "CODEXBOT_TS_DEFAULT_FEISHU_INSTANCE",
-    "main",
-  );
-  defaults.codexUrl = env("CODEX_URL", "ws://127.0.0.1:4500");
-  defaults.codexReconnectDelay = Number(
-    env("CODEXBOT_TS_CODEX_RECONNECT_DELAY_MS", "3000"),
-  );
-  defaults.codexFlushInterval = Number(
-    env("CODEXBOT_TS_CODEX_FLUSH_INTERVAL_MS", "400"),
-  );
-  defaults.feishuAppId = env("FEISHU_APP_ID", "");
-  defaults.feishuAppSecret = env("FEISHU_APP_SECRET", "");
-  defaults.feishuVerificationToken = env("FEISHU_VERIFICATION_TOKEN", "");
-  defaults.feishuEncryptKey = env("FEISHU_ENCRYPT_KEY", "");
-  defaults.enableProviderInstancePreflight =
-    env("CODEXBOT_TS_ENABLE_PROVIDER_INSTANCE_PREFLIGHT", "0") === "1";
-  defaults.approvalPolicy = env("CODEXBOT_TS_APPROVAL_POLICY", tomlApprovalPolicy);
-  defaults.sandbox = env("CODEXBOT_TS_SANDBOX", "workspace-write");
+export function botProviderConfig() {
+  return config.providerConfig;
+}
 
-  return defaults;
+export function resolveApplicationPath(value) {
+  return path.isAbsolute(value) ? value : path.resolve(config.configDir, value);
+}
+
+export function ensureDataDirectory() {
+  fs.mkdirSync(path.dirname(config.defaults.dbPath), { recursive: true });
+}
+
+export function botAdminToken() {
+  return config.adminToken;
 }

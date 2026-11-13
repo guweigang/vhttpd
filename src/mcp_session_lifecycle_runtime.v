@@ -6,7 +6,7 @@ import veb
 
 @['/mcp'; delete]
 pub fn (mut app App) mcp_delete(mut ctx Context) veb.Result {
-	return mcp_handle_delete_http(mut app, mut ctx)
+	return HttpIngressRuntime.route(mut app, mut ctx, 'DELETE', ctx.req.url)
 }
 
 fn mcp_handle_delete_http(mut app App, mut ctx Context) veb.Result {

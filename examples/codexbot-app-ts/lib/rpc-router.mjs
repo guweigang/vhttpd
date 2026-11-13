@@ -1,3 +1,4 @@
+import { isMissingThreadHistory } from "./thread-recovery.mjs";
 import { parseCodexRpcResponse } from "./codex.mts";
 
 function turnLifecycleText(stage) {
@@ -204,26 +205,51 @@ export function createCodexRpcResponseRouter(deps) {
         commands,
       };
     }
-    if (!stream.prompt.startsWith("/codex") && response.hasError && deps.codexRpcIndicatesMissingThread(response)) {
-      const recoveredChat = await deps.resetChatThread(stream.sessionKey, stream.chatId);
-      await deps.updateStreamState(response.streamId, {
-        threadId: "",
-        threadPath: "",
-        turnId: "",
-        status: "queued",
-        resultText: "",
-        completedAt: 0,
-        lastEvent: "thread/restart.requested",
+    if (response.method === "thread/resume" && !stream.prompt.startsWith("/codex")) {
+      if (stream.status !== "resuming_thread") return { handled: true, commands: [] };
+      const currentChat = await deps.ensureChatState(stream.sessionKey, stream.chatId);
+      if (currentChat.threadId !== stream.threadId || currentChat.lastStreamId !== response.streamId) {
+        await deps.finalizeStreamState(response.streamId, {
+          status: "cancelled", lastEvent: "thread/resume.superseded", completedAt: Date.now(),
+        });
+        return { handled: true, commands: [] };
+      }
+      if (isMissingThreadHistory(response, stream.threadId)) {
+        const recoveredChat = await deps.resetChatThread(stream.sessionKey, stream.chatId);
+        await deps.updateStreamState(response.streamId, {
+          threadId: "",
+          threadPath: "",
+          turnId: "",
+          status: "queued",
+          resultText: "",
+          completedAt: 0,
+          lastEvent: "thread/restart.requested",
+        });
+        const defaults = deps.botDefaults();
+        const instance = deps.fallbackCodexInstance(stream.codexInstance || recoveredChat?.codexInstance, defaults);
+        return {
+          handled: true,
+          commands: [
+            streamTextCommand(stream, response.streamId, deps.threadExpiredRestartingText(stream.threadId || recoveredChat?.threadId || ""), deps),
+            deps.codexRpcCall("thread/start", deps.buildThreadStartParams(recoveredChat || stream, defaults), response.streamId, instance),
+          ],
+        };
+      }
+      if (!response.hasError && response.threadId === stream.threadId && response.threadId) {
+        return {
+          handled: true,
+          commands: await deps.continueQueuedTurnStart(response.streamId, response.threadId, response.threadPath || stream.threadPath || "", { resumed: true }),
+        };
+      }
+      const detail = response.hasError
+        ? response.errorMessage || "Codex 未能恢复该会话。"
+        : "恢复响应与原会话不匹配。";
+      const errorText = deps.codexRpcErrorText("thread/resume", detail)
+        + "\n\n原会话绑定已保留，未自动新建。请稍后重试，或使用 /new 手动新建会话。";
+      await deps.finalizeStreamState(response.streamId, {
+        status: "error", resultText: errorText, completedAt: Date.now(), lastEvent: "thread/resume.failed",
       });
-      const defaults = deps.botDefaults();
-      const instance = deps.fallbackCodexInstance(stream.codexInstance || recoveredChat?.codexInstance, defaults);
-      return {
-        handled: true,
-        commands: [
-          streamTextCommand(stream, response.streamId, deps.threadExpiredRestartingText(stream.threadId || recoveredChat?.threadId || ""), deps),
-          deps.codexRpcCall("thread/start", deps.buildThreadStartParams(recoveredChat || stream, defaults), response.streamId, instance),
-        ],
-      };
+      return { handled: true, commands: [streamTextCommand(stream, response.streamId, errorText, deps)] };
     }
     if (response.method === "thread/read" && !stream.prompt.startsWith("/codex")) {
       if (response.hasError) {

@@ -1,0 +1,7 @@
+{
+  "gc_c_matches_HEAD": true,
+  "gc_startup_matches_HEAD": true,
+  "base": "d13ccdd0768496cd6faea9ddfbdd0ddf9e4c4186",
+  "gc_source_sha256": "711336923f4288267a459a9567e054f46e0ef8fc4e1d6d0ba810efd65d480714",
+  "shared_codegen_diff_retained": true
+}

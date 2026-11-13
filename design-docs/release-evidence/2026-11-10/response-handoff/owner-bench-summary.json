@@ -1,0 +1,82 @@
+{
+  "rows": [
+    {
+      "run": 1,
+      "body_bytes": 1024,
+      "before_bytes": 759184,
+      "after_bytes": 397104,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 1414.375
+    },
+    {
+      "run": 1,
+      "body_bytes": 8192,
+      "before_bytes": 2491616,
+      "after_bytes": 402704,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 8159.8125
+    },
+    {
+      "run": 1,
+      "body_bytes": 65536,
+      "before_bytes": 17142688,
+      "after_bytes": 420400,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 65321.4375
+    },
+    {
+      "run": 2,
+      "body_bytes": 1024,
+      "before_bytes": 756528,
+      "after_bytes": 400640,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 1390.1875
+    },
+    {
+      "run": 2,
+      "body_bytes": 8192,
+      "before_bytes": 2505024,
+      "after_bytes": 395744,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 8239.375
+    },
+    {
+      "run": 2,
+      "body_bytes": 65536,
+      "before_bytes": 17137760,
+      "after_bytes": 414144,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 65326.625
+    },
+    {
+      "run": 3,
+      "body_bytes": 1024,
+      "before_bytes": 767888,
+      "after_bytes": 411120,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 1393.625
+    },
+    {
+      "run": 3,
+      "body_bytes": 8192,
+      "before_bytes": 2507920,
+      "after_bytes": 420544,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 8153.8125
+    },
+    {
+      "run": 3,
+      "body_bytes": 65536,
+      "before_bytes": 17193152,
+      "after_bytes": 394576,
+      "iterations": 256,
+      "saved_bytes_per_handoff": 65619.4375
+    }
+  ],
+  "context_bytes": {
+    "before": 7976,
+    "after": 7984
+  },
+  "metric": "GC_get_total_bytes cumulative allocator-accounted bytes including rounding; not live heap, RSS or raw malloc request sizes. 3 subprocesses,256 handoffs per arm. Setup excluded. Legacy arm cleanup is not natural cooldown.",
+  "scope": "microbenchmark only; no whole-package or production acceptance"
+}

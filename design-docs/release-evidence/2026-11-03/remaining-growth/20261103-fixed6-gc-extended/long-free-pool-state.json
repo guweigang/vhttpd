@@ -1,0 +1,30 @@
+{
+  "utc": "2026-11-03T06:08:08.372171+00:00",
+  "pid": 697847,
+  "gc_before": 11456,
+  "gc_after": 11456,
+  "small_uncollectable_blocks": 1119,
+  "bytes_in_blocks": 4583424,
+  "global_free_nodes": 255,
+  "global_free_blocks": 1,
+  "reclaim_queue_blocks": 0,
+  "unknown_reclaim_blocks": [],
+  "free_link_shaped_blocks": 1117,
+  "free_link_shaped_not_in_global_or_reclaim": 1117,
+  "block_mark_count_histogram": {
+    "251": 332,
+    "252": 243,
+    "250": 339,
+    "254": 42,
+    "249": 54,
+    "253": 87,
+    "255": 11,
+    "247": 1,
+    "246": 1,
+    "248": 6,
+    "244": 1,
+    "256": 2
+  },
+  "code_pointer_words": 0,
+  "limits": "Live non-atomic snapshot; zero/linked contents alone cannot prove logical ownership. GC queue membership observed directly."
+}

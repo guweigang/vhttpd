@@ -1,0 +1,18 @@
+{
+  "test_file": "src/executor/websocket_payload_memory_test.v",
+  "functions": 3,
+  "before": {
+    "status": "expected_failure",
+    "iterations": 1024,
+    "native_retained_before_bytes": 950272,
+    "native_retained_after_bytes": 11362304,
+    "failure": "Routing queries retained native callbacks"
+  },
+  "after": {
+    "status": "passed",
+    "native_growth_budget_bytes": 1048576,
+    "js_object_growth_budget": 8
+  },
+  "sequence_gate_tests": 6,
+  "retained_rss_budget_kib": 16384
+}

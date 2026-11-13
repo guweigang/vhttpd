@@ -127,17 +127,11 @@ pub mut:
 	token             string
 }
 
-fn feishu_json_field_string(obj map[string]json2.Any, key string) string {
-	return FeishuRuntimeEventSummary.json_field_string(obj, key)
-}
 
 fn FeishuRuntimeEventSummary.json_field_string(obj map[string]json2.Any, key string) string {
 	return (obj[key] or { json2.Any('') }).str()
 }
 
-fn feishu_json_map_field(obj map[string]json2.Any, key string) map[string]json2.Any {
-	return FeishuRuntimeEventSummary.json_map_field(obj, key)
-}
 
 fn FeishuRuntimeEventSummary.json_map_field(obj map[string]json2.Any, key string) map[string]json2.Any {
 	return (obj[key] or { json2.Any(map[string]json2.Any{}) }).as_map()

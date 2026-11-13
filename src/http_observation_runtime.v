@@ -4,29 +4,29 @@ import executor
 import json2 as json
 import log
 import time
+import application_logs
 
 // Bounded per-listener state; owned by ControlPlaneRuntime.mu. Keys are pipeline
 // IDs, never request URLs. Empty ID covers requests without a compiled route.
 struct HttpObservations {
 mut:
-	total executor.AdminHttpMetrics
-	routes map[string]executor.AdminHttpMetrics
-	errors []executor.AdminHttpObservationError
-	requests map[string][]executor.AdminHttpObservationError
+	total HttpObservedMetrics
+	routes map[string]HttpObservedMetrics
+	errors HttpObservationRing
+	requests map[string]HttpObservationRing
 	buckets map[i64]HttpObservationBucket
 	last_bucket_unix i64
 	window_reset_unix i64
 }
 
-fn http_metrics_record(previous executor.AdminHttpMetrics, status int, duration_ms i64, at_unix i64) executor.AdminHttpMetrics {
+fn http_metrics_record(previous HttpObservedMetrics, status int, duration_ms i64, at_unix i64) HttpObservedMetrics {
 	duration := if duration_ms > 0 { duration_ms } else { i64(0) }
-	mut buckets := previous.duration_buckets.clone()
-	if buckets.len != 9 { buckets = []i64{len: 9} }
-	for i, upper in [i64(1), 5, 10, 50, 100, 500, 1000, 5000] {
+	mut buckets := previous.duration_buckets
+	for i, upper in [i64(1), 5, 10, 50, 100, 500, 1000, 5000]! {
 		if duration <= upper { buckets[i]++ }
 	}
 	buckets[8]++ // +Inf; buckets are cumulative.
-	return executor.AdminHttpMetrics{
+	return HttpObservedMetrics{
 		requests_total: previous.requests_total + 1
 		errors_total: previous.errors_total + if status >= 400 { i64(1) } else { i64(0) }
 		client_errors_total: previous.client_errors_total + if status >= 400 && status < 500 { i64(1) } else { i64(0) }
@@ -48,22 +48,22 @@ fn (mut observations HttpObservations) record(pipeline string, method string, st
 fn (mut observations HttpObservations) record_staged(pipeline string, method string, status int, duration_ms i64, observation_id string, at_unix i64, stages executor.AdminHttpStages) {
 	observations.total = http_metrics_record(observations.total, status, duration_ms, at_unix)
 	key := if pipeline in observations.routes || observations.routes.len < 512 { pipeline } else { '@overflow' }
-	previous := observations.routes[key] or { executor.AdminHttpMetrics{} }
+	previous := observations.routes[key] or { HttpObservedMetrics{} }
 	observations.routes[key] = http_metrics_record(previous, status, duration_ms, at_unix)
 	observations.record_window(key, status, duration_ms, at_unix)
 	if duration_ms >= 1 {
-		mut samples := observations.requests[key] or { []executor.AdminHttpObservationError{} }
-		samples << executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}
-		if samples.len > 50 { samples = samples[samples.len - 50..].clone() }
+		mut samples := observations.requests[key] or { HttpObservationRing{} }
+		samples.append(executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}, 50)
 		observations.requests[key] = samples
 	}
 	if status >= 400 {
-		observations.errors << executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}
-		if observations.errors.len > 20 { observations.errors = observations.errors[observations.errors.len - 20..].clone() }
+		observations.errors.append(executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}, 20)
 	}
 }
 
-fn (mut app App) complete_http_observation(ctx Context, started i64, observation_id string) {
+// Read synchronously while the request context is alive. Borrowing avoids an
+// otherwise boxed copy of the large context on every completed request.
+fn (mut app App) complete_http_observation(ctx &Context, started i64, observation_id string) {
 	status := if ctx.res.status_code > 0 { ctx.res.status_code } else { 200 }
 	total_ns := time.sys_mono_now() - started
 	duration_ms := total_ns / 1000000
@@ -73,10 +73,28 @@ fn (mut app App) complete_http_observation(ctx Context, started i64, observation
 	pipeline := if ctx.observed_pipeline in app.control_plane.http_observations.routes || app.control_plane.http_observations.routes.len < 512 { ctx.observed_pipeline } else { '@overflow' }
 	app.control_plane.http_observations.record_staged(ctx.observed_pipeline, ctx.req.method.str(), status, duration_ms, observation_id, at_unix, stages)
 	app.control_plane.mu.unlock()
-	if duration_ms >= 1 || status >= 400 {
+	scope := app.control_plane.application_log_scope(ctx.observed_pipeline, app.app_build_cfg.plan_listener_id)
+	mut application_log := application_logs.shared()
+	application_log.append(scope, application_logs.Record{
+		pipeline_id:ctx.observed_pipeline
+		request_id:if ctx.observed_request_id != '' { ctx.observed_request_id } else { observation_id }
+		trace_id:ctx.observed_trace_id
+		level:if status >= 500 { 'error' } else if status >= 400 { 'warn' } else { 'info' }
+		source:'request'
+		message:'${ctx.req.method} ${status} ${duration_ms} ms'
+	})
+	if http_observation_should_log(status, duration_ms, log.get_level()) {
 		entry := executor.AdminHttpObservationError{stages:stages,pipeline_id: pipeline, method: ctx.req.method.str(), status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}
 		line := http_observation_log(app.app_build_cfg.plan_listener_id, entry)
 		if status >= 400 { log.warn(line) } else { log.info(line) }
+	}
+}
+
+fn http_observation_should_log(status int, duration_ms i64, level log.Level) bool {
+	return if status >= 400 {
+		int(level) >= int(log.Level.warn)
+	} else {
+		duration_ms >= 1 && int(level) >= int(log.Level.info)
 	}
 }
 

@@ -87,6 +87,7 @@ fn (mut app App) codex_runtime_state_view(instance string) codex.RuntimeStateVie
 fn (mut hub ProviderRuntimeHub) admin_codex_snapshot(db_transport_enabled bool) codex.AdminRuntimeSnapshot {
 	rt := hub.codex_runtime_state_view('main')
 	return codex.AdminRuntimeSnapshot{
+		protocol: rt.protocol
 		enabled:            hub.codex_provider_enabled(db_transport_enabled)
 		connected:          rt.connected
 		initialized:        rt.initialized

@@ -65,6 +65,24 @@ pub fn (mut database AsyncDatabase) close() {
 	}
 }
 
+// Network-backed users may disappear after BEGIN without sending rollback.
+// Do not wait on executing native SQL; its owning lease remains exclusive.
+pub fn (mut database AsyncDatabase) expire_transactions() {
+	$if enable_db ? {
+		database.mu.@lock()
+		mut entries := database.transactions.clone()
+		database.mu.unlock()
+		for id, mut tx in entries {
+			if !tx.mu.try_lock() { continue }
+			if !tx.closed && tx.deadline > 0 && time.sys_mono_now() >= tx.deadline {
+				tx.finish(false) or {}
+				tx.mu.unlock()
+				database.forget(id)
+			} else { tx.mu.unlock() }
+		}
+	}
+}
+
 // Blocking native driver calls run only on background workers. Cancellation is
 // logical: an executing SQL statement is not interrupted, and its lease stays
 // reserved until the driver returns. Never retry SQL automatically.

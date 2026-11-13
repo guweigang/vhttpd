@@ -1,5 +1,6 @@
 export const BUSY_STREAM_STATUSES = Object.freeze([
   "queued",
+  "resuming_thread",
   "thread_ready",
   "thread_ready_notified",
   "starting_turn",
@@ -7,15 +8,6 @@ export const BUSY_STREAM_STATUSES = Object.freeze([
   "streaming",
   "reading_final",
 ]);
-
-export function positiveIntegerEnv(name, fallbackValue) {
-  const raw = typeof process?.env?.[name] === "string" ? process.env[name].trim() : "";
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallbackValue;
-  }
-  return Math.floor(parsed);
-}
 
 export function isBusyStreamStatus(status) {
   const text = typeof status === "string" ? status.trim().toLowerCase() : "";

@@ -1,0 +1,14 @@
+{
+  "reason": "Local machine has 16 GiB RAM and 6.5 GiB swap in use; overlapping broad compiler suites compete with focused before/after and Linux validation. Stop only these two broad test groups; preserve logs and keep focused regressions running. Broad coverage incomplete, not reported as passed.",
+  "stopped": [
+    {
+      "pid": 66572,
+      "command_suffix": "vtest -silent test vlib/v/gen/c/"
+    },
+    {
+      "pid": 71529,
+      "command_suffix": "vtest -silent test vlib/v/"
+    }
+  ],
+  "remote_long_soak_untouched": true
+}

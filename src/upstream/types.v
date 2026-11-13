@@ -1,5 +1,6 @@
 module upstream
 
+import protocol_diagnostics
 import command
 import executor
 import net
@@ -21,6 +22,7 @@ pub:
 
 pub struct UpstreamSnapshot {
 pub:
+	protocol protocol_diagnostics.Snapshot
 	provider                string
 	instance                string
 	enabled                 bool

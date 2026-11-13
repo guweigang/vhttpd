@@ -1,0 +1,6 @@
+{
+  "allocation_calls": 1637,
+  "matched_free_calls": 1636,
+  "remaining_live_entries": 1,
+  "stack_unwind_limitation": "Optimized binary lacks usable frame chains; raw ustack contains invalid frames and is not used for caller attribution. Allocation/free event pairing is separate."
+}

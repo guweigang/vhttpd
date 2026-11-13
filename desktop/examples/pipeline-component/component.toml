@@ -1,0 +1,19 @@
+version = 2
+
+[listeners.component_demo]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19903
+
+[adapters.component_demo]
+kind = "fixed-response"
+options.status = "200"
+options.body = "pipeline-ok"
+
+[[pipelines]]
+id = "component_demo.http"
+group = "component_demo"
+ingress = "listener:component_demo"
+match.paths = ["/healthz"]
+egress = "adapter:component_demo"

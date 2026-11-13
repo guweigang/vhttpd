@@ -1,6 +1,7 @@
 module executor
 
 import vjsx
+import configcache
 
 struct InProcVjsxHostApi {}
 
@@ -15,8 +16,17 @@ fn InProcVjsxHostApi.install_http_facade(mut ctx vjsx.Context) ! {
 	ctx.end()
 }
 
-fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValueBuilder {
+fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int, mut cache configcache.Cache) vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
+		name: 'log'
+		value: InProcVjsxHostApi.log_builder(mut state, idx)
+	}, vjsx.HostObjectField{
+		name: 'applicationInfo'
+        value:InProcVjsxHostApi.application_info_builder(mut state)
+    }, vjsx.HostObjectField{
+        name: 'takeover'
+		value: InProcVjsxHostApi.takeover_builder(mut state, idx)
+	}, vjsx.HostObjectField{
 		name:  'database'
 		value: InProcVjsxHostApi.database_builder(mut state, idx)
 	}, vjsx.HostObjectField{
@@ -33,7 +43,7 @@ fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValu
 		value: InProcVjsxHostApi.session_store_builder(mut state, idx)
 	}, vjsx.HostObjectField{
 		name:  'config'
-		value: InProcVjsxHostApi.config_builder(mut state, idx)
+		value: InProcVjsxHostApi.config_builder(mut state, idx, mut cache)
 	}, vjsx.HostObjectField{
 		name:  'readTextFile'
 		value: InProcVjsxHostApi.read_text_file_builder(mut state, idx)
@@ -52,13 +62,16 @@ fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int) vjsx.HostValu
 	})
 }
 
-fn InProcVjsxHostApi.install(mut ctx vjsx.Context, mut state VjsxExecutorState, idx int) {
+fn InProcVjsxHostApi.install(mut ctx vjsx.Context, mut state VjsxExecutorState, idx int) &configcache.Cache {
+	mut cache := &configcache.Cache{}
+	InProcVjsxHostApi.install_application_console(ctx, mut state, idx)
 	ctx.install_host_api(vjsx.HostApiConfig{
 		globals: [
 			vjsx.HostGlobalBinding{
 				name:  'vhttpdHost'
-				value: InProcVjsxHostApi.builder(mut state, idx)
+				value: InProcVjsxHostApi.builder(mut state, idx, mut cache)
 			},
 		]
 	})
+	return cache
 }

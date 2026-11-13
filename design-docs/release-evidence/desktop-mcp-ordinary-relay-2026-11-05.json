@@ -1,0 +1,58 @@
+{
+  "client": "installed DSH Streamable HTTP connector",
+  "target_id": "a3f98d37d0a38b357d18049e",
+  "relay_id": "ordinaryqa",
+  "created_local_connection": "c5376fd071eebf15269efd3b",
+  "created_remote_connection": "a1135047d435dcbaabbc75ac",
+  "hub": "existing remote instance",
+  "agent": "existing local vhttpd runtime",
+  "carrier": "local initiates WebSocket to remote",
+  "probe": "authenticated and did not replace live carrier",
+  "business_status": 200,
+  "business_body": "pipeline-ok",
+  "stop": "traffic no longer reaches local adapter",
+  "recovery": "local and remote exact config baselines restored, catalog records reclaimed",
+  "negative_cases": 11,
+  "registered_tools": 86,
+  "final_local_runtime": "stopped",
+  "timestamp": "2026-11-05T19:21:39.371250+08:00",
+  "desktop": "actual UI-issued binding in updated Workbench Update QA.app",
+  "desktop_sha256": "0359e0c08496c4be2e6a5c9c87afeeb8a107a1761b1e45d2b4bf7d2b41fa2e01",
+  "desktop_backup": "Workbench Before Ordinary Relay.app",
+  "skills": "DSH desktop model invoked skill tool to reload vhttpd-deploy and vhttpd-debug; separate installed DSH filesystem loader passed",
+  "write_execution_scope": "installed DSH client connector, not autonomous model execution of writes",
+  "versions": {
+    "local": "0.9.0",
+    "remote": "0.9.1"
+  },
+  "hub_listener": "55311, shared HTTP/WebSocket listener in existing mcp-shared-config-qa",
+  "carrier_path": "/vhttpd/relay",
+  "business_path": "/__relay/ordinaryqa",
+  "default_http_forwarding": "disabled unless verify_path is explicitly supplied",
+  "config_restore_cases": [
+    "local runtime stopped before Agent baseline restore",
+    "remote instance stopped before Hub baseline restore"
+  ],
+  "remote_baseline_sha256": "13353a3a9a31618867f472fb124913368c28a2160807b57016f8cbdeebc05f62",
+  "checks": {
+    "macos": "four base suites passed; additional carrier-only test suite passed",
+    "linux": "Relay configuration and shared catalog suites passed; latest carrier-only configuration regression also passed; V 0.5.2 d13ccdd local-dev, GCC gc none",
+    "skills": "vhttpd-deploy and vhttpd-debug quick_validate passed; installed DSH loader and model skill invocations passed",
+    "desktop_signature": "codesign --verify --deep --strict passed"
+  },
+  "cleanup": {
+    "desktop_original_environment": "default running, vhttpd 0.9.0, observed in UI",
+    "local_temporary_ports": "55301, 55302, 52780 closed",
+    "remote_hub_port": "55311 closed",
+    "temporary_mcp": "closed in Desktop UI; private Bearer config removed",
+    "remote_test_instance": "stopped through DSH MCP",
+    "test_ssh_listener": "49284 stopped; isolated authorized key reference removed",
+    "catalog_records": "reclaimed in both scopes"
+  },
+  "limitations": [
+    "Agent start/stop persists autostart and restarts whole environment",
+    "Only MCP-owned config blocks are modified",
+    "Database Relay dedicated probes remain pending"
+  ],
+  "transient_failure": "First actual Desktop TCP probe returned network/DNS failure; subsequent same-address probe and complete rerun passed; no root cause or protocol fix claimed"
+}

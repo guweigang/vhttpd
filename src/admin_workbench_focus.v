@@ -1,6 +1,5 @@
 module main
 
-import executor
 import json2 as json
 import time
 import veb
@@ -36,8 +35,8 @@ pub fn (mut app AdminApp) workbench_log_focus_request(mut ctx Context) veb.Resul
 			cfg := cfgs[i] or { continue }
 			if !cfg.serve_data_plane || cfg.plan_listener_id != listener { continue }
 			runtime.control_plane.mu.@lock()
-			samples := runtime.control_plane.http_observations.requests[pipeline] or { []executor.AdminHttpObservationError{} }
-			found = samples.any(it.observation_id == id) || runtime.control_plane.http_observations.errors.any(it.pipeline_id == pipeline && it.observation_id == id)
+			samples := runtime.control_plane.http_observations.requests[pipeline] or { HttpObservationRing{} }
+			found = samples.entries.any(it.observation_id == id) || runtime.control_plane.http_observations.errors.entries.any(it.pipeline_id == pipeline && it.observation_id == id)
 			runtime.control_plane.mu.unlock()
 			break
 		}

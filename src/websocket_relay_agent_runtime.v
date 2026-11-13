@@ -1,5 +1,6 @@
 module main
 
+import memidle
 import net.websocket
 import time
 import relay
@@ -35,8 +36,8 @@ fn build_relay_agent_context(mut relay_runtime relay.Runtime, mut control Contro
 			} else if outcome.action == .inbound {
 				control.emit('relay.agent.inbound', relay.inbound_event_fields(outcome.inbound))
 				if relay_frame_should_dispatch_pipeline(outcome.inbound.frame) {
-					for dispatch_outcome in dispatch_host.dispatch_and_send_relay_ingress_frame(relay_id,
-						relay_agent_carrier_id(relay_id), outcome.inbound.frame, now_ms) {
+					for dispatch_outcome in dispatch_host.dispatch_and_send_relay_ingress_owned(relay_id,
+						relay_agent_carrier_id(relay_id), outcome.inbound.frame, now_ms, outcome.inbound.forwarding.lease) {
 						control.emit('relay.pipeline.dispatch',
 							relay_pipeline_dispatch_event_fields(dispatch_outcome))
 					}
@@ -198,6 +199,8 @@ pub mut:
 }
 
 fn relay_agent_message_cb(mut client websocket.Client, msg &websocket.Message, ref voidptr) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := unsafe { &RelayAgentSocketState(ref) }
 	if state.session.stopped() { return }
 	RelayAgentRuntime.handle_message(state.ctx, state.descriptor, mut client, msg)!

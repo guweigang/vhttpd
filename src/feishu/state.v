@@ -68,6 +68,7 @@ pub fn (mut s FeishuState) note_disconnected(name string, reason string) {
 	defer { s.mu.unlock() }
 	mut runtime := s.ensure_unlocked(name)
 	runtime.note_disconnected(reason)
+	s.fragments.clear(name)
 	s.runtime[name] = runtime
 }
 
@@ -574,4 +575,29 @@ pub fn (mut s FeishuState) mark_bridge_replica_unlocked(message string) {
 	if buf.bridge_owner == none { return }
 	buf.bridge_replica = true
 	s.buffers[message] = buf
+}
+
+// Only base protocol metadata is retained; event contents remain application-owned.
+pub fn (mut s FeishuState) note_protocol_failure(name string, code string) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut rt := s.ensure_unlocked(name)
+	rt.protocol.failed('decode', code, 'protocol_error')
+	s.runtime[name] = rt
+}
+
+pub fn (mut s FeishuState) note_protocol_passed(name string) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut rt := s.ensure_unlocked(name)
+	rt.protocol.passed('frame')
+	s.runtime[name] = rt
+}
+
+pub fn (mut s FeishuState) note_protocol_unknown(name string, frame_type string) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut rt := s.ensure_unlocked(name)
+	rt.protocol.unknown(frame_type)
+	s.runtime[name] = rt
 }

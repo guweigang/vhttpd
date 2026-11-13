@@ -1,0 +1,35 @@
+{
+  "utc": "2026-11-09T13:35:36Z",
+  "pid": 3730524,
+  "start_ticks": 39645663,
+  "sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+  "status_kib": {
+    "VmRSS": 138304,
+    "RssAnon": 129344,
+    "VmSwap": 0,
+    "Threads": 29
+  },
+  "health": [
+    {
+      "port": 19887,
+      "status": 200
+    },
+    {
+      "port": 19901,
+      "status": 200
+    },
+    {
+      "port": 19987,
+      "status": 200
+    }
+  ],
+  "host_mem_available_kib": 894104,
+  "observer_active": "active",
+  "own_perf_probes_removed": true,
+  "scope_run_completed": true,
+  "http_ok": 2978,
+  "paseo_ok": 19,
+  "host_min_during_run_kib": 791864,
+  "max_cgroup_memory_bytes": 139214848,
+  "last_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

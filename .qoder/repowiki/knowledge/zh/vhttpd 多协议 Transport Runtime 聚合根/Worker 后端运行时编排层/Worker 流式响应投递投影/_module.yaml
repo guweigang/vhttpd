@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: worker_backend/stream_delivery_projection
+title: Worker 流式响应投递投影
+scope:
+    - src/worker_stream_delivery_projection.v
+    - src/worker_stream_delivery_projection_test.v
+    - src/worker_backend_runtime_test.v
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: relay_system/pipeline_runtime
+title: Relay 管道运行时与构建器
+scope:
+    - src/relay_pipeline_runtime.v
+    - src/relay_pipeline_runtime_test.v
+    - src/relay_runtime_builder.v
+source_files: []
+depends_on: []
+related_to:
+    - path: core_engine/http_pipeline_runtime

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: relay_system/registration_snapshot
+title: 中继注册、运行时快照与交换投影
+scope:
+    - src/relay/registration.v
+    - src/relay/snapshot.v
+    - src/relay/exchange_projection.v
+source_files: []
+depends_on: []
+related_to: []

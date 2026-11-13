@@ -1,0 +1,159 @@
+{
+  "status": "passed",
+  "accepted_at": "2026-11-06T14:40:33.916840+00:00",
+  "client": {
+    "app": "WorkBuddy",
+    "version": "5.9.3",
+    "model": "DeepSeek-V4.1-Flash",
+    "conversation": "vhttpd MCP 验收 vjsx 项目测试",
+    "execution": "actual dialogue via custom MCP connector; not connector test harness",
+    "endpoint": "https://mcp.bullsoft.org/mcp",
+    "transport": "Streamable HTTP"
+  },
+  "desktop": {
+    "bundle": "io.vhttpd.workbench.updateqa",
+    "runtime_selection_corrected_from_old_schema_test_package": true,
+    "runtime_selected": "App bundled runtime",
+    "runtime_version": "0.9.0"
+  },
+  "public_handshake": {
+    "initialize_status": 200,
+    "server": {
+      "name": "vhttpd-desktop",
+      "version": "0.1.0"
+    },
+    "tool_count": 21,
+    "context": {
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"authorization_id\":\"8692b6d0b03a8f2ca4dd71a57c61feeeedd4ca2e639e625ec266045ae0c4a263\",\"binding_revision\":1,\"bound\":true,\"guidance_topics\":[\"project\",\"workflow\",\"develop\",\"vjsx\",\"pipeline\",\"wechat-cloud-functions\",\"codexbot\",\"deploy\",\"debug\"],\"installed\":false,\"mode\":\"source_workspace\",\"target\":{\"affects\":\"all_applications_in_source_project\",\"configuration_state\":\"missing\",\"environment\":\"empty\",\"kind\":\"local_source\",\"listeners\":[],\"phase\":\"stopped\",\"runtime_version\":\"0.9.0\"},\"workspace\":{\"configuration\":\"vhttpd.toml\",\"directory\":\".\",\"id\":\"8692b6d0b03a8f2ca4dd71a57c61feeeedd4ca2e639e625ec266045ae0c4a263\"}}"
+          }
+        ],
+        "isError": false
+      },
+      "id": 1
+    }
+  },
+  "guidance": {
+    "workflow_source": "desktop_package",
+    "workflow_version": "2",
+    "develop_source": "runtime_package",
+    "vjsx_source": "runtime_package",
+    "runtime_version": "0.9.0",
+    "runtime_profile": "script",
+    "project": "AGENTS.md absent; empty content returned"
+  },
+  "empty": {
+    "binding_revision": 1,
+    "mode": "source_workspace",
+    "installed": false,
+    "initial_attempt_missing_runtime_guidance": true,
+    "initial_changes_id": "81fd0ef9fd7596da51b4cda1",
+    "complete_runtime_retest_changes_id": "9be42eabfd89631dae9e8c14",
+    "tools": [
+      "context_get",
+      "guidance_get",
+      "templates_list",
+      "schema_get",
+      "files_list",
+      "changes_prepare",
+      "changes_validate",
+      "changes_apply",
+      "runtime_start",
+      "runtime_status",
+      "application_request",
+      "runtime_stop",
+      "changes_restore"
+    ],
+    "response_status": 200,
+    "response_body": {
+      "source_qa": "empty_public_ok"
+    },
+    "ready_pid": 52310,
+    "restored": true,
+    "files_list_after_restore": [],
+    "final_phase": "stopped",
+    "old_grant_tool_call_after_revoke": "Streamable HTTP POST failure; no context result"
+  },
+  "existing": {
+    "binding_revision": 1,
+    "mode": "source_workspace",
+    "installed": false,
+    "changes_id": "d64c103dc5660ed37a6b3ed0",
+    "only_source_edited": "main.mjs",
+    "baseline": {
+      "status": 200,
+      "body": {
+        "source_qa": "existing_base",
+        "preserved": "original"
+      },
+      "pid": 72430
+    },
+    "edited": {
+      "status": 200,
+      "body": {
+        "source_qa": "existing_public_ok",
+        "preserved": "original"
+      },
+      "pid": 73167
+    },
+    "restored": {
+      "status": 200,
+      "body": {
+        "source_qa": "existing_base",
+        "preserved": "original"
+      },
+      "pid": 73623
+    },
+    "final_phase": "stopped",
+    "baseline_files_sha256": {
+      "app.json": "30f3d537b97fd22656b65acf481df993e44f21391a59a5a9e9d5bc984f38b228",
+      "vhttpd.toml": "c8c591a2bb7027747317d67bd36b2afb6dc1c6b1ecf968c70a509fe6af33cbe8",
+      "main.mjs": "b20e35ba2ad6406fd84fb3a30aae5ebc2fc7a5258f12443e60662fb8e1e2cd1a",
+      "business.js": "6ae113f1fc5a852621f02f2fb05ef9f2717bc8203120f4dd317b5c06331aea63",
+      ".git/KEEP": "d54f836ff93741ea768ec0416c9a5c18f0af14b89ee571f1726731dda9acbb91"
+    },
+    "all_baseline_files_byte_identical": true,
+    "old_grant_tool_call_after_revoke": "Streamable HTTP POST failure; no context result",
+    "credential_not_saved_attempt": "cancelled; tool index unavailable; repeated only after UI config saved and matched current publication"
+  },
+  "revocation_independent": {
+    "old_grant_while_new_publication_active": 401,
+    "new_publication_initialize": 200,
+    "old_existing_grant_after_final_revoke": 503
+  },
+  "cleanup": {
+    "temporary_workbuddy_connector_removed": true,
+    "desktop_local_mcp_closed": true,
+    "relay_authorizations_revoked": true,
+    "test_runtime_ports_closed": {
+      "63441": true,
+      "63442": true,
+      "63443": true,
+      "63444": true
+    },
+    "source_restoration_done_by_WorkBuddy_MCP": true,
+    "runtime_generated_logs_and_lock": "retained by runtime after source restoration; moved to private QA evidence separately",
+    "empty_directory_now_physically_empty": true,
+    "existing_directory_now_exact_baseline": true
+  },
+  "evidence": {
+    "kind": "visible WorkBuddy dialogue reports and progress, plus independent file and HTTP checks; not a complete raw MCP wire transcript",
+    "dialogue_excerpts": [
+      "desktop-mcp-workbuddy-source-public-dialogue-1-2026-11-06.txt",
+      "desktop-mcp-workbuddy-source-public-dialogue-2-2026-11-06.txt",
+      "desktop-mcp-workbuddy-source-public-dialogue-3-2026-11-06.txt"
+    ]
+  },
+  "network_limit": "WorkBuddy and Desktop on same Mac; public HTTPS endpoint used, independent network egress not tested",
+  "topology": {
+    "existing_bodytest_reused": true,
+    "gateway_upstream": "127.0.0.1:58595",
+    "carrier": "local vhttpd -> public WebSocket Relay",
+    "ssh_forwarding": false,
+    "new_remote_hub": false
+  }
+}

@@ -1,5 +1,6 @@
 module ws
 
+import memidle
 import encoding.base64
 import log
 import net
@@ -56,11 +57,9 @@ fn dispatch_session_close_current(state &DispatchBridgeState, code int, reason s
 	if isnil(state) {
 		return
 	}
-	unsafe {
-		mut current := state
-		dispatch_session_begin_local_close(mut current)
-		current.rt.close_owned_target(current.conn_id, current.lifecycle, code, reason)
-	}
+	mut current := unsafe { state }
+	dispatch_session_begin_local_close(mut current)
+	current.rt.close_owned_target(current.conn_id, current.lifecycle, code, reason)
 }
 
 fn dispatch_session_followup_close(state &DispatchBridgeState, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame {
@@ -122,7 +121,7 @@ fn dispatch_session_finalize_with_details(state &DispatchBridgeState, reported_c
 	code, reason := current.lifecycle.close_details(reported_code, reported_reason)
 	should_process, worker_initiated := current.lifecycle.begin_peer_close()
 	current.rt.mark_closing(current.conn_id, current.lifecycle)
-	if should_process && current.rt.can_cleanup_fn(current.conn_id, current.lifecycle) {
+	if should_process && current.rt.can_cleanup(current.conn_id, current.lifecycle) {
 		presence := current.rt.presence(current.conn_id)
 		if resp := current.rt.dispatch_event(current.rt.build_frame('close', current.method, current.path,
 			current.query, current.headers, current.remote_addr, current.request_id, current.trace_id, '', '',
@@ -139,6 +138,8 @@ fn dispatch_session_finalize_with_details(state &DispatchBridgeState, reported_c
 }
 
 fn dispatch_session_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := unsafe { &DispatchBridgeState(ref) }
 	if !state.lifecycle.can_process_messages() {
 		log.debug('[vhttpd] websocket dispatch message ignored conn_id=${state.conn_id} request_id=${state.request_id} reason=closed')
@@ -196,7 +197,7 @@ pub fn dispatch_payload_from_message(msg &websocket.Message) (string, string, bo
 	}
 }
 
-fn dispatch_session_close_cb(mut ws_client websocket.Client, reported_code int, reported_reason string, ref voidptr) ! {
+fn dispatch_session_close_cb(mut _ws_client websocket.Client, reported_code int, reported_reason string, ref voidptr) ! {
 	state := unsafe { &DispatchBridgeState(ref) }
 	dispatch_session_finalize_with_details(state, reported_code, reported_reason)
 }

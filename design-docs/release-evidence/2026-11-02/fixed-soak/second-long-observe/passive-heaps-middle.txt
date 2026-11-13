@@ -1,0 +1,25 @@
+[New LWP 51334]
+[New LWP 49217]
+[New LWP 49216]
+[New LWP 49215]
+[New LWP 49211]
+[New LWP 49210]
+[New LWP 49209]
+[New LWP 49208]
+[New LWP 49207]
+[New LWP 49206]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x0000705a3c498e51 in __futex_abstimed_wait_common64 (private=128, cancel=true, abstime=0x0, op=265, expected=49215, futex_word=0x705a3265c990) at ./nptl/futex-internal.c:57
+
+warning: 57	./nptl/futex-internal.c: No such file or directory
+Breakpoint 1 at 0x5625c83300e0
+[Switching to Thread 0x705a3ad846c0 (LWP 49207)]
+
+Thread 10 "vhttpd" hit Breakpoint 1, 0x00005625c83300e0 in JS_Call ()
+0x705a34000b98:	15450	1916472
+0x705a34000ba8:	0	0
+0x5625c87871e0 <GC_arrays>:	35553280
+0x5625c8787208 <GC_arrays+40>:	3903488
+0x5625c8787340 <GC_arrays+352>:	0
+[Inferior 1 (process 49205) detached]

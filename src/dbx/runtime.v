@@ -15,7 +15,7 @@ import provider
 import time
 
 $if enable_db ? {
-	fn C.mysql_fetch_lengths(res &C.MYSQL_RES) &u64
+	fn C.v_mysql_fetch_column_length(res &C.MYSQL_RES, column u32) u64
 }
 
 // ── Shared types (both enable_db and !enable_db) ──
@@ -786,7 +786,6 @@ $if enable_db ? {
 			if row == unsafe { nil } {
 				break
 			}
-			lengths := C.mysql_fetch_lengths(result.result)
 			mut item := map[string]string{}
 			for i in 0 .. field_count {
 				key := if i < columns.len && columns[i] != '' { columns[i] } else { '${i}' }
@@ -794,7 +793,7 @@ $if enable_db ? {
 					item[key] = ''
 					continue
 				}
-				length := if lengths == unsafe { nil } { 0 } else { int(unsafe { lengths[i] }) }
+				length := int(C.v_mysql_fetch_column_length(result.result, u32(i)))
 				item[key] = unsafe { (&u8(row[i])).vstring_with_len(length).clone() }
 			}
 			rows << item
@@ -802,43 +801,30 @@ $if enable_db ? {
 		return rows
 	}
 
-	fn mysql_stmt_query_columns(mut conn mysql.DB, query string) ![]string {
-		mut stmt := conn.init_stmt(query)
-		defer {
-			stmt.close() or {}
-		}
-		stmt.prepare()!
-		metadata := stmt.gen_metadata()
-		if metadata == unsafe { nil } {
-			return []string{}
-		}
-		field_count := mysql.Result{
-			result: metadata
-		}.n_fields()
-		field_defs := stmt.fetch_fields(metadata)
-		mut columns := []string{cap: field_count}
-		for i in 0 .. field_count {
-			columns << unsafe { cstring_to_vstring(field_defs[i].name) }
-		}
-		C.mysql_free_result(metadata)
-		return columns
-	}
-
 	fn mysql_stmt_query_rows(mut conn mysql.DB, query string, params []string) !QueryResult {
-		columns := mysql_stmt_query_columns(mut conn, query) or { []string{} }
-		stmt := conn.prepare(query)!
+		// The legacy buffered StmtHandle fetcher treats length-delimited MySQL
+		// columns as NUL-terminated strings. Use the length-aware prepared
+		// stream API and keep its connection guard for the complete result.
+		mut stmt := conn.prepare_stream(query)!
 		defer {
 			stmt.close()
 		}
-		response := stmt.execute(params)!
+		stmt.execute(params)!
+		columns := stmt.fields().map(it.name)
 		mut rows := []map[string]string{}
-		for response_row in response {
-			mut item := map[string]string{}
-			for i, value in response_row.vals {
-				key := if i < columns.len && columns[i] != '' { columns[i] } else { '${i}' }
-				item[key] = value
+		for {
+			batch := stmt.next_batch(128)!
+			if batch.len == 0 {
+				break
 			}
-			rows << item
+			for response_row in batch {
+				mut item := map[string]string{}
+				for i, value in response_row.vals {
+					key := QueryResult.column_key(columns, i)
+					item[key] = value or { '' }
+				}
+				rows << item
+			}
 		}
 		return QueryResult{
 			columns: columns

@@ -144,7 +144,3 @@ pub fn build_websocket_dispatch_frame(event string, _method string, path string,
 		presence_users:  presence_users.clone()
 	}
 }
-
-fn classify_transport_error(err_msg string) (int, string) {
-	return transport.classify_worker_backend_error(err_msg)
-}

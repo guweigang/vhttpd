@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: provider_framework/spec_and_lifecycle
+title: Provider 规范、实例与运行时配置
+scope:
+    - src/provider/spec.v
+    - src/provider/instance.v
+    - src/provider/config.v
+    - src/provider/context.v
+    - src/provider/name.v
+    - src/provider/types.v
+source_files: []
+depends_on: []
+related_to: []

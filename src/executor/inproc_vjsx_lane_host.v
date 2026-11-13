@@ -1,6 +1,7 @@
 module executor
 
 import vjsx
+import configcache
 
 struct VjsxLaneHost {
 mut:
@@ -15,6 +16,7 @@ mut:
 	session           ?&vjsx.RuntimeSession
 	module_binding    ?&vjsx.ScriptModule
 	request_ctx       InProcVjsxRequestContext
+	config_cache      ?&configcache.Cache
 }
 
 fn VjsxLaneHost.empty() VjsxLaneHost {
@@ -22,6 +24,8 @@ fn VjsxLaneHost.empty() VjsxLaneHost {
 }
 
 fn (mut host VjsxLaneHost) destroy() {
+	if mut cache := host.config_cache { cache.close() }
+	host.config_cache = none
 	if owner := host.wakeup_owner { owner.retire() }
 	host.wakeup_owner = none
 	// Module values depend on the session context: release them first.
@@ -69,11 +73,6 @@ fn (host VjsxLaneHost) context() &vjsx.Context {
 fn (host VjsxLaneHost) resolve_value(val vjsx.Value) !vjsx.Value {
 	session := host.session_handle() or { return error('inproc_vjsx_executor_session_missing') }
 	return session.resolve_value(val)
-}
-
-fn (host VjsxLaneHost) pump_until_idle() {
-	session := host.session_handle() or { return }
-	session.pump_until_idle()
 }
 
 fn (host VjsxLaneHost) call_handler(handler vjsx.Value, args ...vjsx.AnyValue) !vjsx.Value {

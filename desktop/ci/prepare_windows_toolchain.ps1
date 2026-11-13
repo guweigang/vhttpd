@@ -1,0 +1,115 @@
+param([switch]$RuntimeOnly, [switch]$ReuseCached)
+$ErrorActionPreference = 'Stop'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$lock = Get-Content (Join-Path $root 'scripts/ci/toolchain.env') -Raw | ConvertFrom-StringData
+$toolchain = Join-Path $env:RUNNER_TEMP 'workbench-windows-toolchain'
+if ($ReuseCached -and !$RuntimeOnly) { throw 'Toolchain reuse is limited to standalone runtime CI' }
+if (!$ReuseCached -and (Test-Path $toolchain)) { throw 'Toolchain directory must be new' }
+if (!$ReuseCached) { New-Item -ItemType Directory $toolchain | Out-Null }
+function Checkout-Pinned($url, $revision, $destination) {
+ & git init -q $destination
+ if ($LASTEXITCODE -ne 0) { throw 'git init failed' }
+ & git -C $destination config core.autocrlf false
+ & git -C $destination remote add origin $url
+ & git -C $destination fetch --depth 1 origin $revision
+ if ($LASTEXITCODE -ne 0) { throw "fetch failed: $url" }
+ & git -C $destination checkout -q --detach FETCH_HEAD
+ if ($LASTEXITCODE -ne 0) { throw 'checkout failed' }
+ if ((& git -C $destination rev-parse HEAD).Trim() -ne $revision) { throw 'Pinned revision mismatch' }
+}
+$v = Join-Path $toolchain 'v'
+$sdk = Join-Path $toolchain 'vjsx'
+$quickjs = Join-Path $toolchain 'quickjs'
+$qbuild = Join-Path $toolchain 'quickjs-build'
+if (!$ReuseCached) {
+Checkout-Pinned $lock.V_REPO $lock.V_COMMIT $v
+Checkout-Pinned $lock.VC_REPO $lock.VC_COMMIT (Join-Path $v 'vc')
+Checkout-Pinned $lock.VJSX_REPO $lock.VJSX_COMMIT $sdk
+$quickjsCommit = (Get-Content (Join-Path $sdk '.quickjs-version') -Raw).Trim()
+Checkout-Pinned 'https://github.com/quickjs-ng/quickjs' $quickjsCommit $quickjs
+& bash ((Join-Path $sdk 'scripts/patch-quickjs.sh') -replace '\\','/') ($quickjs -replace '\\','/')
+if ($LASTEXITCODE -ne 0) { throw 'QuickJS patch failed' }
+# The current amalgamation enables GNU atomics unconditionally. MSVC must
+# use V's existing libatomic_ops branch instead; this patch affects only this
+# disposable toolchain checkout, never the developer's V installation.
+$patch = Join-Path $root 'desktop/patches/v-windows-msvc-build.patch'
+& git -C $v apply --check $patch
+if ($LASTEXITCODE -ne 0) { throw 'Pinned MSVC build patch no longer applies' }
+& git -C $v apply $patch
+if ($LASTEXITCODE -ne 0) { throw 'MSVC build patch failed' }
+# Resolve headers and libraries only from the vcpkg SDK, never an unrelated
+# system OpenSSL under Program Files (same rule as vjsx Windows CI).
+foreach ($relative in @('vlib/net/openssl/openssl.c.v', 'vlib/crypto/ecdsa/ecdsa_d_use_openssl.c.v')) {
+ $file = Join-Path $v $relative
+ $lines = Get-Content $file | Where-Object { $_ -notmatch '^#flag windows -[IL]\s*"?C:/Program Files/OpenSSL' }
+ [IO.File]::WriteAllLines($file, [string[]]$lines, [Text.UTF8Encoding]::new($false))
+}
+if ($RuntimeOnly) {
+ $pg = Join-Path $v 'vlib/db/pg/pg.c.v'
+ $pgLines = Get-Content $pg | Where-Object { $_ -notmatch '^\s*#flag windows -[IL] .*@VEXEROOT/thirdparty/pg' }
+ [IO.File]::WriteAllLines($pg, [string[]]$pgLines, [Text.UTF8Encoding]::new($false))
+ $mysql = Join-Path $v 'vlib/db/mysql/_cdefs_windows.c.v'
+ [IO.File]::WriteAllText($mysql, @'
+module mysql
+#flag windows -llibmariadb
+#include <mysql.h>
+#include "@VMODROOT/vlib/db/mysql/mysql_compat.h"
+'@, [Text.UTF8Encoding]::new($false))
+}
+$env:VFLAGS = '-cc msvc -gc boehm'
+# Disable the launcher's legacy compiler retry so errors belong to the pinned V.
+$env:V_MACOS_V3_NO_FALLBACK = '1'
+# Same SDK macro hygiene as the full Desktop compile, scoped to V bootstrap.
+$formerClFlags = $env:CL
+$env:CL = '/FI"' + (Join-Path $root 'desktop/ci/msvc_sdk_compat.h') + '" ' + $formerClFlags
+Push-Location $v
+try {
+ & .\makev.bat -msvc --local
+ if ($LASTEXITCODE -ne 0) { throw 'Native Windows V bootstrap failed' }
+ $version = (& .\v.exe version | Out-String).Trim()
+ Write-Host $version
+ if (!$version.Contains($lock.V_COMMIT.Substring(0,7))) { throw "Unexpected compiler version: $version" }
+ if ($LASTEXITCODE -ne 0) { throw 'Native V unavailable' }
+} finally { Pop-Location; $env:CL = $formerClFlags }
+& cmake -S $quickjs -B $qbuild -G 'Visual Studio 17 2022' -A x64 -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
+if ($LASTEXITCODE -ne 0) { throw 'QuickJS configure failed' }
+& cmake --build $qbuild --config Release --target qjs_exe --parallel 2
+if ($LASTEXITCODE -ne 0) { throw 'QuickJS build failed' }
+$qlib = Get-ChildItem $qbuild -Filter qjs.lib -File -Recurse | Select-Object -First 1
+$qexe = Get-ChildItem $qbuild -Filter qjs.exe -File -Recurse | Select-Object -First 1
+if (!$qlib -or !$qexe) { throw 'QuickJS output missing' }
+$result = (& $qexe.FullName -e 'print(1 + 1)' | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $result -ne '2') { throw 'QuickJS smoke failed' }
+# Runtime builds share the same pinned V/QuickJS preparation, without ui2.
+if (!$RuntimeOnly) {
+ $ui2 = Join-Path $root '.deps/ui2'
+ Checkout-Pinned 'https://github.com/vlang/ui2' ((Get-Content (Join-Path $root 'desktop/ui2.commit') -Raw).Trim()) $ui2
+ $modules = Join-Path $toolchain 'modules'
+ $env:VHTTPD_DESKTOP_V = Join-Path $v 'v.exe'
+ & bash ((Join-Path $root 'desktop/prepare-ui2.sh') -replace '\\','/') ((Join-Path $modules 'ui2') -replace '\\','/')
+ if ($LASTEXITCODE -ne 0) { throw 'Build-local ui2 staging failed' }
+ & git -C $ui2 diff --exit-code
+ if ($LASTEXITCODE -ne 0) { throw 'Upstream ui2 checkout was modified' }
+ Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_MODULES=$modules"
+}
+}
+# Check cached compiler/SDK identity too; cache lookup never substitutes a pin.
+$version = (& (Join-Path $v 'v.exe') version | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or !$version.Contains($lock.V_COMMIT.Substring(0,7))) { throw 'Cached V compiler pin mismatch' }
+if ((& git -C $sdk rev-parse HEAD).Trim() -ne $lock.VJSX_COMMIT) { throw 'Cached vjsx pin mismatch' }
+if ((& git -C $sdk status --porcelain | Out-String).Trim()) { throw 'Cached vjsx source is dirty' }
+$quickjsCommit = (Get-Content (Join-Path $sdk '.quickjs-version') -Raw).Trim()
+$qlib = Get-ChildItem $qbuild -Filter qjs.lib -File -Recurse | Select-Object -First 1
+if (!$qlib) { throw 'QuickJS library missing from toolchain' }
+Add-Content $env:GITHUB_PATH $v
+Add-Content $env:GITHUB_ENV "VJSX_DIR=$sdk"
+Add-Content $env:GITHUB_ENV "VJS_QUICKJS_PATH=$quickjs"
+Add-Content $env:GITHUB_ENV "VJS_QUICKJS_LIB_PATH=$($qlib.FullName)"
+Add-Content $env:GITHUB_ENV "WORKBENCH_WINDOWS_SDK_PARENT=$toolchain"
+Add-Content $env:GITHUB_ENV "VFLAGS=-cc msvc -gc boehm"
+New-Item -ItemType Directory -Force (Join-Path $root 'desktop/ci/results/windows-build') | Out-Null
+Get-Content (Join-Path $root 'scripts/ci/toolchain.env') | Set-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt')
+Add-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt') "QUICKJS_COMMIT=$quickjsCommit"
+Add-Content $env:GITHUB_ENV "V_MACOS_V3_NO_FALLBACK=1"
+Add-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt') "C_COMPILER=MSVC"
+Add-Content (Join-Path $root 'desktop/ci/results/windows-build/toolchain.txt') "V_BUILD_PATCH=desktop/patches/v-windows-msvc-build.patch"

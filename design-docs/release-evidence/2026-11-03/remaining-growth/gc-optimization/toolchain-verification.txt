@@ -1,0 +1,7 @@
+V 0.5.2 d13ccdd
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+f9e86e7f5350ae532f210aff99cc213a938fd3a3c528c48a2cb30ef7f98aaed3  v
+6dc2f3273b6b72269f5f7be7646b28fcc5ce613420ed157edb12aba089f19bce  thirdparty/libgc/gc.c
+ff47c1797d210153d6b51f2a6b5eaa0149fdd177a77099862b58a0883a8873c7  vlib/v/gen/c/struct.v
+830c72340dfa41ad99d22784ee7f1122e491587541fbed034179f8db8c449149  vlib/builtin/gc_uncollectable_reclaim_test.v
+f76696753ca8e9576186577c419acf0202df6ea57046cbec67bc649e41a767b2  vlib/builtin/gc_uncollectable_reclaim_test.c.h

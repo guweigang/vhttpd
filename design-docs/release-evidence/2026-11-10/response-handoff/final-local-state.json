@@ -1,0 +1,47 @@
+{
+  "temporary_benchmark_removed": true,
+  "host_v": {
+    "branch": {
+      "exit": 0,
+      "stdout": "local-dev\n",
+      "stderr": ""
+    },
+    "head": {
+      "exit": 0,
+      "stdout": "d13ccdd0768496cd6faea9ddfbdd0ddf9e4c4186\n",
+      "stderr": ""
+    },
+    "status": {
+      "exit": 0,
+      "stdout": " M thirdparty/libgc/gc.c\n M vlib/v/compiler_tests/lock_codegen_test.v\n M vlib/v/gen/c/struct.v\n M vlib/veb/README.md\n M vlib/veb/context.v\n M vlib/veb/controller.v\n M vlib/veb/veb.v\n M vlib/veb/veb_fasthttp.v\n?? vlib/builtin/gc_uncollectable_reclaim_test.c.h\n?? vlib/builtin/gc_uncollectable_reclaim_test.v\n?? vlib/v/tests/concurrency/shared_gc_memory_test.v\n?? vlib/veb/request_activity.v\n?? vlib/veb/request_activity_test.v\n?? vlib/veb/response_writer_append_test.v\n?? vlib/veb/response_writer_transfer_test.v\n",
+      "stderr": ""
+    },
+    "diff_check": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "workspace": {
+    "branch": {
+      "exit": 0,
+      "stdout": "feature/desktop-workbench\n",
+      "stderr": ""
+    },
+    "head": {
+      "exit": 0,
+      "stdout": "f70ee59d356f2c4e71479993711ed3f4bf49bd96\n",
+      "stderr": ""
+    },
+    "status": {
+      "exit": 0,
+      "stdout": " M desktop/devmcp/capabilities.v\n M desktop/devmcp/protocol_probe.v\n M desktop/devmcp/relay_management.v\n M desktop/devmcp/server.v\n M desktop/host/mcp_inspect.v\n M desktop/host/protocol_probe.v\n D desktop/host/protocol_probe_credentials.v\n D desktop/host/protocol_probe_credentials_test.v\n M desktop/host/protocol_probe_tls_test.v\n M desktop/host/remote_scripts/protocol_probe.py\n M src/executor/embedded_host_test.v\n M src/executor/inproc_vjsx_host_api.v\n M src/executor/inproc_vjsx_host_config_api.v\n M src/executor/inproc_vjsx_host_lifecycle.v\n M src/executor/inproc_vjsx_lane_host.v\n M src/http_observation_runtime.v\n?? .openidea/\n?? design-docs/release-evidence/\n?? desktop/ci/protocol_probe_auth_fixture.py\n?? desktop/ci/test_protocol_probe_digest_mtls.py\n?? desktop/ci/test_protocol_probe_references.py\n?? desktop/examples/api-playground/admin/\n?? desktop/examples/api-playground/application-logs/\n?? desktop/host/protocol_probe_auth.v\n?? desktop/host/protocol_probe_auth_test.v\n?? desktop/host/protocol_probe_digest.v\n?? desktop/host/protocol_probe_digest_test.v\n?? desktop/host/protocol_probe_peer_test.v\n?? desktop/host/protocol_probe_remote.v\n?? desktop/host/protocol_probe_remote_test.v\n?? desktop/host/remote_scripts/protocol_probe_config.py\n?? src/configcache/\n?? src/executor/config_cache_host_test.v\n",
+      "stderr": ""
+    },
+    "diff_check": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "checked_at": "2026-11-06T14:03:30.927538+00:00",
+  "scope": "existing bodytest instance; existing public reverse proxy to 127.0.0.1:58595",
+  "remote_upgrade": {
+    "previous_id": "sha256-51086217838889ddaccbcf2a7d734341fa38db0b9b7c128c1104677a90960d07",
+    "target_id": "sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041",
+    "archive_sha256": "506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041",
+    "binary_sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+    "check": {
+      "protocol": 1,
+      "revision": "10b4306f17dd757da1be8db6bc8060ad4de5bcf3f4f13722817b848c15301da2",
+      "version": "0.9.0"
+    },
+    "build_info": {
+      "gc": "boehm",
+      "gc_enabled": true,
+      "version": "0.9.0"
+    },
+    "upgrade_id": "652191c30dae12bb18900798",
+    "previous_boot": "5fd3b674cd47f51781e5367518511ca2",
+    "config_sha256": "53c009f50a7c0d13674ac1214ed8bdd539e00b357ce22780e0a99fd15c25cf04",
+    "ingress_sha256": "83cf501d84c600cc84c6406971185a811cbeec6a95f42ab6b8118ae37ab52e9b",
+    "first_attempt_id": "92359faac6c591cf06d6fbb5",
+    "status": {
+      "id": "652191c30dae12bb18900798",
+      "config_path": "/root/.local/share/vhttpd-workbench/instances/bodytest/vhttpd.toml",
+      "previous_id": "sha256-51086217838889ddaccbcf2a7d734341fa38db0b9b7c128c1104677a90960d07",
+      "target_id": "sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041",
+      "phase": "completed",
+      "error": "",
+      "version": "0.9.0",
+      "boot_id": "05576580e410c6a21f66637a8bd744bb",
+      "revision": "10b4306f17dd757da1be8db6bc8060ad4de5bcf3f4f13722817b848c15301da2"
+    },
+    "live": {
+      "ready": true,
+      "boot_id": "05576580e410c6a21f66637a8bd744bb",
+      "version": "0.9.0",
+      "effective_revision": "10b4306f17dd757da1be8db6bc8060ad4de5bcf3f4f13722817b848c15301da2",
+      "disk_revision": "10b4306f17dd757da1be8db6bc8060ad4de5bcf3f4f13722817b848c15301da2"
+    },
+    "config_unchanged": true,
+    "ingress_unchanged": true,
+    "carrier_count": 0,
+    "request_removed": true,
+    "lock_removed": true
+  },
+  "carrier_reference": {
+    "saved_relay_id_matches": true,
+    "saved_carrier_token_matches": true
+  },
+  "candidate_smoke": {
+    "passed": true,
+    "no_agent_status": [
+      {
+        "method": "GET",
+        "status": 503,
+        "body": ""
+      },
+      {
+        "method": "POST",
+        "status": 503,
+        "body": ""
+      },
+      {
+        "method": "DELETE",
+        "status": 503,
+        "body": ""
+      }
+    ],
+    "gc": {
+      "gc": "boehm",
+      "gc_enabled": true,
+      "version": "0.9.0"
+    }
+  },
+  "linux_regression": {
+    "test": "src/relay_pipeline_runtime_test.v",
+    "passed": 1,
+    "total": 1,
+    "compiler": "V 0.5.2 d13ccdd",
+    "vjsx": "259620f1981a3573777ec8cda72883b1866404a7",
+    "environment": "existing OrbStack Ubuntu ARM; dependencies unchanged",
+    "command": "v -cc gcc -gc none -nocache -d build_quickjs -d vjsx_sqlite -d enable_db -d use_openssl -enable-globals -path <src>|<aligned-vjsx>|@vlib|@vmodules test src/relay_pipeline_runtime_test.v"
+  },
+  "candidate_build": {
+    "platform": "linux/amd64",
+    "existing_image": "vhttpd-gc-o2-toolchain:20261103",
+    "gc": "boehm",
+    "image_v_compiler_has_preexisting_changes": true,
+    "dependency_sources_changed": false
+  },
+  "observations": {
+    "origin_post_mcp_status": 503,
+    "public_initialize_status": 503,
+    "business_get_root_status": 405,
+    "business_error_code": "METHOD_NOT_ALLOWED",
+    "business_matches_baseline": true,
+    "actual_desktop_local_mcp_initialize": 200,
+    "actual_desktop_context_get": "bound source_workspace, configuration missing, runtime stopped",
+    "public_agent": "expired temporary publication; no active carrier observed",
+    "new_hub_created": false,
+    "ssh_forwarding_used": false,
+    "gateway_changed": false
+  },
+  "followup_acceptance": {
+    "status": "passed",
+    "evidence": "desktop-mcp-workbuddy-source-public-acceptance-2026-11-06.json",
+    "note": "Original observations above describe the earlier repair checkpoint. Actual Desktop republishing, public handshake and WorkBuddy source development/recovery/revocation subsequently passed."
+  },
+  "checkpoint_before_acceptance": {
+    "status": "runtime_repair_passed_public_acceptance_pending",
+    "pending": [
+      "republish Relay from actual Desktop UI with corrected saved carrier",
+      "public Streamable HTTP initialize, tools/list and tools/call",
+      "WorkBuddy actual dialogue for empty source workspace",
+      "WorkBuddy actual dialogue for existing source workspace",
+      "WorkBuddy old-grant tool rejection after revoke"
+    ],
+    "blocker": "Computer Use unavailable in current tool set; requested restoration; no substitute scripted client accepted as WorkBuddy dialogue",
+    "source_fixtures": {
+      "empty_still_empty": true,
+      "existing_files_byte_identical_to_baseline": true,
+      "WorkBuddy_development_not_yet_executed": true
+    }
+  },
+  "status": "passed",
+  "pending": [],
+  "observation_scope": "Runtime repair checkpoint observations are historical; completed public and WorkBuddy validation is linked under followup_acceptance."
+}

@@ -1,0 +1,25 @@
+schema_version: 1
+module_path: runtime_executors/inproc_vjsx_runtime/websocket_layer
+title: In-Process VJSX WebSocket 执行器
+scope:
+    - src/executor/inproc_vjsx_websocket_actor_policy.v
+    - src/executor/inproc_vjsx_websocket_actor_runtime.v
+    - src/executor/inproc_vjsx_websocket_affinity_runtime.v
+    - src/executor/inproc_vjsx_websocket_affinity_state.v
+    - src/executor/inproc_vjsx_websocket_callback_runtime.v
+    - src/executor/inproc_vjsx_websocket_dispatch_js.v
+    - src/executor/inproc_vjsx_websocket_event_runtime.v
+    - src/executor/inproc_vjsx_websocket_js.v
+    - src/executor/inproc_vjsx_websocket_lane_query_runtime.v
+    - src/executor/inproc_vjsx_websocket_mailbox.v
+    - src/executor/inproc_vjsx_websocket_policy.v
+    - src/executor/inproc_vjsx_websocket_request.v
+    - src/executor/inproc_vjsx_websocket_response_codec.v
+    - src/executor/inproc_vjsx_websocket_runtime_payload.v
+    - src/executor/inproc_vjsx_websocket_session_store_js.v
+    - src/executor/inproc_vjsx_websocket_task_awaiter.v
+    - src/executor/inproc_vjsx_websocket_types.v
+    - src/executor/inproc_vjsx_websocket_upstream_runtime.v
+source_files: []
+depends_on: []
+related_to: []

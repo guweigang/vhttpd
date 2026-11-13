@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: runtime_executors/inproc_vjsx_runtime
+title: In-Process VJSX 执行器运行时
+scope:
+    - src/executor/
+source_files: []
+depends_on: []
+related_to: []

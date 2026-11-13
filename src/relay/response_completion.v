@@ -86,7 +86,7 @@ pub fn response_completion_from_returned(outbound OutboundOutcome, send_result C
 	}
 	fields['returned_frame_id'] = returned.id
 	delivery := returned_frame_delivery_outcome(returned)
-	error := if delivery.kind == .failure { delivery.error } else { '' }
+	completion_error := if delivery.kind == .failure { delivery.error } else { '' }
 	return ResponseCompletionOutcome{
 		action:      if delivery.kind == .failure {
 			ResponseCompletionAction.failed
@@ -99,7 +99,7 @@ pub fn response_completion_from_returned(outbound OutboundOutcome, send_result C
 		frame_id:    outbound.frame.id
 		send_result: send_result
 		delivery:    delivery
-		error:       error
+		error:       completion_error
 		fields:      response_completion_fields_with_action(fields, if delivery.kind == .failure {
 			'failed'
 		} else {
@@ -181,12 +181,12 @@ pub fn response_completion_delivery_outcome(completion ResponseCompletionOutcome
 			} else {
 				'relay_response_completion_failed'
 			}
-			error := if completion.error != '' {
+			completion_error := if completion.error != '' {
 				completion.error
 			} else {
 				completion.delivery.error
 			}
-			return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(status, error,
+			return dispatch.outcome_with_metadata(dispatch.delivery_failure_outcome(status, completion_error,
 				error_class), response_completion_delivery_metadata(completion))
 		}
 	}

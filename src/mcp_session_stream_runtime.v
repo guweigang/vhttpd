@@ -9,7 +9,7 @@ import worker
 
 @['/mcp'; get]
 pub fn (mut app App) mcp_get(mut ctx Context) veb.Result {
-	return mcp_handle_get_http(mut app, mut ctx)
+	return HttpIngressRuntime.route(mut app, mut ctx, 'GET', ctx.req.url)
 }
 
 fn mcp_handle_get_http(mut app App, mut ctx Context) veb.Result {

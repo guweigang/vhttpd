@@ -5,6 +5,7 @@ import upstream.transport
 import net.http
 import os
 import time
+import json2 as json
 
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_use_selection_scope() {
 	codexbot_ts_with_temp_db('codexbot_ts_projects_models.sqlite', fn (_ string) {
@@ -246,7 +247,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_and_models_commands_u
 		}) or { panic(err) }
 		assert next_task.handled
 		codexbot_ts_assert_single_response(next_task.commands)
-		assert next_task.commands[0].method == 'turn/start'
+		assert next_task.commands[0].method == 'thread/resume'
 		assert next_task.commands[0].params.contains('"model":"gpt-5.4"')
 		assert next_task.commands[0].params.contains('"threadId":"alpha"')
 		assert next_task.commands[0].params.contains('/beta')
@@ -457,6 +458,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_create_import_and_bind_project
 			req:         http.Request{
 				method: .get
 				url:    '/admin/state'
+				header: codexbot_ts_test_header()
 				host:   'example.test'
 			}
 			remote_addr: '127.0.0.1'
@@ -554,7 +556,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_projects_self_heal_legacy_bind
 
 		mutator_file := os.join_path(mutator_dir, 'mutator.mts')
 		mutator_source := 'import { open } from "sqlite";\n' + '\n' +
-			'globalThis.__vhttpd_handle = async (ctx) => {\n' + '  const dbPath = process.env.CODEXBOT_TS_DB_PATH;\n' + '  const db = await open({ path: dbPath, busyTimeout: 5000 });\n' + '  await db.exec("delete from project_binding_state where chat_id = \'chat_codexbot_ts_legacy_projects\'");\n' + '  await db.exec("delete from project_registry where project_key = \'alpha\'");\n' + '  await db.close();\n' + '  return ctx.json({ ok: true, dbPath });\n' + '};\n'
+			'globalThis.__vhttpd_handle = async (ctx) => {\n' + '  const dbPath = ' + json.encode(os.join_path(codexbot_ts_fixture_root(), 'data', 'codexbot_ts_legacy_project_bindings.sqlite')) + ';\n' + '  const db = await open({ path: dbPath, busyTimeout: 5000 });\n' + '  await db.exec("delete from project_binding_state where chat_id = \'chat_codexbot_ts_legacy_projects\'");\n' + '  await db.exec("delete from project_registry where project_key = \'alpha\'");\n' + '  await db.close();\n' + '  return ctx.json({ ok: true, dbPath });\n' + '};\n'
 		os.write_file(mutator_file, mutator_source) or { panic(err) }
 
 		app_file := codexbot_ts_app_file()
@@ -800,12 +802,13 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_settings_command_controls_proj
 
 		create_without_setting := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
 			'codexbot_ts_settings_create_fail', 'trace_codexbot_ts_settings_create_fail',
-			'chat_codexbot_ts_settings', 'om_codexbot_ts_settings_create_fail', '/create gamma') or {
+			'chat_codexbot_ts_settings', 'om_codexbot_ts_settings_create_fail', '/create from_config') or {
 			panic(err)
 		}
 		assert create_without_setting.handled
 		codexbot_ts_assert_single_response(create_without_setting.commands)
-		assert create_without_setting.commands[0].text.contains('**Project Root Missing**')
+		assert create_without_setting.commands[0].text.contains('**Project Created**')
+		assert os.is_dir(os.join_path(codexbot_ts_fixture_root(), 'projects', 'from_config'))
 
 		setting_resp := codexbot_ts_dispatch_feishu_message(mut executor, mut app,
 			'codexbot_ts_settings_update', 'trace_codexbot_ts_settings_update',
@@ -851,7 +854,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_instances_command_normalizes_l
 
 		mutator_file := os.join_path(mutator_dir, 'mutator.mts')
 		mutator_source := 'import { open } from "sqlite";\n' + '\n' +
-			'globalThis.__vhttpd_handle = async (ctx) => {\n' + '  const dbPath = process.env.CODEXBOT_TS_DB_PATH;\n' + '  const db = await open({ path: dbPath, busyTimeout: 5000 });\n' + '  await db.exec("insert into instance_registry (provider, instance, config_json, desired_state, created_at, updated_at) values (\'codex\', \'default\', \'{}\', \'connected\', 1, 1) on conflict(provider, instance) do update set config_json = excluded.config_json, desired_state = excluded.desired_state, updated_at = excluded.updated_at");\n' +
+			'globalThis.__vhttpd_handle = async (ctx) => {\n' + '  const dbPath = ' + json.encode(os.join_path(codexbot_ts_fixture_root(), 'data', 'codexbot_ts_instances_legacy_alias.sqlite')) + ';\n' + '  const db = await open({ path: dbPath, busyTimeout: 5000 });\n' + '  await db.exec("insert into instance_registry (provider, instance, config_json, desired_state, created_at, updated_at) values (\'codex\', \'default\', \'{}\', \'connected\', 1, 1) on conflict(provider, instance) do update set config_json = excluded.config_json, desired_state = excluded.desired_state, updated_at = excluded.updated_at");\n' +
 			'  await db.close();\n' + '  return ctx.json({ ok: true, dbPath });\n' + '};\n'
 		os.write_file(mutator_file, mutator_source) or { panic(err) }
 

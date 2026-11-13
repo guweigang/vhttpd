@@ -655,6 +655,8 @@ function decodeRpcErrorMessage(payload) {
   const direct = pickFirstString(
     payload?.error?.message,
     payload?.error?.data?.message,
+    payload?.raw_response?.error?.message,
+    payload?.has_error ? payload?.result?.message : "",
   );
   if (direct) {
     return direct;

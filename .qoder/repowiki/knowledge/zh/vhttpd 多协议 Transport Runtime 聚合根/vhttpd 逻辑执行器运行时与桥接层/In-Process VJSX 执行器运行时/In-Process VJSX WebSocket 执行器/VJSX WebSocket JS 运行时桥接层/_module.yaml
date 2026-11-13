@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: runtime_executors/inproc_vjsx_runtime/websocket_layer/js_integration
+title: VJSX WebSocket JS 运行时桥接层
+scope:
+    - src/executor/inproc_vjsx_websocket_dispatch_js.v
+    - src/executor/inproc_vjsx_websocket_js.v
+    - src/executor/inproc_vjsx_websocket_session_store_js.v
+source_files: []
+depends_on: []
+related_to: []

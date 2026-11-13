@@ -1,0 +1,7 @@
+{
+  "benchmark": "python3 reproduce_benchmark.py --vroot /absolute/patched/v --output results.json",
+  "test": "VJOBS=1 /path/to/v -cc gcc -gc none -d use_openssl test /path/to/vlib/veb/{response_writer_transfer_test.v,response_writer_append_test.v,context_response_test.v,middleware_response_lifetime_test.v,controller_static_regression_test.v} (shell brace expansion)",
+  "macos": "same with -cc cc -gc boehm",
+  "linux_boehm": "Exact argv in linux-owner-boehm-results.json; timeout30s run binary",
+  "autofree_baseline": "Restore four .before files in isolated veb module tree; v -cc cc -gc boehm -autofree -d use_openssl -path \"/absolute/baseline-root|@vlib|@vmodules\" -o baseline-test /absolute/baseline-root/veb/middleware_response_lifetime_test.v; run binary. Generated C verified without owned_response_body."
+}

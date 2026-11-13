@@ -48,21 +48,22 @@ export function createThreadSessionCoordinator(deps) {
     return pending;
   }
 
-  async function continueQueuedTurnStart(streamId, threadId, threadPath = "") {
+  async function continueQueuedTurnStart(streamId, threadId, threadPath = "", options = {}) {
     if (!streamId || !threadId) {
       return [];
     }
+    let latest = await deps.getStreamState(streamId);
+    if (!latest || latest.turnId) return [];
+    // thread/started may precede the resume response. It cannot start the prompt.
+    const allowed = options.resumed ? ["resuming_thread"] : ["queued", "thread_ready", "thread_ready_notified"];
+    if (latest.status && !allowed.includes(latest.status)) return [];
+    if (options.resumed) {
+      const current = await deps.ensureChatState(latest.sessionKey, latest.chatId);
+      if (current.threadId !== threadId || current.lastStreamId !== streamId) return [];
+    }
     const bound = await deps.bindThreadToStream(streamId, threadId, threadPath || "");
-    const latest = bound?.stream || await deps.getStreamState(streamId);
-    if (!latest) {
-      return [];
-    }
-    if (latest.turnId) {
-      return [];
-    }
-    if (latest.status && !["queued", "thread_ready", "thread_ready_notified"].includes(latest.status)) {
-      return [];
-    }
+    latest = bound?.stream || await deps.getStreamState(streamId);
+    if (!latest) return [];
     await deps.finalizeStreamState(streamId, {
       status: "starting_turn",
       threadPath: threadPath || latest.threadPath || "",

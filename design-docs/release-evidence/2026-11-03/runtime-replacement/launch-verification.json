@@ -1,0 +1,14 @@
+{
+  "verified_utc": "2026-11-03T02:40:00.060641+00:00",
+  "pid": 697847,
+  "exe": "/root/vhttpd-release-tests/20261103-fixed6/package/vhttpd",
+  "sha256": "dd079b74542580f7ed7acdbdeb372b671c006c9c687b5158e908fa63dabf5c7d",
+  "unit": "vhttpd-soak-fixed6-24h-20261103.service",
+  "unit_state": "CPUQuotaPerSecUSec=1s\nMemoryMax=536870912\nMemorySwapMax=0\nActiveState=active\nSubState=running\n",
+  "production_pid": 9303,
+  "production_start_ticks": "601054",
+  "started_cst": "2026-11-03T10:39:20+08:00",
+  "pressure_start_cst": "2026-11-03T10:49:20+08:00",
+  "pressure_end_cst": "2026-11-04T10:49:20+08:00",
+  "cooldown_end_cst": "2026-11-04T10:59:20+08:00"
+}

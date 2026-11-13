@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: runtime_executors/inproc_vjsx_runtime/websocket_layer/request_response_payload
+title: WebSocket 请求/响应载荷编解码
+scope:
+    - src/executor/inproc_vjsx_websocket_request.v
+    - src/executor/inproc_vjsx_websocket_response_codec.v
+    - src/executor/inproc_vjsx_websocket_runtime_payload.v
+source_files: []
+depends_on: []
+related_to: []

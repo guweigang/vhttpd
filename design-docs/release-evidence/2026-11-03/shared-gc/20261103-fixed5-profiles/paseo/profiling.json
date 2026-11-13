@@ -1,0 +1,12 @@
+{
+  "diagnostic_only": true,
+  "acceptance_run": false,
+  "real_binary": "/root/vhttpd-release-tests/20261102-fixed5/package/vhttpd",
+  "workload": "paseo",
+  "long_soak_pid_untouched": 108824,
+  "memory_max_mib": 256,
+  "cpu_quota_percent": 30,
+  "flush_memory_max_mib": 384,
+  "flush_cpu_quota_percent": 50,
+  "reason": "heaptrack interpreter/compressor memory pressure"
+}

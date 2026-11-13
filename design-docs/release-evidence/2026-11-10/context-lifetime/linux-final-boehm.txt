@@ -1,0 +1,6 @@
+[veb] handler for route "/panic" panicked: worker writer panic fixture
+[veb] Running multi-threaded app on http://localhost:13009/
+listening on http://[::]:13009/
+> client retries: 1
+> client retries: 1
+> client retries: 1

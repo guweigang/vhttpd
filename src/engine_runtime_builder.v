@@ -29,13 +29,14 @@ struct AdditionalEngineTargets {
 fn build_engine_runtime_with_diagnostics_from_plan(cfg config.VhttpdConfig, executor_plan executor.LogicExecutorRuntimePlan, plan runtime_plan.RuntimePlan, listener_id string, routes []RuntimeRouteRule, build_cfg server_lifecycle.AppRuntimeBuildConfig) EngineRuntimeBuildResult {
 	additional := build_additional_engine_workers_with_diagnostics_from_plan(cfg, executor_plan,
 		plan, listener_id, routes, build_cfg)
+	mut runtime := EngineRuntime{
+		primary:worker_state_from_executor_plan(executor_plan, build_cfg,
+			build_cfg.worker_read_timeout_ms,build_cfg.worker_queue_capacity,build_cfg.worker_queue_timeout_ms)
+		additional:additional.workers
+	}
+	runtime.configure_application_logs(plan,listener_id)
 	return EngineRuntimeBuildResult{
-		runtime:     EngineRuntime{
-			primary:    worker_state_from_executor_plan(executor_plan, build_cfg,
-				build_cfg.worker_read_timeout_ms, build_cfg.worker_queue_capacity,
-				build_cfg.worker_queue_timeout_ms)
-			additional: additional.workers
-		}
+		runtime:runtime
 		diagnostics: additional.diagnostics
 	}
 }

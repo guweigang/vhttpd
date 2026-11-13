@@ -1,0 +1,48 @@
+{
+  "checked_utc": "2026-11-03T05:36:09.089538+00:00",
+  "status": "investigation_in_progress_no_new_growth_fix_claimed",
+  "untouched_soak_pid": 697847,
+  "untouched_soak_start_ticks": "9646788",
+  "untouched_production_pid": 9303,
+  "changes_this_investigation": {
+    "vhttpd_runtime": false,
+    "vlang": false,
+    "vjsx": false
+  },
+  "native_heaptrack": {
+    "paseo": {
+      "cycles": 764,
+      "native_net_bytes_30s_to_170s": 11672
+    },
+    "http_native": {
+      "requests": 4793,
+      "native_net_bytes_30s_to_170s": 0
+    },
+    "http_json": {
+      "requests": 4792,
+      "native_net_bytes_30s_to_170s": 20320,
+      "plateau_after_first_load_checkpoint": true
+    },
+    "limits": "Only short independent diagnostics; native malloc tracing excludes Boehm small allocations/mmap. SIGTERM final totals include live startup runtimes and are not per-request leaks."
+  },
+  "gc_findings": {
+    "previous_shared_fix": "Long-run uncollectable 80-byte class is only 6 static slots in sampled snapshots; old wrapper retention is absent at its former scale.",
+    "remaining_small_slots": "16-byte kind2 mark slots increase in live long-run snapshots; dominant payload is pointer to preceding slot, consistent with free-list-shaped storage. Marked counts include free slots and are non-atomic, not a proven live-object leak. Exact retaining caller remains unconfirmed.",
+    "counter_underflow": "GC_get_non_gc_bytes underflows in standalone serial, parallel and batch allocate/free programs as well as V thread churn. Batch GC heap returns fully free at fixed 196608 bytes. The uncollectable small-allocation fallback omits a counter increment while free subtracts it. This is a demonstrated accounting defect, not demonstrated cause of RSS growth."
+  },
+  "extended_diagnostic": {
+    "root": "/root/vhttpd-release-tests/20261103-fixed6-gc-extended",
+    "unit": "vhttpd-fixed6-gc-extended-20261103.service",
+    "baseline_seconds": 600,
+    "pressure_seconds": 1200,
+    "cooldown_seconds": 120,
+    "http_rps": 40,
+    "paseo_interval_seconds": 2,
+    "memory_max_mib": 256,
+    "cpu_max_percent": 30,
+    "host_available_floor_mib": 512,
+    "guard_unit": "vhttpd-fixed6-diag-memory-guard-20261103.service",
+    "acceptance_run": false
+  },
+  "release_gate": "P0-02 remains blocked; do not count diagnostics toward soak duration and do not replace current soak."
+}

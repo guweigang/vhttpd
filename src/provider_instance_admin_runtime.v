@@ -25,6 +25,7 @@ fn ProviderInstanceRuntime.admin_snapshots(registry &provider.ProviderInstanceRe
 		}
 		upstream_snap, upstream_ok := ctx.runtime_snapshot(spec.provider, spec.instance)
 		out << provider.AdminProviderInstanceSnapshot{
+			protocol: upstream_snap.protocol
 			provider:           spec.provider
 			instance:           spec.instance
 			source:             ctx.source(spec.provider, spec.instance)
@@ -49,6 +50,7 @@ fn ProviderInstanceRuntime.admin_snapshots(registry &provider.ProviderInstanceRe
 		}
 		upstream_snap, upstream_ok := ctx.runtime_snapshot(spec.provider, spec.instance)
 		out << provider.AdminProviderInstanceSnapshot{
+			protocol: upstream_snap.protocol
 			provider:           spec.provider
 			instance:           spec.instance
 			source:             static_item.source

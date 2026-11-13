@@ -1,6 +1,6 @@
 module main
 
-import admin
+import browser_auth
 import net.http
 import time
 import veb
@@ -15,7 +15,7 @@ fn (app AdminApp) browser_cookie_name() string {
 }
 
 fn (app AdminApp) browser_session_authorized(ctx Context) bool {
-	if !admin.browser_request_allowed(ctx.req.method.str(), ctx.req.header.get(.host) or { '' },
+	if !browser_auth.browser_request_allowed(ctx.req.method.str(), ctx.req.header.get(.host) or { '' },
 		ctx.req.header.get(.origin) or { '' }, ctx.req.header.get_custom('sec-fetch-site') or { '' }, app.browser_origin()) {
 		return false
 	}

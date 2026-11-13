@@ -1,0 +1,21 @@
+{
+  "before": {
+    "status": "expected_native_memory_assertion_failure",
+    "iterations": 512,
+    "native_retained_before_bytes": 548864,
+    "native_retained_after_bytes": 4255744
+  },
+  "after": {
+    "status": "passed",
+    "test_functions": 41,
+    "native_growth_budget_bytes": 1048576,
+    "combined_test_source_sha256": "f6d608210feb8dac185070a371250517411ac0b5cf30b04fb475eed852916fff"
+  },
+  "coverage": [
+    "native hub/kernel context memory",
+    "connection cleanup",
+    "broadcast and close ownership",
+    "logging",
+    "multi-RPC origin generation"
+  ]
+}

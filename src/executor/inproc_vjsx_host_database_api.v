@@ -13,6 +13,7 @@ mut:
 
 // A plain-data port avoids executor -> dbx -> provider -> executor cycles.
 // Implementations must be thread-safe and must not capture any QuickJS value.
+// run_fn borrows its cancellation callback only until it returns.
 pub struct DatabaseBackend {
 pub:
 	run_fn   fn (string, fn () bool) !string @[required]
@@ -135,6 +136,18 @@ fn vjsx_database_worker(mut bridge VjsxDatabaseBridge, database DatabaseBackend,
 		bridge.workers--
 		bridge.mu.unlock()
 	}
+	run_scoped_database_work(&VjsxDatabaseWork{
+		database:     database
+		req:          req
+		request_json: request_json
+		port:         port
+		token:        token
+	}) or { port.reject('database_callback_scope_failed:${err}') }
+}
+
+// Cancellation callbacks are borrowed by the synchronous native backend. The
+// worker scope releases their trampolines only after all backend work returns.
+fn vjsx_database_worker_run(database DatabaseBackend, req DatabaseWireRequest, request_json string, port vjsx.RuntimeHostAsyncCompletionPort, token vjsx.RuntimeHostAsyncCancelToken) {
 	clock := time.new_stopwatch()
 	stop := fn [clock, token, req] () bool {
 		return token.is_cancelled() || clock.elapsed().milliseconds() >= req.timeout_ms

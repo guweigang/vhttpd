@@ -289,7 +289,7 @@ export function createBotTextHelpers(deps) {
   function threadExpiredRestartingText(threadId) {
     return deps.mdSection("Thread Restarting", [
       deps.mdBullet("Previous Thread", threadId || "unknown", { code: true }),
-      "- The saved Codex thread is no longer available. Starting a new thread automatically.",
+      "- Codex could not find the saved history after thread/resume. Starting a new thread automatically.",
     ]);
   }
 

@@ -7,11 +7,11 @@ export function createProjectAdminCommandHandlers(deps) {
     if (explicitPath) {
       return deps.normalizeImportPath(explicitPath);
     }
-    const projectRoot = (await deps.getSettingValue("project_root_dir")).trim();
+    const projectRoot = (await deps.getSettingValue("project_root_dir")).trim() || deps.botDefaults().projectRootDir;
     if (projectRoot === "") {
       return "";
     }
-    return path.join(path.resolve(projectRoot), projectKey);
+    return path.join(deps.normalizeImportPath(projectRoot), projectKey);
   }
 
   async function handleCreateCommand(session, text) {
@@ -24,7 +24,7 @@ export function createProjectAdminCommandHandlers(deps) {
       };
     }
     const projectKey = parts[1].trim();
-    const projectRoot = (await deps.getSettingValue("project_root_dir")).trim();
+    const projectRoot = (await deps.getSettingValue("project_root_dir")).trim() || deps.botDefaults().projectRootDir;
     if (projectRoot === "") {
       return {
         handled: true,
@@ -38,7 +38,7 @@ export function createProjectAdminCommandHandlers(deps) {
         commands: [deps.replyText(session, deps.projectExistsText(projectKey, existingProject.repoPath || ""))],
       };
     }
-    const repoPath = path.join(path.resolve(projectRoot), projectKey);
+    const repoPath = path.join(deps.normalizeImportPath(projectRoot), projectKey);
     if (await deps.pathExistsAsDirectory(repoPath)) {
       return {
         handled: true,

@@ -1,5 +1,6 @@
 module main
 
+import memidle
 import dispatch
 import executor
 import log
@@ -101,6 +102,8 @@ pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Re
 }
 
 fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := unsafe { &ws.BridgeState(ref) }
 	state.rt.trace('ws.message.enter', {
 		'conn_id':     state.conn_id

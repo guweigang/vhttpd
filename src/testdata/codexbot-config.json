@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "bot": {
+    "default_project": "vhttpd",
+    "project_root": "../projects",
+    "db_path": "../data/codexbot.sqlite",
+    "active_stream_stale_ms": 180000,
+    "enable_provider_instance_preflight": false
+  },
+  "codex": {
+    "default_instance": "main",
+    "url": "ws://127.0.0.1:4500",
+    "model": "gpt-5.4",
+    "supported_models": [
+      "gpt-5.4",
+      "gpt-5.3-codex"
+    ],
+    "effort": "medium",
+    "cwd": "../projects/vhttpd",
+    "approval_policy": "untrusted",
+    "sandbox": "workspace-write",
+    "reconnect_delay_ms": 3000,
+    "flush_interval_ms": 400,
+    "instances": {
+      "main": {
+        "startup": true
+      }
+    }
+  },
+  "feishu": {
+    "enabled": true,
+    "default_instance": "main",
+    "instances": {
+      "main": {
+        "startup": true,
+        "app_id": "",
+        "app_secret": "",
+        "verification_token": "",
+        "encrypt_key": ""
+      }
+    }
+  },
+  "admin": {
+    "token": ""
+  }
+}

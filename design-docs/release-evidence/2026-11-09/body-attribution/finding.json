@@ -1,0 +1,120 @@
+{
+  "status": "Major allocation hot spot and resident categories identified; no release acceptance or universal leak-free conclusion.",
+  "protected_business": {
+    "utc": "2026-11-09T07:38:16Z",
+    "pid": 3730524,
+    "start_ticks": 39645663,
+    "sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+    "VmRSS": "139596 kB",
+    "RssAnon": "129344 kB",
+    "TracerPid": "0",
+    "Threads": "29",
+    "health": {
+      "19887": 200,
+      "19901": 200,
+      "19987": 200
+    },
+    "MemAvailable_kib": 868036
+  },
+  "units": "bytes unless explicitly suffixed",
+  "resident_attribution": {
+    "gc_resident_bytes": 94670848,
+    "malloc_arena_resident_bytes": 29282304,
+    "confirmed_stack_resident_bytes": 3567616,
+    "unclassified_resident_bytes": 4927488
+  },
+  "gc_natural_collection_snapshot": {
+    "utc": "2026-11-09T07:31:02.642793+00:00",
+    "gc_epoch": 20580,
+    "allocated_since_gc_end_bytes": 537536,
+    "gc_resident_anonymous_bytes": 94670848,
+    "gc_whole_free_block_resident_bytes": 80445440,
+    "all_object_block_resident_bytes": 14225408,
+    "marked_object_bytes_estimate": 5612816
+  },
+  "malloc": {
+    "arena_resident_bytes": 29282304,
+    "top_free_resident_bytes": 16457728,
+    "boundary_inuse_bytes": 10768032,
+    "arena_metadata_unchanged": true,
+    "boundary_inuse_caveat": "Includes tcache/fastbins; not precise live objects. Virtual free chunk size is not resident memory."
+  },
+  "quickjs": {
+    "identified_runtime_count": 4,
+    "tracked_malloc_size_sum_bytes": 8411192,
+    "repeat_samples": 3,
+    "repeat_seconds": 20,
+    "repeat_counters_unchanged": true,
+    "caveat": "Matched exact binary allocator table and runtime initialization offsets. QuickJS logical malloc accounting differs from arena reserved/resident accounting; do not subtract the two to assign ownership."
+  },
+  "other_resident_details": {
+    "resident_pages_containing_verified_gc_metadata_bytes": 2801664,
+    "metadata_pages_in_fully_unclassified_mappings_bytes": 2646016,
+    "file_backed_cow_anonymous_bytes": 1343488,
+    "caveat": "Pages containing metadata are not an exclusive byte ownership census; mixed mappings and non-atomic reads remain. About 1 MiB of other pages is still not assigned to a specific owner."
+  },
+  "background_churn": {
+    "observed_seconds": 1825.8982968330383,
+    "allocated_bytes": 5918251008,
+    "mean_mib_s": 3.0911272518105095,
+    "gc_cycles": 59,
+    "anonymous_kib_min": 129340,
+    "anonymous_kib_max": 129348,
+    "request_activity_counter_unchanged": true
+  },
+  "source_scope_measurement": {
+    "duration_seconds": 19.97043044,
+    "gc_allocated_mib_per_second": 3.0878195151645005,
+    "all_global_allocations_bytes": 64660528,
+    "global_allocations_during_union_of_source_scopes_bytes": 64566064,
+    "global_allocation_coverage_fraction": 0.9985390778126649,
+    "source_scope_time_fraction": 0.01761577708887881,
+    "entry_calls": {
+      "1": 796,
+      "2": 78
+    },
+    "thread_entry_calls": {
+      "3730539": 220,
+      "3730535": 220,
+      "3730543": 217,
+      "3730542": 217
+    },
+    "unmatched_exits": 0,
+    "remaining_open_scopes": 0,
+    "inconsistent_epoch_reads": 0,
+    "gc_epoch_range": [
+      20581,
+      20582
+    ],
+    "limitations": [
+      "Allocation deltas are global counters inside the UNION of source-probe/signature intervals; overlapping scopes are counted once.",
+      "This establishes time coverage, not exclusive allocation ownership or retained-byte attribution. Concurrent non-scan allocations can contribute.",
+      "Same-SHA independent prior allocation call stacks provide direct ownership evidence for scanner allocations.",
+      "Low-frequency four boundary probes; no malloc-level instrumentation, no GC intervention."
+    ],
+    "allocation_time_coverage_by_scope_bytes": {
+      "probe_only": 52640528,
+      "outside": 94464,
+      "probe_signature_overlap": 4165952,
+      "signature_only": 7759584
+    }
+  },
+  "conclusions": [
+    "Current business uses the older source_probe/source_signature path; four refresh threads execute about 40 probes and 4 signatures per second combined.",
+    "Global allocation increments are 99.85% temporally covered by the union of source scope intervals; this is not exclusive per-allocation ownership. Same-SHA isolated allocation stacks directly demonstrate scanner allocations.",
+    "Boehm whole free blocks plus glibc free top are large resident categories. Natural GC reuses/frees object memory without returning all resident pages.",
+    "Four identified QuickJS runtimes account for about 8.02 MiB logical allocations and were unchanged in the short repeat; does not establish long-term absence of JS leaks.",
+    "No new runtime/vlang/vjsx source changes, package deployment, restart, target function calls or forced GC. Four low-frequency scope probes and 15-second CPU sampling were temporary; first metadata-only parser attempts failed closed."
+  ],
+  "limitations": [
+    "One 15-second-later natural-GC census failed consistency checks and is excluded.",
+    "CPU perf sample had only 12 events and unreliable optimized user-frame unwinding; do not use for quantitative caller attribution.",
+    "About 1 MiB of other resident pages and ownership of remaining native allocations are still unresolved.",
+    "These are production passive diagnostics, not a workload controlled comparison or a 24-hour acceptance run."
+  ],
+  "next_actions": [
+    "Exercise the existing low-allocation scanner candidate independently with representative four-engine source layouts before business deployment. Preserve same-size/same-mtime content detection and scope isolation.",
+    "Compare resident high-water, repeated traffic/cooldown and latency; allocation reduction alone is insufficient.",
+    "Keep aggressive per-collection unmapping disabled; leave bodytest and existing monitoring intact."
+  ]
+}

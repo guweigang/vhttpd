@@ -41,8 +41,6 @@ fn (e InProcVjsxExecutor) websocket_callback_input(lane VjsxExecutionLane, frame
 struct InProcVjsxWebSocketCallback {}
 
 fn InProcVjsxWebSocketCallback.build_payload(ctx &vjsx.Context, input InProcVjsxWebSocketCallbackInput, runtime_config_json string, mut app EmbeddedHost) (vjsx.Value, vjsx.Value) {
-	mut js_runtime :=
-		InProcVjsxWebSocketJs.runtime(ctx, input.runtime_meta, runtime_config_json, mut app)
 	create_frame_fn := ctx.js_global('__vhttpd_create_websocket_frame')
 	defer {
 		create_frame_fn.free()
@@ -55,11 +53,16 @@ fn InProcVjsxWebSocketCallback.build_payload(ctx &vjsx.Context, input InProcVjsx
 		defer {
 			bundle_obj.free()
 		}
-		mut js_frame := ctx.call(create_frame_fn, bundle_obj) or {
-			InProcVjsxWebSocketJs.frame(ctx, input.frame, js_runtime)
+		if js_frame := ctx.call(create_frame_fn, bundle_obj) {
+			// The JS frame already owns its runtime facade. Building a second
+			// native facade creates callback trampolines that retain each event's
+			// context/metadata even though that facade is never used by the frame.
+			js_runtime := js_frame.get('runtime')
+			return js_runtime, js_frame
 		}
-		return js_runtime, js_frame
 	}
+	mut js_runtime :=
+		InProcVjsxWebSocketJs.runtime(ctx, input.runtime_meta, runtime_config_json, mut app)
 	mut js_frame := InProcVjsxWebSocketJs.frame(ctx, input.frame, js_runtime)
 	return js_runtime, js_frame
 }

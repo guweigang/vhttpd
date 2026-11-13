@@ -1,0 +1,6 @@
+{
+  "diagnostic_only": true,
+  "reason": "Copied diagnostic stop guard still named fixed4; no stop signal was sent at scheduled end. Manually SIGTERM exact diagnostic PID after config/exe verification. Three timeout errors under profiling; not acceptance evidence.",
+  "pid": 560427,
+  "long_soak_pid_untouched": 108824
+}

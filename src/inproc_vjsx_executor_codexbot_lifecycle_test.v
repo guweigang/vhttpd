@@ -128,7 +128,7 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_cancel_interrupts_active_turn_
 	})
 }
 
-fn test_inproc_vjsx_executor_repo_codexbot_app_ts_existing_thread_starts_turn_directly() {
+fn test_inproc_vjsx_executor_repo_codexbot_app_ts_existing_thread_resumes_before_turn() {
 	codexbot_ts_with_temp_db('codexbot_ts_existing_thread_turn.sqlite', fn (_ string) {
 		mut executor := codexbot_ts_new_executor(true)
 		defer {
@@ -172,9 +172,13 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_existing_thread_starts_turn_di
 		assert second_task.handled
 		codexbot_ts_assert_single_response(second_task.commands)
 		assert second_task.commands[0].type_ == 'provider.rpc.call'
-		assert second_task.commands[0].method == 'turn/start'
+		assert second_task.commands[0].method == 'thread/resume'
 		assert second_task.commands[0].params.contains('"threadId":"thread_existing_001"')
-		assert second_task.commands[0].params.contains('"text":"second turn"')
+		assert second_task.commands[0].params.contains('"excludeTurns":true')
+		resumed := codexbot_ts_dispatch_codex_event(mut executor, mut app, 'resume-existing', second_task.commands[0].stream_id, 'codex.rpc.response', '{"method":"thread/resume","result":{"thread":{"id":"thread_existing_001"}},"has_error":false}') or { panic(err) }
+		assert resumed.commands.len == 1
+		assert resumed.commands[0].method == 'turn/start'
+		assert resumed.commands[0].params.contains('"text":"second turn"')
 	})
 }
 
@@ -219,8 +223,13 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_reuses_thread_after_restart() 
 		assert second_task.handled
 		codexbot_ts_assert_single_response(second_task.commands)
 		assert second_task.commands[0].type_ == 'provider.rpc.call'
-		assert second_task.commands[0].method == 'turn/start'
+		assert second_task.commands[0].method == 'thread/resume'
 		assert second_task.commands[0].params.contains('"threadId":"thread_reuse_001"')
+		resumed := codexbot_ts_dispatch_codex_event(mut executor_b, mut app, 'resume-after-restart', second_task.commands[0].stream_id, 'codex.rpc.response', '{"method":"thread/resume","result":{"thread":{"id":"thread_reuse_001"}},"has_error":false}') or { panic(err) }
+		assert resumed.commands.len == 1
+		assert resumed.commands[0].method == 'turn/start'
+		assert resumed.commands[0].params.contains('"threadId":"thread_reuse_001"')
+
 	})
 }
 
@@ -264,13 +273,13 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_recovers_when_reused_thread_is
 			'follow up task') or { panic(err) }
 		assert second_task.handled
 		codexbot_ts_assert_single_response(second_task.commands)
-		assert second_task.commands[0].method == 'turn/start'
+		assert second_task.commands[0].method == 'thread/resume'
 		assert second_task.commands[0].params.contains('"threadId":"thread_recover_missing_001"')
 		assert second_stream_id != ''
 
 		recover_resp := codexbot_ts_dispatch_codex_event(mut executor, mut app,
 			'codexbot_ts_recover_missing_thread_error', second_stream_id, 'codex.rpc.response',
-			'{"method":"codex.error_burst","result":["thread not found: thread_recover_missing_001"],"has_error":true}') or {
+			'{"method":"thread/resume","result":{"code":-32600,"message":"no rollout found for thread id thread_recover_missing_001"},"has_error":true}') or {
 			panic(err)
 		}
 		assert recover_resp.handled

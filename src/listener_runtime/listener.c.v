@@ -1,6 +1,7 @@
 module listener_runtime
 
 import net
+import socket_runtime
 import net.unix
 import os
 import sync
@@ -37,7 +38,7 @@ pub fn listen(path string) !&Listener {
 			if bound { remove_owned_path(path, identity) }
 		}
 	}
-	net.socket_error_message(C.fcntl(fd, C.F_SETFD, C.FD_CLOEXEC), 'setting listener close-on-exec failed')!
+	socket_runtime.protect(fd)!
 	net.socket_error_message(C.bind(fd, voidptr(&address), address.len()), 'binding to ${path} failed')!
 	// Capture the directory entry before publishing this generation.
 	identity = os.lstat(path)!
@@ -62,8 +63,7 @@ pub fn (mut listener Listener) accept() !&unix.StreamConn {
 	mut conn := listener.native.accept()!
 	// The handler owns this fd. Exec'd workers must not extend its lifetime.
 	// Match the listener and stop-interrupt duplicate before publishing it.
-	net.socket_error_message(C.fcntl(i32(conn.sock.handle), C.F_SETFD, C.FD_CLOEXEC),
-		'setting accepted connection close-on-exec failed') or {
+	socket_runtime.protect(conn.sock.handle) or {
 		conn.close() or {}
 		return err
 	}

@@ -77,10 +77,6 @@ export function createCodexRpcHelpers(deps) {
     return parts.join("\n").trim();
   }
 
-  function codexRpcIndicatesMissingThread(response) {
-    return codexRpcDebugText(response).toLowerCase().includes("thread not found");
-  }
-
   function extractThreadNameFromResult(result) {
     if (!result || typeof result !== "object") {
       return "";
@@ -327,7 +323,6 @@ export function createCodexRpcHelpers(deps) {
   return {
     codeQueryMethods,
     codexRpcDebugText,
-    codexRpcIndicatesMissingThread,
     defaultCodexParams,
     extractAnswerFromThreadReadResult,
     extractExactAnswerFromThreadReadResult,

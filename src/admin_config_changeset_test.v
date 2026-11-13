@@ -83,3 +83,19 @@ fn test_changeset_conflict_or_detached_source_cannot_partially_publish() {
 	}
 	assert os.read_file(relay_file) or { panic(err) } == relay_text
 }
+
+fn test_changeset_publication_is_excluded_during_application_switch() {
+ root, root_file, relay_file, _, app_value := changeset_app_fixture()
+ defer { os.rmdir_all(root) or {} }
+ mut app := app_value
+ before := os.read_file(relay_file) or { panic(err) }
+ bundle := AdminConfigChangeSet{config_path:root_file,files:[admin_state_store.ConfigFileChange{path:relay_file,original:before,value:before+'\n# staged\n'}]}
+ app.admin_config_changeset_save('deploy-guard',json.encode(bundle)) or { panic(err) }
+ lock_path := admin_project_write_lock(root_file) or { panic(err) }
+ mut rejected := false
+ app.admin_config_changeset_publish('deploy-guard') or { rejected=true; assert err.msg()=='application_operation_in_progress' }
+ assert rejected && os.read_file(relay_file) or { '' } == before
+ os.rmdir(lock_path) or { panic(err) }
+ app.admin_config_changeset_publish('deploy-guard') or { panic(err) }
+ assert !os.exists(lock_path)
+}

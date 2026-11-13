@@ -1,11 +1,14 @@
 module executor
 
 import log
+import memidle
 import os
 import vjsx
 import vjsx.runtimejs
 
 pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := e.state
 	state.mu.@lock()
 	if state.stopping {
@@ -79,29 +82,26 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	log.debug('[vhttpd] ensure_lane_host runtime ready lane=${lane_id} idx=${idx} module=${as_module} temp_root=${temp_root}')
 	mut ctx := session.context()
 	InProcVjsxHostApi.install_http_facade(mut ctx)!
-	InProcVjsxHostApi.install(mut ctx, mut state, idx)
+	mut config_cache := InProcVjsxHostApi.install(mut ctx, mut state, idx)
+	defer { if !owned_by_lane { config_cache.close() } }
 	InProcVjsxRuntimeProfileLog.write(lane_id, idx, config.runtime_profile, ctx)
 	mut module_binding_ptr := ?&vjsx.ScriptModule(none)
 	mut has_http_handler := false
 	mut has_websocket_handler := false
 	mut has_upstream_handler := false
 	mut has_plugin_handler := false
+	defer { release_inproc_vjsx_compiler_memory() }
+	prepared_entry := e.prepare_inproc_vjsx_module(config, temp_root, lane_id, session, as_module) or {
+		return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
+	}
 	if as_module {
-		if vjsx.is_typescript_file(config.app_entry)
-			|| vjsx.is_runtime_module_file(config.app_entry) {
-			runtimejs.install_typescript_runtime(ctx)!
-		}
 		log.debug('[vhttpd] ensure_lane_host importing module lane=${lane_id} idx=${idx}')
 		js_flag_eval :=
 			ctx.eval('var __vhttpd_enable_item_render_streams__ = ${config.enable_item_render_streams};')!
 		defer {
 			js_flag_eval.free()
 		}
-		module_entry_path := runtimejs.build_runtime_module_entry(ctx, os.real_path(config.app_entry), true,
-			temp_root) or {
-			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
-		}
-		module_binding_value := VjsxHostLoader.import_prepared_entry(mut session, module_entry_path) or {
+		module_binding_value := VjsxHostLoader.import_prepared_entry(mut session, prepared_entry) or {
 			return error('inproc_vjsx_executor_module_import_failed:${err.msg()}')
 		}
 		has_http_handler =
@@ -146,8 +146,7 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		}
 	} else {
 		log.debug('[vhttpd] ensure_lane_host loading script entry lane=${lane_id} idx=${idx}')
-		mut entry_exports := VjsxHostLoader.load_entry(mut ctx, config, temp_root,
-			false) or {
+		mut entry_exports := VjsxHostLoader.load_prepared_script(mut ctx, config, prepared_entry) or {
 			return error('inproc_vjsx_executor_bootstrap_failed:${err.msg()}')
 		}
 		defer {
@@ -204,6 +203,7 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 		wakeup_owner:      wake_owner
 		session:           session
 		module_binding:    module_binding_ptr
+		config_cache:      config_cache
 	}
 	mut published_wake_owner := unsafe { wake_owner }
 	published_wake_owner.published = true
@@ -211,4 +211,27 @@ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
 	state.lanes[idx].healthy = true
 	state.lanes[idx].dirty = false
 	log.debug('[vhttpd] ensure_lane_host ready lane=${lane_id} idx=${idx} http=${has_http_handler} websocket=${has_websocket_handler} upstream=${has_upstream_handler} plugin=${has_plugin_handler}')
+}
+
+// Module scanning/transpilation needs the full TypeScript compiler. Keep it
+// outside the long-lived execution context, which only imports prepared JS.
+fn (e InProcVjsxExecutor) prepare_inproc_vjsx_module(config VjsxRuntimeFacadeConfig, temp_root string, lane_id string, execution &vjsx.RuntimeSession, as_module bool) !string {
+	mut compiler := InProcVjsxRuntimeSessionFactory.new_compiler(config)
+	e.attach_task_session(lane_id, compiler)
+	defer {
+		// Cancellation must follow the active runtime, including during bootstrap.
+		e.attach_task_session(lane_id, execution)
+		compiler.close()
+	}
+	entry := os.real_path(config.app_entry)
+	if !as_module {
+		if !runtimejs.is_commonjs_module(compiler.context(), entry)! { return '' }
+	}
+	$if windows {
+		// Do not append the entire absolute project path beneath the private cache.
+		// The SDK rewrites graph imports relative to this mirror base.
+		base := if config.module_root.trim_space() != '' { os.real_path(config.module_root) } else { os.dir(entry) }
+		return runtimejs.build_runtime_module_entry_with_mirror_base(compiler.context(), entry, true, temp_root, base)
+	}
+	return runtimejs.build_runtime_module_entry(compiler.context(), entry, true, temp_root)
 }

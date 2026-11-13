@@ -25,6 +25,7 @@ mut:
 
 struct EngineRuntime {
 mut:
+	startup_failed bool
 	primary    &worker.WorkerState = &worker.WorkerState{}
 	additional map[string]&worker.WorkerState
 }

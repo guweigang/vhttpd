@@ -175,6 +175,7 @@ fn (mut app App) finalize_runtime(runtime_cfg server_lifecycle.ServerRuntimeConf
 	log.info('[vhttpd] shutdown_app_runtime: stopping engine runtimes')
 	port := app.build_engine_lifecycle_port()
 	app.engines.stop(runtime_cfg.executor_plan.lifecycle, port)
+	app.relay_databases.close()
 	log.info('[vhttpd] shutdown_app_runtime: closing all plugins')
 	app.close_all_plugins()
 	log.info('[vhttpd] shutdown_app_runtime: stopping all providers')

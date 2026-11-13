@@ -1,0 +1,65 @@
+diff --git a/ui/clipboard_nix.v b/ui/clipboard_nix.v
+index e5c9ac2..1e7356e 100644
+--- a/ui/clipboard_nix.v
++++ b/ui/clipboard_nix.v
+@@ -7,10 +7,11 @@
+ // iOS have their own bridge files, and Android the default fallback.
+ module ui2
+ 
++import os
++import rand
+ import time
+ 
+ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+-	import os
+ 
+ 	struct LinuxClipboardTool {
+ 		copy  []string // arguments of the tool reading the text from its stdin
+@@ -59,15 +60,16 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+ 	// another claimant took the selection over, so every copy froze the
+ 	// event thread until the next copy. Nothing reads the child's output:
+ 	// stdin is the file, stdout and stderr travel with the caller's own
+-	// descriptors, and wait() answers the immediate child only. wl-copy does
+-	// not answer at all (it serves until superseded), so for it the run is
+-	// fire-and-forget and never waited.
++	// descriptors. wait() answers the immediate child only. wl-copy also
++	// forks after setting the selection, so wait for its success before cutting.
+ 	fn native_clipboard_write(copy_args []string, text string) bool {
+-		path := os.join_path(os.temp_dir(), 'ui2-clipboard-${os.getpid()}-${time.sys_mono_now()}.txt')
++		// Stage clipboard text in a directory only the current user can read.
++		suffix := rand.bytes(16) or { return false }
++		directory := os.join_path(os.temp_dir(), 'ui2-clipboard-' + suffix.hex())
++		os.mkdir(directory, mode: 0o700) or { return false }
++		defer { os.rmdir_all(directory) or {} }
++		path := os.join_path(directory, 'text')
+ 		os.write_file(path, text) or { return false }
+-		defer {
+-			os.rm(path) or {}
+-		}
+ 		$if clipboard_stage_probe ? {
+ 			eprintln('KW stage: file ${time.sys_mono_now()}')
+ 		}
+@@ -78,9 +80,6 @@ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+ 		$if clipboard_stage_probe ? {
+ 			eprintln('KW stage: post-run ${time.sys_mono_now()}')
+ 		}
+-		if copy_args[0].contains('wl-copy') {
+-			return true
+-		}
+ 		p.wait()
+ 		$if clipboard_stage_probe ? {
+ 			eprintln('KW stage: post-wait ${time.sys_mono_now()}')
+diff --git a/ui/ui_immediate.c.v b/ui/ui_immediate.c.v
+index dec47f4..ecd58ca 100644
+--- a/ui/ui_immediate.c.v
++++ b/ui/ui_immediate.c.v
+@@ -2015,7 +2015,8 @@ $if (android || linux || freebsd || openbsd || netbsd || dragonfly || solaris ||
+ 	// unowned for focus and dismissal.
+ 	fn field_owns_key(key gg.KeyCode, modifiers u32) bool {
+ 		if key == .enter || key == .kp_enter {
+-			return true
++			// Let host forms handle their Ctrl/Command+Return shortcuts.
++			return modifiers & (u32(gg.Modifier.ctrl) | u32(gg.Modifier.super)) == 0
+ 		}
+ 		if key == .escape || key == .tab {
+ 			return false

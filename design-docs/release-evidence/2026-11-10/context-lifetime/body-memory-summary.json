@@ -1,0 +1,14 @@
+{
+  "utc": "2026-11-10T05:39:48.555615+00:00",
+  "gc_managed_anon_mib": 90.28515625,
+  "outside_gc_managed_anon_mib": 36.02734375,
+  "mapped_gc_heap_mib": 105.4609375,
+  "mapped_gc_free_mib": 33.87890625,
+  "mapped_gc_nonfree_mib": 71.58203125,
+  "gc_resident_free_lower_bound_mib": 18.703125,
+  "earlier_mapped_gc_free_mib": 87.13671875,
+  "earlier_RssAnon_kib": 129344,
+  "current_RssAnon_kib": 129344,
+  "basis": "Stable epoch, count/table and heap/free/unmapped counters. Sum sections=collector heapsize. Every mixed anonymous mapping pagemap total=smaps Anonymous. No PFNs collected. At most all mapped nonfree bytes can be resident; consistent-snapshot resident-free lower estimate=GC-managed anon minus mapped nonfree. Nonfree includes uncollected garbage/fragmentation and is not precise business live bytes.",
+  "limits": "Maps partition storage, not allocation stacks or root owners. Outside GC segments includes metadata, stacks, native arenas, libraries and QuickJS; not all libc live blocks. Business0890d931 did not receive new writer patch."
+}

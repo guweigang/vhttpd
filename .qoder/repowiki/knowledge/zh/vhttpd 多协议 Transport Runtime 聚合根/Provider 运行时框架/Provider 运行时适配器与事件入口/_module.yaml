@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: provider_framework/adapters_and_hooks
+title: Provider 运行时适配器与事件入口
+scope:
+    - src/provider_action_adapter_runtime.v
+    - src/provider_instance_admin_runtime.v
+    - src/provider_websocket_hook_runtime.v
+    - src/provider_ingress_event_runtime.v
+source_files: []
+depends_on: []
+related_to: []

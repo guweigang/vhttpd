@@ -1,0 +1,42 @@
+{
+  "release_mode": "unsigned",
+  "signature": "ad-hoc",
+  "archive": "vhttpd-workbench-macos-arm64-0.1.0.zip",
+  "sha256": "45cbeb8807552f43f31c38966e30121c443bf73b5e8996b3d6bb96f2f465ed22",
+  "source_commit": "1461fc13002a2bf91135f77d9fb7f74ec16bcf57",
+  "run_url": "https://github.com/guweigang/vhttpd/actions/runs/39185790650",
+  "targets": [
+    {
+      "macos": "15.7.9",
+      "arch": "arm64",
+      "runtime": "passed",
+      "gatekeeper_exit": 3,
+      "gatekeeper_output": "/private/tmp/vhttpd-macos-runtime.UmEyRf/Applications with spaces/vhttpd-workbench.app: rejected",
+      "gatekeeper_download_approval": "not_verified"
+    },
+    {
+      "macos": "26.6.2",
+      "arch": "arm64",
+      "runtime": "passed",
+      "gatekeeper_exit": 3,
+      "gatekeeper_output": "/private/tmp/vhttpd-macos-runtime.4YlxtR/Applications with spaces/vhttpd-workbench.app: rejected",
+      "gatekeeper_download_approval": "not_verified"
+    }
+  ],
+  "coverage": [
+    "extract and relocate complete app",
+    "fresh HOME and system PATH without development tools",
+    "create both vjsx templates",
+    "startup failure and retry",
+    "cross-include publish and restart effectiveness",
+    "persistent history and restore"
+  ],
+  "not_verified": [
+    "Finder first launch",
+    "target-system GUI and browser interaction",
+    "Gatekeeper approval after browser download"
+  ],
+  "release_attachment_preparation": "passed",
+  "tag_mode_staging_checksums": "passed",
+  "actual_release_publication": "not_executed"
+}

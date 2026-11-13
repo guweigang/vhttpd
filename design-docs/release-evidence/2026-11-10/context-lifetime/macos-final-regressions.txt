@@ -1,0 +1,9 @@
+---- Testing... ----------------------------------------------------------------
+OK    [1/6] C: 9170.002 ms, R:   847.845 ms /Users/guweigang/local/v/vlib/veb/controller_static_regression_test.v
+OK    [2/6] C: 11060.077 ms, R:   311.555 ms /Users/guweigang/local/v/vlib/veb/middleware_response_lifetime_test.v
+OK    [3/6] C: 8635.394 ms, R:   305.383 ms /Users/guweigang/local/v/vlib/veb/panic_recovery_test.v
+OK    [4/6] C: 8446.978 ms, R:   332.556 ms /Users/guweigang/local/v/vlib/veb/response_writer_append_test.v
+OK    [5/6] C: 17064.327 ms, R:   336.922 ms /Users/guweigang/local/v/vlib/veb/response_writer_state_test.v
+OK    [6/6] C: 19750.338 ms, R:  6508.494 ms /Users/guweigang/local/v/vlib/veb/tests/persistent_connection_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 6 passed, 6 total. Elapsed time: 82779 ms, on 1 job. Comptime: 74127 ms. Runtime: 8642 ms.

@@ -1,0 +1,15 @@
+// vtest vflags: -cc gcc -prod -parallel-cc -gc boehm -d use_bundled_libgc -enable-globals
+// vtest build: linux
+module builtin
+
+#include "@VEXEROOT/vlib/builtin/gc_uncollectable_reclaim_test.c.h"
+
+fn C.v_gc_uncollectable_churn_retained() u64
+
+fn test_uncollectable_slots_are_reclaimed_after_detached_thread_churn() {
+	retained := C.v_gc_uncollectable_churn_retained()
+	// Keep the check in production mode, where assert statements are removed.
+	if retained > 2 * 1024 * 1024 {
+		panic('uncollectable thread wrappers retained ${retained} bytes after GC')
+	}
+}

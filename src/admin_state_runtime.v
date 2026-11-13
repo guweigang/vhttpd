@@ -436,6 +436,8 @@ fn (mut app App) admin_state_publish_source_draft(id string, raw_path string) Ad
 	}
 	language := admin_state_source_language(resolved.path)
 	config_path := app.admin_state_draft_source_path()
+	deployment_lock := admin_project_write_lock(config_path) or { return AdminSourcePublishResult{draft_id:id,error:err.msg()} }
+	defer { os.rmdir(deployment_lock) or {} }
 	change := admin_state_snapshot_publish_target(resolved.path, entry.value) or {
 		return AdminSourcePublishResult{ draft_id: id, path: resolved.path, language: language, error: err.msg() }
 	}
@@ -505,6 +507,8 @@ fn (mut app App) admin_state_publish_draft(id string, raw_path string) AdminDraf
 		}
 	}
 	config_path := app.admin_state_draft_source_path()
+	deployment_lock := admin_project_write_lock(config_path) or { return AdminDraftPublishResult{draft_id:id,error:err.msg()} }
+	defer { os.rmdir(deployment_lock) or {} }
 	resolved := admin_state_resolve_publish_path(config_path, target_path) or {
 		return AdminDraftPublishResult{
 			draft_id:    id
@@ -750,39 +754,7 @@ fn admin_state_safe_id(raw string) string {
 	return clean
 }
 
-fn admin_state_extract_include_paths(text string) []string {
-	mut paths := []string{}
-	mut in_include := false
-	for line in text.split_into_lines() {
-		clean := line.trim_space()
-		if clean.starts_with('include') && clean.contains('[') {
-			in_include = true
-		}
-		if in_include {
-			paths << admin_state_extract_quoted_values(clean)
-			if clean.contains(']') {
-				in_include = false
-			}
-		}
-	}
-	return paths
-}
 
-fn admin_state_extract_quoted_values(line string) []string {
-	mut values := []string{}
-	mut start := -1
-	for idx, ch in line {
-		if ch == `"` {
-			if start < 0 {
-				start = idx + 1
-			} else {
-				values << line[start..idx]
-				start = -1
-			}
-		}
-	}
-	return values
-}
 
 fn admin_state_add_include_to_config(text string, include_path string) string {
 	needle := '"${include_path}"'

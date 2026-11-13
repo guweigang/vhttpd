@@ -17,36 +17,63 @@ pub:
 	presence_users  map[string][]string
 }
 
-// RuntimeContext is the closure-based interface for WebSocket hub operations.
-// Built by WebSocketRuntime. Hub closures capture the WebSocket owner while the
-// narrow kernel port supplies protocol-frame construction and logic dispatch.
+// RuntimePort keeps hub ownership in ordinary GC references. RuntimeContext
+// also supports explicit callback overrides for injected adapters and tests.
+pub interface RuntimePort {
+	dispatch_targets(room string, except_id string) []HubDispatchTarget
+	presence(conn_id string) PresenceSnapshot
+	rooms(conn_id string) []string
+	metadata(conn_id string) map[string]string
+	register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState, serving ?&IngressRun)
+	conn_open(conn_id string) bool
+	mark_closing(conn_id string, lifecycle &DispatchConnState) bool
+	flush_pending(conn_id string)
+	can_cleanup(id string, lifecycle &DispatchConnState) bool
+	cleanup_conn(conn_id string, lifecycle &DispatchConnState)
+	unregister_conn(conn_id string, lifecycle &DispatchConnState)
+	send_to(conn_id string, data string, opcode string) bool
+	join(conn_id string, room string) bool
+	leave(conn_id string, room string) bool
+	set_meta(conn_id string, key string, value string) bool
+	clear_meta(conn_id string, key string) bool
+	broadcast(room string, data string, opcode string, except_id string) int
+	command_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult
+	close_owned_target(id string, lifecycle &DispatchConnState, code int, reason string)
+	close_target(conn_id string, code int, reason string)
+	emit(kind string, fields map[string]string)
+	build_frame(event string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, presence PresenceSnapshot) transport.WorkerWebSocketFrame
+	dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+	followup_failure(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame
+}
+
 pub struct RuntimeContext {
 pub:
-	emit_fn             fn (string, map[string]string) @[required]
+	owner               ?RuntimePort
+	emit_fn             ?fn (string, map[string]string)
 	ingress_run         ?&IngressRun
-	dispatch_targets_fn fn (string, string) []HubDispatchTarget @[required]
-	presence_fn         fn (string) PresenceSnapshot            @[required]
-	rooms_fn            fn (string) []string                    @[required]
-	metadata_fn         fn (string) map[string]string           @[required]
-	register_conn_fn    fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState, ?&IngressRun) @[required]
-	conn_open_fn        fn (string) bool                     @[required]
-	mark_closing_fn     fn (string, &DispatchConnState) bool @[required]
-	flush_pending_fn    fn (string) @[required]
-	can_cleanup_fn      fn (string, &DispatchConnState) bool    @[required]
-	cleanup_conn_fn     fn (string, &DispatchConnState)         @[required]
-	unregister_conn_fn  fn (string, &DispatchConnState)         @[required]
-	send_to_fn          fn (string, string, string) bool        @[required]
-	join_fn             fn (string, string) bool                @[required]
-	leave_fn            fn (string, string) bool                @[required]
-	set_meta_fn         fn (string, string, string) bool        @[required]
-	clear_meta_fn       fn (string, string) bool                @[required]
-	broadcast_fn        fn (string, string, string, string) int @[required]
-	build_frame_fn      fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, PresenceSnapshot) transport.WorkerWebSocketFrame @[required]
-	dispatch_event_fn   fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse        @[required]
-	command_result_fn   fn ([]transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult @[required]
-	followup_failure_fn fn (string, string, string, map[string]string, map[string]string, string, string, string, []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame @[required]
-	close_owned_fn      fn (string, &DispatchConnState, int, string) @[required]
-	close_target_fn     fn (string, int, string)                     @[required]
+	dispatch_targets_fn ?fn (string, string) []HubDispatchTarget
+	presence_fn         ?fn (string) PresenceSnapshot
+	rooms_fn            ?fn (string) []string
+	metadata_fn         ?fn (string) map[string]string
+	register_conn_fn    ?fn (string, string, string, string, string, string, map[string]string, map[string]string, string, &websocket.Client, &DispatchConnState, ?&IngressRun)
+	conn_open_fn        ?fn (string) bool
+	mark_closing_fn     ?fn (string, &DispatchConnState) bool
+	flush_pending_fn    ?fn (string)
+	can_cleanup_fn      ?fn (string, &DispatchConnState) bool
+	cleanup_conn_fn     ?fn (string, &DispatchConnState)
+	unregister_conn_fn  ?fn (string, &DispatchConnState)
+	send_to_fn          ?fn (string, string, string) bool
+	join_fn             ?fn (string, string) bool
+	leave_fn            ?fn (string, string) bool
+	set_meta_fn         ?fn (string, string, string) bool
+	clear_meta_fn       ?fn (string, string) bool
+	broadcast_fn        ?fn (string, string, string, string) int
+	build_frame_fn      ?fn (string, string, string, map[string]string, map[string]string, string, string, string, string, string, int, string, []string, map[string]string, PresenceSnapshot) transport.WorkerWebSocketFrame
+	dispatch_event_fn   ?fn (transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse
+	command_result_fn   ?fn ([]transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult
+	followup_failure_fn ?fn (string, string, string, map[string]string, map[string]string, string, string, string, []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame
+	close_owned_fn      ?fn (string, &DispatchConnState, int, string)
+	close_target_fn     ?fn (string, int, string)
 }
 
 // Trace metadata shares the event sink; it never owns a second file.
@@ -54,7 +81,7 @@ pub fn (rt RuntimeContext) trace(label string, fields map[string]string) {
 	mut data := fields.clone()
 	data['label'] = label
 	data['pid'] = '${os.getpid()}'
-	rt.emit_fn('runtime.trace', data)
+	rt.emit('runtime.trace', data)
 }
 
 pub fn (rt RuntimeContext) with_ingress(run ?&IngressRun) RuntimeContext {
@@ -62,94 +89,241 @@ pub fn (rt RuntimeContext) with_ingress(run ?&IngressRun) RuntimeContext {
 }
 
 pub fn (rt RuntimeContext) dispatch_targets(room string, except_id string) []HubDispatchTarget {
-	return rt.dispatch_targets_fn(room, except_id)
+	if callback := rt.dispatch_targets_fn {
+		return callback(room, except_id)
+	}
+	if owner := rt.owner {
+		return owner.dispatch_targets(room, except_id)
+	}
+	panic('websocket runtime operation missing: dispatch_targets')
 }
 
 pub fn (rt RuntimeContext) presence(conn_id string) PresenceSnapshot {
-	return rt.presence_fn(conn_id)
+	if callback := rt.presence_fn {
+		return callback(conn_id)
+	}
+	if owner := rt.owner {
+		return owner.presence(conn_id)
+	}
+	panic('websocket runtime operation missing: presence')
 }
 
 pub fn (rt RuntimeContext) rooms(conn_id string) []string {
-	return rt.rooms_fn(conn_id)
+	if callback := rt.rooms_fn {
+		return callback(conn_id)
+	}
+	if owner := rt.owner {
+		return owner.rooms(conn_id)
+	}
+	panic('websocket runtime operation missing: rooms')
 }
 
 pub fn (rt RuntimeContext) metadata(conn_id string) map[string]string {
-	return rt.metadata_fn(conn_id)
+	if callback := rt.metadata_fn {
+		return callback(conn_id)
+	}
+	if owner := rt.owner {
+		return owner.metadata(conn_id)
+	}
+	panic('websocket runtime operation missing: metadata')
 }
 
 pub fn (rt RuntimeContext) register_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState) {
-	rt.register_conn_fn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers,
-		remote_addr, client, lifecycle, rt.ingress_run)
+	if callback := rt.register_conn_fn {
+		callback(conn_id, worker_socket, method, req_id, trace_id, path, query, headers,
+			remote_addr, client, lifecycle, rt.ingress_run)
+		return
+	}
+	if owner := rt.owner {
+		owner.register_conn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers,
+			remote_addr, client, lifecycle, rt.ingress_run)
+		return
+	}
+	panic('websocket runtime operation missing: register_conn')
 }
 
 pub fn (rt RuntimeContext) conn_open(conn_id string) bool {
-	return rt.conn_open_fn(conn_id)
+	if callback := rt.conn_open_fn {
+		return callback(conn_id)
+	}
+	if owner := rt.owner {
+		return owner.conn_open(conn_id)
+	}
+	panic('websocket runtime operation missing: conn_open')
 }
 
 pub fn (rt RuntimeContext) mark_closing(conn_id string, lifecycle &DispatchConnState) bool {
-	return rt.mark_closing_fn(conn_id, lifecycle)
+	if callback := rt.mark_closing_fn {
+		return callback(conn_id, lifecycle)
+	}
+	if owner := rt.owner {
+		return owner.mark_closing(conn_id, lifecycle)
+	}
+	panic('websocket runtime operation missing: mark_closing')
 }
 
 pub fn (rt RuntimeContext) flush_pending(conn_id string) {
-	rt.flush_pending_fn(conn_id)
+	if callback := rt.flush_pending_fn {
+		callback(conn_id)
+		return
+	}
+	if owner := rt.owner {
+		owner.flush_pending(conn_id)
+		return
+	}
+	panic('websocket runtime operation missing: flush_pending')
 }
 
 pub fn (rt RuntimeContext) cleanup_conn(conn_id string, lifecycle &DispatchConnState) {
-	rt.cleanup_conn_fn(conn_id, lifecycle)
+	if callback := rt.cleanup_conn_fn {
+		callback(conn_id, lifecycle)
+		return
+	}
+	if owner := rt.owner {
+		owner.cleanup_conn(conn_id, lifecycle)
+		return
+	}
+	panic('websocket runtime operation missing: cleanup_conn')
 }
 
 pub fn (rt RuntimeContext) unregister_conn(conn_id string, lifecycle &DispatchConnState) {
-	rt.unregister_conn_fn(conn_id, lifecycle)
+	if callback := rt.unregister_conn_fn {
+		callback(conn_id, lifecycle)
+		return
+	}
+	if owner := rt.owner {
+		owner.unregister_conn(conn_id, lifecycle)
+		return
+	}
+	panic('websocket runtime operation missing: unregister_conn')
 }
 
 pub fn (rt RuntimeContext) send_to(conn_id string, data string, opcode string) bool {
-	return rt.send_to_fn(conn_id, data, opcode)
+	if callback := rt.send_to_fn {
+		return callback(conn_id, data, opcode)
+	}
+	if owner := rt.owner {
+		return owner.send_to(conn_id, data, opcode)
+	}
+	panic('websocket runtime operation missing: send_to')
 }
 
 pub fn (rt RuntimeContext) join(conn_id string, room string) bool {
-	return rt.join_fn(conn_id, room)
+	if callback := rt.join_fn {
+		return callback(conn_id, room)
+	}
+	if owner := rt.owner {
+		return owner.join(conn_id, room)
+	}
+	panic('websocket runtime operation missing: join')
 }
 
 pub fn (rt RuntimeContext) leave(conn_id string, room string) bool {
-	return rt.leave_fn(conn_id, room)
+	if callback := rt.leave_fn {
+		return callback(conn_id, room)
+	}
+	if owner := rt.owner {
+		return owner.leave(conn_id, room)
+	}
+	panic('websocket runtime operation missing: leave')
 }
 
 pub fn (rt RuntimeContext) set_meta(conn_id string, key string, value string) bool {
-	return rt.set_meta_fn(conn_id, key, value)
+	if callback := rt.set_meta_fn {
+		return callback(conn_id, key, value)
+	}
+	if owner := rt.owner {
+		return owner.set_meta(conn_id, key, value)
+	}
+	panic('websocket runtime operation missing: set_meta')
 }
 
 pub fn (rt RuntimeContext) clear_meta(conn_id string, key string) bool {
-	return rt.clear_meta_fn(conn_id, key)
+	if callback := rt.clear_meta_fn {
+		return callback(conn_id, key)
+	}
+	if owner := rt.owner {
+		return owner.clear_meta(conn_id, key)
+	}
+	panic('websocket runtime operation missing: clear_meta')
 }
 
 pub fn (rt RuntimeContext) broadcast(room string, data string, opcode string, except_id string) int {
-	return rt.broadcast_fn(room, data, opcode, except_id)
+	if callback := rt.broadcast_fn {
+		return callback(room, data, opcode, except_id)
+	}
+	if owner := rt.owner {
+		return owner.broadcast(room, data, opcode, except_id)
+	}
+	panic('websocket runtime operation missing: broadcast')
 }
 
 pub fn (rt RuntimeContext) build_frame(event string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, opcode string, data string, code int, reason string, rooms []string, metadata map[string]string, presence PresenceSnapshot) transport.WorkerWebSocketFrame {
-	return rt.build_frame_fn(event, method, path, query, headers, remote_addr, req_id, trace_id,
-		opcode, data, code, reason, rooms, metadata, presence)
+	if callback := rt.build_frame_fn {
+		return callback(event, method, path, query, headers, remote_addr, req_id, trace_id,
+			opcode, data, code, reason, rooms, metadata, presence)
+	}
+	if owner := rt.owner {
+		return owner.build_frame(event, method, path, query, headers, remote_addr, req_id, trace_id,
+			opcode, data, code, reason, rooms, metadata, presence)
+	}
+	panic('websocket runtime operation missing: build_frame')
 }
 
 pub fn (rt RuntimeContext) dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
-	return rt.dispatch_event_fn(frame)
+	if callback := rt.dispatch_event_fn {
+		return callback(frame)
+	}
+	if owner := rt.owner {
+		return owner.dispatch_event(frame)
+	}
+	panic('websocket runtime operation missing: dispatch_event')
 }
 
 pub fn (rt RuntimeContext) command_result(commands []transport.WorkerWebSocketFrame) transport.WorkerWebSocketDispatchCommandsResult {
-	return rt.command_result_fn(commands)
+	if callback := rt.command_result_fn {
+		return callback(commands)
+	}
+	if owner := rt.owner {
+		return owner.command_result(commands)
+	}
+	panic('websocket runtime operation missing: command_result')
 }
 
 pub fn (rt RuntimeContext) followup_failure(conn_id string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, failures []transport.WorkerWebSocketDispatchCommandFailure) ?transport.WorkerWebSocketFrame {
-	return rt.followup_failure_fn(conn_id, method, path, query, headers, remote_addr, req_id,
-		trace_id, failures)
+	if callback := rt.followup_failure_fn {
+		return callback(conn_id, method, path, query, headers, remote_addr, req_id,
+			trace_id, failures)
+	}
+	if owner := rt.owner {
+		return owner.followup_failure(conn_id, method, path, query, headers, remote_addr, req_id,
+			trace_id, failures)
+	}
+	panic('websocket runtime operation missing: followup_failure')
 }
 
 pub fn (rt RuntimeContext) close_target(conn_id string, code int, reason string) {
-	rt.close_target_fn(conn_id, code, reason)
+	if callback := rt.close_target_fn {
+		callback(conn_id, code, reason)
+		return
+	}
+	if owner := rt.owner {
+		owner.close_target(conn_id, code, reason)
+		return
+	}
+	panic('websocket runtime operation missing: close_target')
 }
 
 pub fn (rt RuntimeContext) close_owned_target(conn_id string, lifecycle &DispatchConnState, code int, reason string) {
-	rt.close_owned_fn(conn_id, lifecycle, code, reason)
+	if callback := rt.close_owned_fn {
+		callback(conn_id, lifecycle, code, reason)
+		return
+	}
+	if owner := rt.owner {
+		owner.close_owned_target(conn_id, lifecycle, code, reason)
+		return
+	}
+	panic('websocket runtime operation missing: close_owned_target')
 }
 
 pub fn (rt RuntimeContext) process_worker_frame(frame transport.WorkerWebSocketFrame) ?transport.WorkerWebSocketDispatchCommandFailure {
@@ -332,7 +506,7 @@ pub fn hub_broadcast_dispatch(rt RuntimeContext, room string, data string, excep
 	targets := rt.dispatch_targets(room, except_id)
 	mut delivered := 0
 	for target in targets {
-		if !rt.conn_open(target.id) || !rt.can_cleanup_fn(target.id, target.lifecycle) { continue }
+		if !rt.conn_open(target.id) || !rt.can_cleanup(target.id, target.lifecycle) { continue }
 		presence := rt.presence(target.id)
 		base_frame := rt.build_frame('info', target.method, target.path, target.query,
 			target.headers, target.remote_addr, target.request_id, target.trace_id, 'text', data,
@@ -342,7 +516,7 @@ pub fn hub_broadcast_dispatch(rt RuntimeContext, room string, data string, excep
 			room: room
 		}
 		resp := if owner := target.dispatch {
-			owner.call_fn(info_frame) or { continue }
+			owner.dispatch_event(info_frame) or { continue }
 		} else {
 			rt.dispatch_event(info_frame) or { continue }
 		}
@@ -646,4 +820,22 @@ pub fn hub_snapshot(mut hub HubState, details bool, limit int, offset int, room_
 		connections:          sliced_connections
 		rooms:                sliced_rooms
 	}
+}
+
+pub fn (rt RuntimeContext) emit(kind string, fields map[string]string) {
+	if callback := rt.emit_fn {
+		callback(kind, fields)
+		return
+	}
+	if owner := rt.owner {
+		owner.emit(kind, fields)
+		return
+	}
+	panic('websocket runtime operation missing: emit')
+}
+
+pub fn (rt RuntimeContext) can_cleanup(id string, lifecycle &ws.DispatchConnState) bool {
+	if callback := rt.can_cleanup_fn { return callback(id, lifecycle) }
+	if owner := rt.owner { return owner.can_cleanup(id, lifecycle) }
+	panic('websocket runtime operation missing: can_cleanup')
 }

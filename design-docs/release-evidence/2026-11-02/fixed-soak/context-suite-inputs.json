@@ -1,0 +1,8 @@
+{
+  "src/websocket_context_memory_test.v": "c3b04cc1722c3e76865569f8f1275216557e285e9d94fe9f9ee7ad2132cec154",
+  "src/websocket_dispatch_lifecycle_test.v": "4329494b5812ed16d4d650aed427ac4483ca6a47606796671b0638367bc3f71d",
+  "src/multi_rpc_generation_test.v": "6ae123db4ca84f44241fbb811d86126e4bd6a0a84cb67e329e3ef8d78399f755",
+  "src/websocket_broadcast_close_owner_test.v": "68f6dd35e70e65f9509ae26cb26f37819147f442575676dbe9fbe0450f127824",
+  "src/websocket_detached_cleanup_owner_test.v": "45dfcd0791846d6d90bc36294654ec44c83f42a3e1af161a010624ad5f0a9e41",
+  "src/logging_contract_test.v": "36f1b0a4c0a1fc6d3b6be47993cac46bb5b038a1171b59674de6c9fa6a739c64"
+}

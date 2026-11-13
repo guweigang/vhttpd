@@ -17,6 +17,13 @@ fn (mut app App) codex_handle_response(instance string, cls codex.RpcClassificat
 	}
 	log.info('[codex] 🧩 response match instance=${codex.ProviderRuntime.normalize_instance(instance)} id=${cls.id_raw} pending_method=${pending.method} pending_stream=${pending.stream_id} pending_message=${pending.message_id}')
 
+	if app.providers.codex.snapshot(instance).application_messages {
+		if pending.method != '' {
+			result_raw := codex.RpcField.raw(raw, if cls.has_error { 'error' } else { 'result' })
+			app.dispatch_codex_rpc_response(instance, pending, result_raw, cls.has_error, raw)
+		}
+		return
+	}
 	if cls.has_error {
 		if pending.stream_id != '' {
 			app.codex_clear_read_fallback(instance, pending.stream_id)

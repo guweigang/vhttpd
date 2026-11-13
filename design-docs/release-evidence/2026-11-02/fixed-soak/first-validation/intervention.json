@@ -1,0 +1,8 @@
+{
+  "status": "manually_stopped_before_full_24h",
+  "reason": "Paseo retained RSS +30616 KiB over a short load; actor/affinity still allocated per-query native callbacks. Stopped to complete the same ownership fix rather than proceed with suspected residual growth.",
+  "full_24h_unit": "inactive",
+  "original_runtime_pid": 9303,
+  "original_runtime_running": true,
+  "raw_sequence_status_note": "sequence.json retains validating because the systemd unit was stopped by SIGTERM; it is not a running sequence now"
+}

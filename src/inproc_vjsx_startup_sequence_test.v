@@ -14,7 +14,7 @@ fn startup_sequence_feishu_payload(text string, chat_id string, message_id strin
 }
 
 fn startup_sequence_with_temp_db(db_name string, run fn (string)) {
-	with_temp_sqlite_db_env('CODEXBOT_TS_DB_PATH', db_name, run)
+	codexbot_ts_with_temp_db(db_name, run)
 }
 
 fn test_inproc_vjsx_startup_sequence_app_startup_command_then_repo_boot() {
@@ -72,7 +72,7 @@ export default app;
 	assert spec.config_json.contains('"value":"startup_value"')
 
 	startup_sequence_with_temp_db('codexbot_ts_startup_sequence.sqlite', fn (_ string) {
-		repo_app_file := os.join_path(os.dir(@FILE), '..', 'examples', 'codexbot-app-ts', 'app.mts')
+		repo_app_file := codexbot_ts_app_file()
 		assert os.exists(repo_app_file)
 		mut repo_executor := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 			thread_count:    1

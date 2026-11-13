@@ -4,10 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       validation:
-        description: 'PR gates, full nightly matrix, or production E2E preflight'
+        description: 'PR gates, development packages, full nightly, production E2E, or Windows acceptance'
         type: choice
-        options: [pr, nightly, e2e]
+        options: [pr, package, nightly, e2e, windows]
         default: pr
+      source_commit:
+        description: 'Optional full source commit SHA for development packages'
+        type: string
+        required: false
+      package_platform:
+        description: 'Platform selection for development packages'
+        type: choice
+        options: [all, linux, macos]
+        default: all
   push:
     branches:
       - main
@@ -19,7 +28,9 @@ on:
       - "examples/**"
       - "assets/**"
       - "scripts/**"
-      - "desktop/ci/**"
+      - "desktop/**"
+      - "!desktop/**/*.md"
+      - "admin/ui/**"
       - "Makefile"
       - "v.mod"
       - ".github/**"
@@ -30,10 +41,14 @@ permissions:
   contents: read
 
 jobs:
+  windows-acceptance:
+    if: github.event_name == 'workflow_dispatch' && inputs.validation == 'windows'
+    uses: ./.github/workflows/vhttpd-windows.yml
+
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
+    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr' || inputs.validation == 'package'
     name: ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"linux-amd64":"ubuntu-24.04","linux-arm64":"ubuntu-24.04-arm","macos-amd64":"macos-15-intel","macos-arm64":"macos-15"}')[matrix.target] }}
     timeout-minutes: 360
     env:
       VJOBS: 2
@@ -47,23 +62,46 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            target: linux-amd64
-          - os: macos-15-intel
-            target: macos-amd64
-          - os: macos-15
-            target: macos-arm64
+        target: ${{ github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && (inputs.package_platform == 'linux' && fromJSON('["linux-amd64","linux-arm64"]') || inputs.package_platform == 'macos' && fromJSON('["macos-amd64","macos-arm64"]')) || fromJSON('["linux-amd64","linux-arm64","macos-amd64","macos-arm64"]') }}
 
     steps:
+      - name: Validate package source selection
+        if: github.event_name == 'workflow_dispatch' && inputs.validation == 'package'
+        shell: bash
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          if [[ -n "$SOURCE_COMMIT" && ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Package source_commit must be a full Git commit SHA.' >&2
+            exit 1
+          fi
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && inputs.source_commit || github.event.pull_request.head.sha || github.sha }}
+
+      - name: Prepare development package acceptance fixtures
+        if: github.event_name == 'workflow_dispatch' && inputs.validation == 'package' && inputs.source_commit != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git archive "$GITHUB_SHA" .github/actions/setup-runtime tests/e2e tests/admin-ui | tar -x
 
       - uses: ./.github/actions/setup-runtime
 
+      - name: Verify dependency and GC build guards
+        shell: bash
+        run: |
+          python3 scripts/ci/test_pinned_vjsx.py
+          make test-build-gc
+
+      - name: Run ownership checks for development packaging
+        if: github.event_name == 'workflow_dispatch' && inputs.validation == 'package'
+        run: make lint-safety
+
       - name: Run fast unit tests
+        if: github.event_name != 'workflow_dispatch' || inputs.validation != 'package'
         shell: bash
         run: |
           set -euo pipefail
@@ -71,11 +109,27 @@ jobs:
           # V disables ownership tests whenever GITHUB_ACTIONS=true.
           env -u GITHUB_ACTIONS make test-fast V_CC=cc 2>&1 | tee ci-results/fast.log
 
+      - name: Feishu official SDK wire compatibility
+        if: matrix.target == 'linux-amd64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix tests/protocol --ignore-scripts --no-audit --no-fund
+          make test-protocol-feishu 2>&1 | tee ci-results/feishu-protocol.log
+
       - name: Build production binary
         shell: bash
         run: |
           set -euo pipefail
           make prod V_CC=cc VPHP_V_GC=boehm WITH_DB=1 2>&1 | tee ci-results/prod.log
+
+      - name: Verify Linux application deployment and rollback
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/verify-application-deploy.py --runtime "$VHTTPD_BIN" --output ci-results/application-deployment.json 2>&1 | tee ci-results/application-deployment.log
+          VHTTPD_START_TEST_RUNTIME="$VHTTPD_BIN" python3 desktop/ci/test_remote_start.py 2>&1 | tee ci-results/remote-start.log
 
       - name: Smoke test
         shell: bash
@@ -95,19 +149,52 @@ jobs:
           bundle="vhttpd-${{ matrix.target }}"
           mkdir -p "$bundle/scripts" "$bundle/runtime"
           cp "$VHTTPD_BIN" "$bundle/vhttpd"
+          python3 desktop/package_guidance.py "$bundle"
+          python3 - "$bundle/runtime-manifest.json" "${{ matrix.target }}" <<'PY_MANIFEST'
+          import json, os, pathlib, subprocess, sys
+          lock = dict(line.split('=', 1) for line in pathlib.Path('scripts/ci/toolchain.env').read_text().splitlines() if line and not line.startswith('#'))
+          sdk = pathlib.Path(os.environ['VJSX_DIR'])
+          sdk_commit = subprocess.check_output(['git', '-C', str(sdk), 'rev-parse', 'HEAD'], text=True).strip()
+          assert sdk_commit == lock['VJSX_COMMIT']
+          assert not subprocess.check_output(['git', '-C', str(sdk), 'status', '--porcelain', '--untracked-files=normal'], text=True).strip()
+          pathlib.Path(sys.argv[1]).write_text(json.dumps({
+              'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'source_tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip(),
+              'acceptance_commit': os.environ['GITHUB_SHA'],
+              'v_commit': lock['V_COMMIT'], 'vjsx_commit': sdk_commit,
+              'quickjs_commit': (sdk / '.quickjs-version').read_text().strip(),
+              'build_info': json.loads(subprocess.check_output([os.environ['VHTTPD_BIN'], '--build-info'], text=True)),
+              'platform': sys.argv[2], 'run_id': os.environ['GITHUB_RUN_ID'],
+          }) + '\n')
+          PY_MANIFEST
+          mkdir -p "$bundle/admin"
+          cp -R ./admin/ui "$bundle/admin/ui"
           bash ./scripts/bundle_runtime_libs.sh "$bundle/vhttpd" "$bundle/runtime/libs"
           cp ./README.md "$bundle/README.md"
           cp ./scripts/install_runtime.sh "$bundle/scripts/install_runtime.sh"
           cp ./scripts/runtime_doctor.sh "$bundle/scripts/runtime_doctor.sh"
           cp ./scripts/bundle_runtime_libs.sh "$bundle/scripts/bundle_runtime_libs.sh"
           chmod +x "$bundle/scripts/install_runtime.sh" "$bundle/scripts/runtime_doctor.sh" "$bundle/scripts/bundle_runtime_libs.sh"
-          tar -czf "$bundle.tar.gz" "$bundle"
+          COPYFILE_DISABLE=1 tar -czf "$bundle.tar.gz" "$bundle"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$bundle.tar.gz" > "$bundle.tar.gz.sha256"
+          else
+            shasum -a 256 "$bundle.tar.gz" > "$bundle.tar.gz.sha256"
+          fi
+
+      - name: Verify extracted standalone runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/verify-runtime-package.py "vhttpd-${{ matrix.target }}.tar.gz" 2>&1 | tee ci-results/package.log
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vhttpd-${{ matrix.target }}
-          path: vhttpd-${{ matrix.target }}.tar.gz
+          path: |
+            vhttpd-${{ matrix.target }}.tar.gz
+            vhttpd-${{ matrix.target }}.tar.gz.sha256
           if-no-files-found: error
 
       - name: Upload validation logs

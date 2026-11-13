@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: examples
+title: vhttpd 示例应用与配置集
+scope:
+    - examples/
+source_files: []
+depends_on: []
+related_to: []
