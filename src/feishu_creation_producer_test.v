@@ -160,8 +160,20 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_reuses_thread_after_restart() 
 		assert second_task.handled
 		assert second_task.commands.len == 1
 		assert second_task.commands[0].type_ == 'provider.rpc.call'
-		assert second_task.commands[0].method == 'turn/start'
+		assert second_task.commands[0].method == 'thread/resume'
 		assert second_task.commands[0].params.contains('"threadId":"thread_reuse_001"')
+		assert second_task.commands[0].params.contains('"excludeTurns":true')
+		resumed := codexbot_ts_dispatch_codex_event(mut executor_b, mut app,
+			'codexbot_ts_reuse_resume_rpc', second_task.commands[0].stream_id, 'codex.rpc.response',
+			'{"method":"thread/resume","result":{"thread":{"id":"thread_reuse_001"}},"has_error":false}') or {
+			panic(err)
+		}
+		assert resumed.handled
+		assert resumed.commands.len == 1
+		assert resumed.commands[0].type_ == 'provider.rpc.call'
+		assert resumed.commands[0].method == 'turn/start'
+		assert resumed.commands[0].params.contains('"threadId":"thread_reuse_001"')
+		assert resumed.commands[0].params.contains('"text":"second task"')
 	})
 }
 
