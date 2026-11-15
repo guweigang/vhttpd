@@ -5,6 +5,7 @@ import log
 struct ProviderStartupRuntime {}
 
 fn ProviderStartupRuntime.initialize(mut app App) {
+	app.start_reply_maintenance()
 	app.providers.feishu_card_bridge_apply_env_fallbacks()
 	ProviderStartupRuntime.start_feishu_background(mut app)
 	app.bootstrap_providers()

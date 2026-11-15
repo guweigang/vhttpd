@@ -203,7 +203,8 @@ fn app_final_signal(sig int) {
 	child.set_args(['--app-finalization-probe', root])
 	child.run()
 	defer { child.close() }
-	deadline := time.now().add(5 * time.second)
+	// The child warms a real TypeScript plugin before publishing readiness.
+	deadline := time.now().add(30 * time.second)
 	for !os.exists(root + '/ready') && child.is_alive() && time.now() < deadline {
 		time.sleep(time.millisecond)
 	}

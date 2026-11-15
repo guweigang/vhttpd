@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import command
 import executor as execmod
 import feishu
@@ -128,7 +130,7 @@ fn test_feishu_rollover_publish_and_session_clear_share_atomic_metadata_boundary
 		writer.wait()
 		clearer.wait()
 		assert app.providers.feishu.buffers.len == 0
-		assert app.providers.codex.snapshot('main').stream_map.len == 0
+		assert app.providers.codex.snapshot('main').reply_sessions.stream_map.len == 0
 	}
 }
 

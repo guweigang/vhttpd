@@ -1,6 +1,6 @@
 module main
 
-import codex
+import conversation_binding
 import command
 import config
 import executor as execmod
@@ -38,25 +38,22 @@ fn (mut h InitialSendHost) command_feishu_state() &feishu.FeishuState {
 	return &h.app.providers.feishu
 }
 
-fn (mut h InitialSendHost) codex_find_stream_targets(stream string) []codex.CodexTarget {
-	return h.app.codex_find_stream_targets(stream)
+fn (mut h InitialSendHost) find_reply_bindings(stream string) []conversation_binding.ReplyTarget {
+	return h.app.find_reply_bindings(stream)
 }
 
-fn (mut h InitialSendHost) codex_add_stream_target(instance string, stream string, target codex.CodexTarget) {
-	h.app.codex_add_stream_target(instance, stream, target)
+fn (mut h InitialSendHost) rebind_reply_binding(stream string, target conversation_binding.ReplyTarget) {
+	h.app.rebind_reply_binding(stream, target)
 }
 
-fn (mut h InitialSendHost) codex_rebind_stream_target(instance string, stream string, target codex.CodexTarget) {
-	h.app.codex_rebind_stream_target(instance, stream, target)
+fn (mut h InitialSendHost) release_reply_binding(release conversation_binding.Release) {
+	h.app.release_reply_binding(release)
 }
 
-fn (mut h InitialSendHost) codex_resolve_instance_for_stream(stream string) string {
-	return h.app.codex_resolve_instance_for_stream(stream)
-}
 
-fn (mut h InitialSendHost) codex_clear_stream_targets_any(stream string) bool {
-	return h.app.codex_clear_stream_targets_any(stream)
-}
+
+
+
 
 fn (mut _ InitialSendHost) feishu_runtime_buffer_patch(_req upstream.UpstreamSendRequest) {}
 
@@ -376,8 +373,4 @@ fn test_initial_send_completion_and_clear_publish_or_retire_as_one_transition() 
 
 fn (mut h InitialSendHost) feishu_runtime_execute_stream_command(admission feishu.StreamCommand, req upstream.UpstreamSendRequest, action string, finish bool) !upstream.UpstreamUpdateResult {
 	return h.app.feishu_runtime_execute_stream_command(admission, req, action, finish)
-}
-
-fn (mut h InitialSendHost) codex_release_feishu_targets(released feishu.WireStreamRelease) {
-	h.app.codex_release_feishu_targets(released)
 }

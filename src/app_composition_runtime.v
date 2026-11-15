@@ -12,6 +12,7 @@ import runtime_plan
 import http_runtime
 import process_runtime
 import application_logs
+import connection_runtime
 
 struct DataPlaneRuntime {
 mut:
@@ -47,6 +48,7 @@ mut:
 
 struct ProcessLifecycle {
 mut:
+	reply_runs connection_runtime.Registry
 	startup_ready bool
 	shutdown                 &process_runtime.ShutdownOwner = &process_runtime.ShutdownOwner{}
 	http_admission_installed bool

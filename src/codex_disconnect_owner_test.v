@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import codex
 import command
 import net
@@ -29,9 +31,9 @@ fn test_codex_disconnect_drains_connection_rpcs_but_preserves_logical_routes_and
 			thread_stream_map: {
 				'thread': 'stream'
 			}
-			stream_map:        {
+			reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 				'stream': [codex.CodexTarget{ platform: 'feishu', message_id: 'message' }]
-			}
+			}}
 			read_fallbacks:    {
 				'thread': codex.ReadFallback{ stream_id: 'stream' }
 			}
@@ -47,7 +49,7 @@ fn test_codex_disconnect_drains_connection_rpcs_but_preserves_logical_routes_and
 		assert live.thread_id == ''
 		assert live.active_stream_id == 'stream'
 		assert live.thread_stream_map['thread'] == 'stream'
-		assert live.stream_map['stream'][0].message_id == 'message'
+		assert live.reply_sessions.stream_map['stream'][0].message_id == 'message'
 		assert held.pending_rpcs.len == 1
 		assert held.read_fallbacks.len == 1
 		assert !owned.is_pending()

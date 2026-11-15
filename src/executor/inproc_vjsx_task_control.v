@@ -23,6 +23,8 @@ mut:
 	done        chan bool = chan bool{cap: 1}
 	started     chan bool = chan bool{cap: 1}
 	mailbox_key string
+	mailbox_bytes int
+	mailbox_deadline i64
 	notified    bool
 	session     ?&vjsx.RuntimeSession
 }
@@ -47,6 +49,12 @@ fn (e InProcVjsxExecutor) begin_task(mut control ExecutorTaskControl, lane_id st
 	if control.phase != .pending || control.reason != '' {
 		control.mu.unlock()
 		state.mu.unlock()
+		return false
+	}
+	if control.mailbox_deadline > 0 && time.sys_mono_now() >= control.mailbox_deadline {
+		control.mu.unlock()
+		state.mu.unlock()
+		e.cancel_task(mut control, 'inproc_vjsx_executor_websocket_queue_timeout')
 		return false
 	}
 	// Affinity withdrawal may race the deferred cancellation after dequeue.

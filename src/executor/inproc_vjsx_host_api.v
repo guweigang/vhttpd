@@ -18,6 +18,9 @@ fn InProcVjsxHostApi.install_http_facade(mut ctx vjsx.Context) ! {
 
 fn InProcVjsxHostApi.builder(mut state VjsxExecutorState, idx int, mut cache configcache.Cache) vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
+		name: 'commands'
+		value: InProcVjsxHostApi.commands_builder(mut state, idx)
+	}, vjsx.HostObjectField{
 		name: 'log'
 		value: InProcVjsxHostApi.log_builder(mut state, idx)
 	}, vjsx.HostObjectField{

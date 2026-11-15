@@ -171,7 +171,7 @@ fn (mut registry ChannelRegistry) enqueue_unlocked(channel_id string, frame Wire
 	if channel.buffered.len >= channel.buffer_limit {
 		return error('relay_channel_buffer_full:${channel_id}')
 	}
-	channel.buffered << frame
+	channel.buffered << frame.owned_copy()
 	registry.channels[channel_id] = channel
 }
 

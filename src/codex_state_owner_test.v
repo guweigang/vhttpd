@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import codex
 import command
 
@@ -9,9 +11,9 @@ fn codex_owner_seed() codex.ProviderRuntime {
 		initialized:       true
 		thread_id:         'thread'
 		active_stream_id:  'stream'
-		stream_map:        {
+		reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 			'stream': [codex.CodexTarget{ platform: 'feishu', message_id: 'original' }]
-		}
+		}}
 		pending_rpcs:      {
 			7: codex.PendingRpc{ method: 'read', stream_id: 'stream' }
 		}
@@ -34,7 +36,7 @@ fn test_codex_snapshots_and_published_inputs_own_their_mutable_containers() {
 		assert state.snapshot(instance).stream_targets('stream').len == 1
 		mut held := state.snapshot(instance)
 		mut changed := state.snapshot(instance)
-		changed.stream_map['stream'][0] = codex.CodexTarget{ platform: 'feishu', message_id: 'changed' }
+		changed.reply_sessions.stream_map['stream'][0] = codex.CodexTarget{ platform: 'feishu', message_id: 'changed' }
 		changed.pending_rpcs.delete(7)
 		changed.thread_stream_map.delete('thread')
 		changed.read_fallbacks.delete('stream')
@@ -98,7 +100,7 @@ fn test_codex_concurrent_rpc_routing_and_frame_mutations_do_not_overwrite_each_o
 	assert held.received_frames == 512
 	assert held.pending_rpcs.len == 512
 	assert held.thread_stream_map.len == 512
-	assert held.stream_map.len == 512
+	assert held.reply_sessions.stream_map.len == 512
 	assert held.read_fallback_seq == 512
 	assert held.read_fallbacks.len == 512
 	mut tokens := map[int]bool{}
@@ -122,11 +124,11 @@ fn test_codex_concurrent_rpc_routing_and_frame_mutations_do_not_overwrite_each_o
 	cleaners.wait()
 	live := app.providers.codex.snapshot('secondary')
 	assert live.pending_rpcs.len == 0
-	assert live.stream_map.len == 0
+	assert live.reply_sessions.stream_map.len == 0
 	assert live.thread_stream_map.len == 0
 	assert live.read_fallbacks.len == 0
 	assert held.pending_rpcs.len == 512
-	assert held.stream_map.len == 512
+	assert held.reply_sessions.stream_map.len == 512
 	assert held.thread_stream_map.len == 512
 	assert held.read_fallbacks.len == 512
 	assert app.providers.codex.snapshot('main').rpc_id_counter == 0
@@ -162,7 +164,7 @@ fn test_codex_turn_preparation_rejects_before_allocating_routes_or_pending_rpc()
 	live := app.providers.codex.snapshot('main')
 	assert live.rpc_id_counter == 0
 	assert live.pending_rpcs.len == 0
-	assert live.stream_map.len == 0
+	assert live.reply_sessions.stream_map.len == 0
 	assert live.current_stream_id() == ''
 }
 
@@ -182,7 +184,7 @@ fn test_codex_turn_preparation_publishes_one_coherent_route_and_rpc() {
 	assert live.pending_rpcs[prepared.id].stream_id == 'new-stream'
 	assert live.stream_targets('new-stream')[0].message_id == 'new-message'
 	assert held.current_stream_id() == 'stream'
-	assert 'new-stream' !in held.stream_map
+	assert 'new-stream' !in held.reply_sessions.stream_map
 }
 
 fn test_codex_parallel_turns_expose_coherent_detached_route_and_rpc_snapshots() {
@@ -209,5 +211,5 @@ fn test_codex_parallel_turns_expose_coherent_detached_route_and_rpc_snapshots() 
 	live := app.providers.codex.snapshot('main')
 	assert live.rpc_id_counter == 256
 	assert live.pending_rpcs.len == 256
-	assert live.stream_map.len == 256
+	assert live.reply_sessions.stream_map.len == 256
 }

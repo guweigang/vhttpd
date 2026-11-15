@@ -7,6 +7,7 @@ import executor
 import log
 import upstream
 import feishu
+import conversation_binding
 
 pub struct CodexCommandHandler {
 pub mut:
@@ -37,8 +38,9 @@ pub fn (h CodexCommandHandler) execute(command transport.WorkerWebSocketUpstream
 		if normalized.correlation.stream_id != '' && normalized.target.type_ == 'message_id'
 			&& normalized.target.id != '' {
 			app.codex_add_stream_target(instance, normalized.correlation.stream_id, codex.CodexTarget{
-				platform:   'feishu'
+				platform:   normalized.metadata['reply_provider'] or { 'feishu' }
 				message_id: normalized.target.id
+				stream_generation: normalized.metadata['stream_generation'] or { '' }
 			})
 			snapshot.status = 'bound'
 			return true, ''
@@ -122,7 +124,7 @@ fn (h FeishuCommandHandler) resolve_target(normalized cmdpkg.NormalizedCommand, 
 		return
 	}
 	mut app := h.app
-	targets := app.codex_find_stream_targets(normalized.correlation.stream_id)
+	targets := app.find_reply_bindings(normalized.correlation.stream_id)
 	platform := normalized.normalized_provider('feishu')
 	for t in targets.reverse() {
 		if t.platform == platform {
@@ -196,8 +198,8 @@ fn (h FeishuCommandHandler) execute_provider_message_send(normalized cmdpkg.Norm
 		// The admitted result owns this physical message. Replace stale target
 		// entries as well as publishing provenance, rather than retaining an older
 		// generation merely because its message ID already appears in the index.
-		app.codex_rebind_stream_target(app.codex_resolve_instance_for_stream(normalized.correlation.stream_id),
-			normalized.correlation.stream_id, codex.CodexTarget{
+		app.rebind_reply_binding(
+			normalized.correlation.stream_id, conversation_binding.ReplyTarget{
 				platform:          normalized.provider
 				message_id:        result.message_id
 				stream_generation: feishu_state.stream_generation_unlocked(result.message_id)
@@ -356,7 +358,7 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 					generation := app.command_feishu_bridge_bind(claim) or {
 						feishu_state.mu.@lock()
 						if released := feishu_state.abort_bridge_bind_unlocked(claim) {
-							app.codex_release_feishu_targets(released)
+							app.release_reply_binding(released.binding_release())
 						}
 						feishu_state.mu.unlock()
 						return feishu_stream_command_error(mut snapshot, err.msg())
@@ -364,7 +366,7 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 					feishu_state.mu.@lock()
 					if !feishu_state.complete_bridge_bind_unlocked(claim, generation) {
 						if released := feishu_state.abort_bridge_bind_unlocked(claim) {
-							app.codex_release_feishu_targets(released)
+							app.release_reply_binding(released.binding_release())
 						}
 						feishu_state.mu.unlock()
 						app.command_feishu_bridge_cancel_bind(claim, generation) or {
@@ -372,8 +374,8 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 						}
 						return feishu_stream_command_error(mut snapshot, 'feishu_stream_command_retired')
 					}
-					app.codex_rebind_stream_target(app.codex_resolve_instance_for_stream(claim.stream), claim.stream,
-						codex.CodexTarget{ platform: 'feishu', message_id: claim.message, buffer_message_id: claim.message, stream_generation: generation })
+					app.rebind_reply_binding(claim.stream,
+						conversation_binding.ReplyTarget{ platform: 'feishu', message_id: claim.message, buffer_message_id: claim.message, stream_generation: generation })
 					feishu_state.start_sent_publication_unlocked(claim.message, normalized.metadata['publication_id'] or { '' })
 					receipt := feishu_state.next_sent_receipt_unlocked(claim.message, claim.message)
 					feishu_state.mu.unlock()
@@ -393,11 +395,15 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 				feishu_state.mu.unlock()
 				return feishu_stream_command_error(mut snapshot, 'feishu_stream_command_retired')
 			}
+			if !feishu_state.buffer_capacity_unlocked(normalized.target.id, '') {
+				feishu_state.mu.unlock()
+				return feishu_stream_command_error(mut snapshot, 'feishu_buffer_capacity')
+			}
 			feishu_state.register_stream_buffer_unlocked(normalized.target.id,
 				normalized.correlation.stream_id, normalized.instance, '', '', '')
 			feishu_state.retain_bridge_binding_unlocked(normalized.target.id, binding)
-			app.codex_rebind_stream_target(app.codex_resolve_instance_for_stream(normalized.correlation.stream_id),
-				normalized.correlation.stream_id, codex.CodexTarget{
+			app.rebind_reply_binding(
+				normalized.correlation.stream_id, conversation_binding.ReplyTarget{
 					platform:          'feishu'
 					message_id:        normalized.target.id
 					stream_generation: feishu_state.stream_generation_unlocked(normalized.target.id)
@@ -432,7 +438,7 @@ pub fn (h FeishuCommandHandler) execute(command transport.WorkerWebSocketUpstrea
 			}
 			return feishu_stream_command_error(mut snapshot, 'feishu_stream_command_retired')
 		}
-		app.codex_release_feishu_targets(released)
+		app.release_reply_binding(released.binding_release())
 		state.mu.unlock()
 		if app.command_feishu_bridge_enabled() {
 			if mut app is FeishuBridgeRevocationHost {
@@ -561,7 +567,7 @@ fn (h FeishuCommandHandler) execute_bridge_stream_operation(admission feishu.Str
 		if !accepted {
 			state.mu.@lock()
 			if released := state.abort_bridge_stream_operation_unlocked(op) {
-				app.codex_release_feishu_targets(released)
+				app.release_reply_binding(released.binding_release())
 			}
 			state.mu.unlock()
 		}
@@ -577,7 +583,7 @@ fn (h FeishuCommandHandler) execute_bridge_stream_operation(admission feishu.Str
 	}
 	if action == 'fail' {
 		if released := state.abort_bridge_stream_operation_unlocked(op) {
-			app.codex_release_feishu_targets(released)
+			app.release_reply_binding(released.binding_release())
 		}
 	}
 	state.mu.unlock()

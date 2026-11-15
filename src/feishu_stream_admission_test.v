@@ -1,6 +1,6 @@
 module main
 
-import codex
+import conversation_binding
 import command
 import config
 import executor as execmod
@@ -52,25 +52,22 @@ fn (mut h StreamAdmissionHost) command_feishu_state() &feishu.FeishuState {
 	return &h.app.providers.feishu
 }
 
-fn (mut h StreamAdmissionHost) codex_find_stream_targets(stream string) []codex.CodexTarget {
-	return h.app.codex_find_stream_targets(stream)
+fn (mut h StreamAdmissionHost) find_reply_bindings(stream string) []conversation_binding.ReplyTarget {
+	return h.app.find_reply_bindings(stream)
 }
 
-fn (mut h StreamAdmissionHost) codex_add_stream_target(instance string, stream string, target codex.CodexTarget) {
-	h.app.codex_add_stream_target(instance, stream, target)
+fn (mut h StreamAdmissionHost) rebind_reply_binding(stream string, target conversation_binding.ReplyTarget) {
+	h.app.rebind_reply_binding(stream, target)
 }
 
-fn (mut h StreamAdmissionHost) codex_rebind_stream_target(instance string, stream string, target codex.CodexTarget) {
-	h.app.codex_rebind_stream_target(instance, stream, target)
+fn (mut h StreamAdmissionHost) release_reply_binding(release conversation_binding.Release) {
+	h.app.release_reply_binding(release)
 }
 
-fn (mut h StreamAdmissionHost) codex_resolve_instance_for_stream(stream string) string {
-	return h.app.codex_resolve_instance_for_stream(stream)
-}
 
-fn (mut h StreamAdmissionHost) codex_clear_stream_targets_any(stream string) bool {
-	return h.app.codex_clear_stream_targets_any(stream)
-}
+
+
+
 
 fn (mut h StreamAdmissionHost) feishu_runtime_buffer_patch(req upstream.UpstreamSendRequest) {
 	h.retire()
@@ -551,8 +548,4 @@ fn test_bind_receipt_rotates_generation_even_when_all_identifiers_match() {
 	assert host.app.providers.feishu.admit_wire_stream_command('message', 'stream', 'main', receipt.stream_generation) != none
 	assert host.app.providers.feishu.admit_wire_stream_command('message', 'stream', 'main', old.generation) == none
 	assert host.notified == 1
-}
-
-fn (mut h StreamAdmissionHost) codex_release_feishu_targets(released feishu.WireStreamRelease) {
-	h.app.codex_release_feishu_targets(released)
 }

@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import executor
 import codex
 import upstream.transport
@@ -214,7 +216,7 @@ fn test_codex_get_active_stream_id_and_set() {
 fn test_codex_runtime_bind_and_clear_thread_binding() {
 	mut rt := codex.ProviderRuntime{
 		thread_stream_map: map[string]string{}
-		stream_map:        map[string][]codex.CodexTarget{}
+		reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 	}
 	thread_id := rt.bind_stream_to_thread('thread_001', 'stream_001')
 	assert thread_id == 'thread_001'
@@ -233,7 +235,7 @@ fn test_codex_notification_active_does_not_schedule_read_fallback() {
 			codex: codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 					pending_rpcs:      map[int]codex.PendingRpc{}
 					read_fallbacks:    map[string]codex.ReadFallback{}
 				}
@@ -253,7 +255,7 @@ fn test_codex_notification_delta_clears_read_fallback() {
 			codex: codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 					pending_rpcs:      map[int]codex.PendingRpc{}
 					read_fallbacks:    map[string]codex.ReadFallback{}
 				}
@@ -274,7 +276,7 @@ fn test_codex_notification_reasoning_delta_clears_read_fallback() {
 			codex: codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 					pending_rpcs:      map[int]codex.PendingRpc{}
 					read_fallbacks:    map[string]codex.ReadFallback{}
 				}
@@ -297,7 +299,7 @@ fn test_codex_turn_start_response_does_not_schedule_read_fallback() {
 			codex: codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 					pending_rpcs:      map[int]codex.PendingRpc{}
 					read_fallbacks:    map[string]codex.ReadFallback{}
 				}
@@ -320,7 +322,7 @@ fn test_codex_turn_start_response_does_not_schedule_read_fallback() {
 fn test_codex_runtime_add_remove_and_clear_stream_targets() {
 	mut rt := codex.ProviderRuntime{
 		thread_stream_map: map[string]string{}
-		stream_map:        map[string][]codex.CodexTarget{}
+		reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 		active_stream_id:  'stream_001'
 	}
 	rt.add_stream_target('stream_001', codex.CodexTarget{
@@ -331,16 +333,16 @@ fn test_codex_runtime_add_remove_and_clear_stream_targets() {
 		platform:   'discord'
 		message_id: 'msg_002'
 	})
-	assert rt.stream_map['stream_001'].len == 2
+	assert rt.reply_sessions.stream_map['stream_001'].len == 2
 
 	removed := rt.remove_stream_target('stream_001', 'feishu', 'om_001')
 	assert removed == true
-	assert rt.stream_map['stream_001'].len == 1
-	assert rt.stream_map['stream_001'][0].platform == 'discord'
+	assert rt.reply_sessions.stream_map['stream_001'].len == 1
+	assert rt.reply_sessions.stream_map['stream_001'][0].platform == 'discord'
 
 	cleared := rt.clear_stream_targets('stream_001')
 	assert cleared == true
-	assert 'stream_001' !in rt.stream_map
+	assert 'stream_001' !in rt.reply_sessions.stream_map
 	assert rt.active_stream_id == ''
 }
 
@@ -351,14 +353,14 @@ fn test_codex_find_stream_targets_scans_across_instances() {
 				runtime:   codex.ProviderRuntime{
 					instance:          'main'
 					thread_stream_map: map[string]string{}
-					stream_map:        {
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 						'codex:stream_001': [
 							codex.CodexTarget{
 								platform:   'feishu'
 								message_id: 'om_main_001'
 							},
 						]
-					}
+					}}
 					pending_rpcs:      map[int]codex.PendingRpc{}
 					read_fallbacks:    map[string]codex.ReadFallback{}
 				}
@@ -369,7 +371,7 @@ fn test_codex_find_stream_targets_scans_across_instances() {
 						thread_stream_map: {
 							'thread_local_001': 'codex:stream_001'
 						}
-						stream_map:        map[string][]codex.CodexTarget{}
+						reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 						pending_rpcs:      map[int]codex.PendingRpc{}
 						read_fallbacks:    map[string]codex.ReadFallback{}
 					}
@@ -452,7 +454,7 @@ fn test_codex_notification_prefers_thread_bound_stream_over_active_stream() {
 					thread_stream_map: {
 						'thread_live_001': 'codex:thread_bound_001'
 					}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 					pending_rpcs:      map[int]codex.PendingRpc{}
 					read_fallbacks:    map[string]codex.ReadFallback{}
 				}

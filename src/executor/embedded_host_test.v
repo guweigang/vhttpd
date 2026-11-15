@@ -11,6 +11,7 @@ mut:
 	config_json string
 	events      int
 	creations   int
+	commands int
 }
 
 fn (h EmbeddedOnlyHost) get_runtime_config_json() string { return h.config_json }
@@ -27,7 +28,8 @@ fn (mut _ EmbeddedOnlyHost) provider_bridge_dispatch_callback(_provider string, 
 	return FeishuCardBridgeResult{}
 }
 
-fn (mut _ EmbeddedOnlyHost) run_command_envelopes(_request string, _ctx DispatchContext, _commands []transport.WorkerWebSocketUpstreamCommand) string {
+fn (mut h EmbeddedOnlyHost) run_command_envelopes(_request string, _ctx DispatchContext, commands []transport.WorkerWebSocketUpstreamCommand) string {
+	h.commands += commands.len
 	return ''
 }
 
@@ -40,7 +42,7 @@ fn test_embedded_http_runs_with_only_embedded_services_and_live_config() {
 	os.mkdir_all(dir) or { panic(err) }
 	defer { os.rmdir_all(dir) or {} }
 	entry := os.join_path(dir, 'handler.js')
-	os.write_file(entry, 'globalThis.__vhttpd_handle = (ctx) => { ctx.runtime.emit("embedded.test", {}); return ctx.json({ value: ctx.runtime.config("message") }, 201); };') or { panic(err) }
+	os.write_file(entry, 'globalThis.__vhttpd_handle = (ctx) => { vhttpdHost.commands([{type:"session.bind",provider:"codex",stream_id:"app-stream",target_type:"message_id",target:"reply",metadata:{reply_provider:"custom",thread_id:"thread"}}]); ctx.runtime.emit("embedded.test", {}); return ctx.json({ value: ctx.runtime.config("message") }, 201); };') or { panic(err) }
 	exec := new_inproc_vjsx_executor(VjsxRuntimeFacadeConfig{
 		thread_count:    1
 		app_entry:       entry
@@ -62,6 +64,7 @@ fn test_embedded_http_runs_with_only_embedded_services_and_live_config() {
 	second := exec.dispatch_http_with_host(mut host, request) or { panic(err) }
 	assert second.response.body.contains('second')
 	assert host.events == 2
+	assert host.commands == 2
 }
 
 fn test_prepared_typescript_and_commonjs_do_not_retain_compiler_in_execution_lane() ! {

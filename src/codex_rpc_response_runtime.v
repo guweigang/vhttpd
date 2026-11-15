@@ -10,7 +10,8 @@ fn (mut app App) codex_handle_response(instance string, cls codex.RpcClassificat
 
 	// Check for pending RPCs FIRST so we know the stream_id
 	id := cls.id_raw.int()
-	pending, _ := app.codex_take_pending_rpc(instance, id)
+	pending, found := app.codex_take_pending_rpc(instance, id)
+	if !found || (pending.expires_at_ms > 0 && pending.expires_at_ms <= time.now().unix_milli()) { return }
 	if pending.routing_is_retired() {
 		log.debug('[codex] retired stream response discarded instance=${instance} id=${id}')
 		return

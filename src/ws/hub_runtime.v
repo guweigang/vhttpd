@@ -397,6 +397,7 @@ fn hub_send_expected(mut hub HubState, conn_id string, expected ?&DispatchConnSt
 		}
 		if !hub_conn.lifecycle.can_send() {
 			if hub_conn.lifecycle.can_queue() {
+				if !hub.can_enqueue_unlocked(conn_id, data) { hub.mu.unlock(); return false }
 				mut pending := hub.pending[conn_id] or { []HubPendingMessage{} }
 				pending << HubPendingMessage{
 					registration: hub_conn.lifecycle
@@ -418,6 +419,7 @@ fn hub_send_expected(mut hub HubState, conn_id string, expected ?&DispatchConnSt
 			return false
 		}
 		mut pending := hub.pending[conn_id] or { []HubPendingMessage{} }
+		if !hub.can_enqueue_unlocked(conn_id, data) { hub.mu.unlock(); return false }
 		pending << HubPendingMessage{
 			data:   data
 			opcode: if opcode == '' { 'text' } else { opcode }
@@ -450,6 +452,7 @@ pub fn hub_broadcast(mut hub HubState, room string, data string, opcode string, 
 				}
 			} else {
 				mut pending := hub.pending[conn_id] or { []HubPendingMessage{} }
+				if !hub.can_enqueue_unlocked(conn_id, data) { continue }
 				pending << HubPendingMessage{
 					data:   data
 					opcode: if opcode == '' { 'text' } else { opcode }

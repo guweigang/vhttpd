@@ -1,6 +1,7 @@
 module ws
 
 import time
+import executor
 
 // ── Fixture Runtime Management ──
 
@@ -133,6 +134,18 @@ pub fn (mut h HubState) fixture_update_msg(instance string, target string) !Upst
 
 // ── Activity Recording ──
 
+fn (snapshot UpstreamActivitySnapshot) snapshot_copy() UpstreamActivitySnapshot {
+	mut commands := []executor.WebSocketUpstreamCommandActivity{cap: snapshot.commands.len}
+	for command in snapshot.commands {
+		commands << executor.WebSocketUpstreamCommandActivity{
+			...command
+			metadata: command.metadata.clone()
+			content_fields: command.content_fields.clone()
+		}
+	}
+	return UpstreamActivitySnapshot{ ...snapshot, commands: commands }
+}
+
 pub fn (mut h HubState) record_upstream_activity(snapshot UpstreamActivitySnapshot) {
 	h.upstream_mu.@lock()
 	defer {
@@ -143,7 +156,7 @@ pub fn (mut h HubState) record_upstream_activity(snapshot UpstreamActivitySnapsh
 	} else {
 		50
 	}
-	h.recent_activities << snapshot
+	h.recent_activities << snapshot.snapshot_copy()
 	if h.recent_activities.len > limit {
 		start := h.recent_activities.len - limit
 		h.recent_activities = h.recent_activities[start..].clone()
@@ -163,7 +176,7 @@ pub fn (mut h HubState) upstream_activities_snapshot(limit int, offset int, prov
 		if instance_filter != '' && entry.instance != instance_filter {
 			continue
 		}
-		activities << entry
+		activities << entry.snapshot_copy()
 	}
 	activities.sort(a.received_at > b.received_at)
 	if offset >= activities.len {

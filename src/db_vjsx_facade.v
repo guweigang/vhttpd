@@ -19,6 +19,7 @@ pub fn (mut app App) vjsx_database_backend() !executor.DatabaseBackend {
 	access := dbx.AsyncDatabaseAccess{ settings: app.transport.db.settings(), owner: app.transport.db.pool_owner }
 	app.mu.unlock()
 	mut database := dbx.AsyncDatabase.new(access)
+	database.start_transaction_sweeper()
 	return executor.DatabaseBackend{
 		run_fn:   fn [mut database] (request string, cancelled fn () bool) !string {
 			return database.run_json(request, cancelled)

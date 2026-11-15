@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import command
 import config
 import upstream.transport
@@ -566,7 +568,7 @@ fn test_codex_handler_session_bind_thread_updates_runtime_binding() {
 			codex: codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 				}
 			}
 		}
@@ -598,7 +600,7 @@ fn test_codex_handler_session_clear_thread_removes_runtime_binding() {
 					thread_stream_map: {
 						'thread_001': 'codex:task_001'
 					}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 				}
 			}
 		}
@@ -626,7 +628,7 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 			codex:  codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        map[string][]codex.CodexTarget{}
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: map[string][]codex.CodexTarget{}}
 				}
 			}
 			feishu: feishu.FeishuState{
@@ -655,8 +657,8 @@ fn test_feishu_handler_session_bind_message_registers_stream_target_and_buffer()
 	assert err == ''
 	assert snapshot.status == 'bound'
 	assert snapshot.message_id == 'om_reply_001'
-	assert app.providers.codex.runtime.stream_map['codex:task_002'].len == 1
-	assert app.providers.codex.runtime.stream_map['codex:task_002'][0].message_id == 'om_reply_001'
+	assert app.providers.codex.runtime.reply_sessions.stream_map['codex:task_002'].len == 1
+	assert app.providers.codex.runtime.reply_sessions.stream_map['codex:task_002'][0].message_id == 'om_reply_001'
 	assert 'om_reply_001' in app.providers.feishu.buffers
 	assert app.providers.feishu.buffers['om_reply_001'].stream_id == 'codex:task_002'
 }
@@ -667,14 +669,14 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 			codex:  codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        {
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 						'codex:task_003': [
 							codex.CodexTarget{
 								platform:   'feishu'
 								message_id: 'om_reply_002'
 							},
 						]
-					}
+					}}
 				}
 			}
 			feishu: feishu.FeishuState{
@@ -706,7 +708,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_and_stream_target() 
 	assert err == ''
 	assert snapshot.status == 'cleared'
 	assert 'om_reply_002' !in app.providers.feishu.buffers
-	assert 'codex:task_003' !in app.providers.codex.runtime.stream_map
+	assert 'codex:task_003' !in app.providers.codex.runtime.reply_sessions.stream_map
 }
 
 fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
@@ -715,7 +717,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 			codex:  codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        {
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 						'codex:task_chain': [
 							codex.CodexTarget{
 								platform:   'feishu'
@@ -726,7 +728,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 								message_id: 'om_chain_2'
 							},
 						]
-					}
+					}}
 				}
 			}
 			feishu: feishu.FeishuState{
@@ -764,7 +766,7 @@ fn test_feishu_handler_session_clear_message_removes_buffer_chain() {
 	assert snapshot.status == 'cleared'
 	assert 'om_chain_1' !in app.providers.feishu.buffers
 	assert 'om_chain_2' !in app.providers.feishu.buffers
-	assert 'codex:task_chain' !in app.providers.codex.runtime.stream_map
+	assert 'codex:task_chain' !in app.providers.codex.runtime.reply_sessions.stream_map
 }
 
 fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
@@ -773,7 +775,7 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 			codex:  codex.CodexState{
 				runtime: codex.ProviderRuntime{
 					thread_stream_map: map[string]string{}
-					stream_map:        {
+					reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 						'codex:task_stream_clear': [
 							codex.CodexTarget{
 								platform:   'feishu'
@@ -784,7 +786,7 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 								message_id: 'om_stream_2'
 							},
 						]
-					}
+					}}
 				}
 			}
 			feishu: feishu.FeishuState{
@@ -826,5 +828,5 @@ fn test_feishu_handler_session_clear_stream_id_removes_all_stream_buffers() {
 	assert 'om_stream_1' !in app.providers.feishu.buffers
 	assert 'om_stream_2' !in app.providers.feishu.buffers
 	assert 'om_other' in app.providers.feishu.buffers
-	assert 'codex:task_stream_clear' !in app.providers.codex.runtime.stream_map
+	assert 'codex:task_stream_clear' !in app.providers.codex.runtime.reply_sessions.stream_map
 }

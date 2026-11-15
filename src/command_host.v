@@ -4,6 +4,7 @@ import codex
 import command
 import upstream
 import feishu
+import conversation_binding
 
 interface UpstreamMessageHost {
 mut:
@@ -25,12 +26,9 @@ mut:
 pub interface FeishuCommandHost {
 	UpstreamMessageHost
 mut:
-	codex_find_stream_targets(stream_id string) []codex.CodexTarget
-	codex_add_stream_target(instance string, stream_id string, target codex.CodexTarget)
-	codex_rebind_stream_target(instance string, stream_id string, target codex.CodexTarget)
-	codex_release_feishu_targets(released feishu.WireStreamRelease)
-	codex_resolve_instance_for_stream(stream_id string) string
-	codex_clear_stream_targets_any(stream_id string) bool
+	find_reply_bindings(stream string) []conversation_binding.ReplyTarget
+	rebind_reply_binding(stream string, target conversation_binding.ReplyTarget)
+	release_reply_binding(release conversation_binding.Release)
 	feishu_runtime_execute_stream_command(admission feishu.StreamCommand, req upstream.UpstreamSendRequest, action string, finish bool) !upstream.UpstreamUpdateResult
 	dispatch_feishu_message_sent(receipt feishu.SentReceipt)
 	dispatch_feishu_message_updated(stream_id string, message_id string)

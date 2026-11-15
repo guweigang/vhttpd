@@ -338,6 +338,12 @@ pub fn (mut s HubState) join(conn_id string, room string) bool {
 		return false
 	}
 	s.mu.@lock()
+	if (room !in s.room_members && s.room_members.len >= 4096)
+		|| (room !in (s.conn_rooms[conn_id] or { map[string]bool{} })
+		&& (s.conn_rooms[conn_id] or { map[string]bool{} }).len >= 128) {
+		s.mu.unlock()
+		return false
+	}
 	mut members := (s.room_members[room] or {
 		map[string]bool{}
 	}).clone()
@@ -394,6 +400,7 @@ pub fn (mut s HubState) send_client(conn_id string, client &websocket.Client, da
 			}
 			if !hub_conn.lifecycle.can_send() {
 				if hub_conn.lifecycle.can_queue() {
+					if !s.can_enqueue_unlocked(conn_id, data) { s.mu.unlock(); return false }
 					mut pending := s.pending[conn_id] or { []HubPendingMessage{} }
 					pending << HubPendingMessage{
 						registration: hub_conn.lifecycle

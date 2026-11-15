@@ -1,6 +1,7 @@
 module feishu
 
 import time
+import conversation_binding
 
 pub struct WireStreamRelease {
 pub:
@@ -12,6 +13,16 @@ pub:
 	stream_id         string
 	message_ids       []string
 	retire_route      bool
+}
+
+pub fn (release WireStreamRelease) binding_release() conversation_binding.Release {
+	return conversation_binding.Release{
+		platform: 'feishu'
+		generation: release.generation
+		stream_id: release.stream_id
+		message_ids: release.message_ids.clone()
+		retire_route: release.retire_route
+	}
 }
 
 // Caller holds mu across the paired target publication. Replacement needs the

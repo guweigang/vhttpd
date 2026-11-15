@@ -24,13 +24,9 @@ pub fn (mut s FeishuState) append_buffer_patch(message_id string, app_name strin
 }
 
 fn (mut s FeishuState) append_buffer_patch_unlocked(message_id string, app_name string, text string) ?BufferRollover {
+	if !s.buffer_capacity_unlocked(message_id, text) { return none }
 	if message_id !in s.buffers {
-		s.buffers[message_id] = StreamBuffer{
-			message_id:    message_id
-			app:           app_name
-			last_flush:    time.now().unix_milli()
-			segment_index: 1
-		}
+		s.register_stream_buffer_content_unlocked(message_id, '', app_name, '', '', '')
 	}
 	root := s.buffers[message_id] or { return none }
 	if root.message_only || root.message_update != none || root.bridge_replica || root.bridge_operation != none || root.bind_pending || root.failure != none {
@@ -46,6 +42,7 @@ fn (mut s FeishuState) append_buffer_patch_unlocked(message_id string, app_name 
 			return none
 		}
 		if !buf.sealed {
+			if text.len > buffer_content_limit - buf.content.len { return none }
 			buf.content += text
 			buf.last_delta = time.now().unix_milli()
 			s.buffers[current] = buf
@@ -62,7 +59,9 @@ fn (mut s FeishuState) append_buffer_patch_unlocked(message_id string, app_name 
 		if buf.receive_id.trim_space() == '' || buf.receive_id_type.trim_space() == '' {
 			return none
 		}
+		if text.len > buffer_content_limit - buf.rollover_content.len { return none }
 		buf.rollover_content += text
+		buf.last_delta = time.now().unix_milli()
 		if buf.rollover != none {
 			s.buffers[current] = buf
 			return none
@@ -112,7 +111,7 @@ pub fn (mut s FeishuState) commit_buffer_rollover(claim BufferRollover, message_
 pub fn (mut s FeishuState) commit_buffer_rollover_unlocked(claim BufferRollover, message_id string, now i64) bool {
 	mut active := s.buffers[claim.buffer.message_id] or { return false }
 	if !claim.owns(active) { return false }
-	if message_id == '' || message_id in s.buffers {
+	if !s.buffer_capacity_unlocked(message_id, active.rollover_content) || message_id in s.buffers {
 		active.rollover = none
 		s.buffers[claim.buffer.message_id] = active
 		return false

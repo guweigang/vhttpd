@@ -2,6 +2,21 @@ module codex
 
 import time
 
+pub fn (mut rt ProviderRuntime) add_stream_target(stream string, target CodexTarget) {
+	rt.reply_sessions.add_stream_target(stream, target)
+}
+
+pub fn (rt &ProviderRuntime) stream_targets(stream string) []CodexTarget {
+	return rt.reply_sessions.stream_targets(stream)
+}
+
+pub fn (mut rt ProviderRuntime) remove_stream_target(stream string, platform string, message string) bool {
+	mut routes := rt.reply_sessions
+	removed := routes.remove_stream_target(stream, platform, message)
+	rt.reply_sessions = routes
+	return removed
+}
+
 // ── ProviderRuntime state-transition methods ──
 
 pub fn (mut rt ProviderRuntime) begin_turn_stream(stream_id string) string {
@@ -10,41 +25,8 @@ pub fn (mut rt ProviderRuntime) begin_turn_stream(stream_id string) string {
 		rt.thread_stream_map[thread_id] = stream_id
 	}
 	rt.active_stream_id = stream_id
-	rt.stream_map.delete(stream_id)
+	rt.reply_sessions.clear_stream(stream_id)
 	return thread_id
-}
-
-pub fn (mut rt ProviderRuntime) add_stream_target(stream_id string, target CodexTarget) {
-	rt.stream_map[stream_id] << target
-}
-
-pub fn (mut rt ProviderRuntime) remove_stream_target(stream_id string, platform string, message_id string) bool {
-	if stream_id == '' {
-		return false
-	}
-	targets := rt.stream_map[stream_id]
-	if targets.len == 0 {
-		return false
-	}
-	mut next := []CodexTarget{}
-	mut removed := false
-	for target in targets {
-		if message_id != '' && target.message_id != message_id {
-			next << target
-			continue
-		}
-		if platform != '' && target.platform != platform {
-			next << target
-			continue
-		}
-		removed = true
-	}
-	if next.len == 0 {
-		rt.stream_map.delete(stream_id)
-	} else {
-		rt.stream_map[stream_id] = next
-	}
-	return removed
 }
 
 pub fn (mut rt ProviderRuntime) clear_stream_targets(stream_id string) bool {
@@ -54,8 +36,7 @@ pub fn (mut rt ProviderRuntime) clear_stream_targets(stream_id string) bool {
 	// The active route exists independently of optional message targets. In
 	// particular, removing the last target must not make later release a no-op.
 	mut cleared := false
-	if stream_id in rt.stream_map {
-		rt.stream_map.delete(stream_id)
+	if rt.reply_sessions.clear_stream(stream_id) {
 		cleared = true
 	}
 	if rt.active_stream_id == stream_id {
@@ -139,6 +120,9 @@ pub fn (mut rt ProviderRuntime) take_pending_rpc(id int) (PendingRpc, bool) {
 	}
 	pending := rt.pending_rpcs[id]
 	rt.pending_rpcs.delete(id)
+	if pending.expires_at_ms > 0 && pending.expires_at_ms <= time.now().unix_milli() {
+		return PendingRpc{}, false
+	}
 	return pending, true
 }
 
@@ -169,10 +153,6 @@ pub fn (mut rt ProviderRuntime) repair_thread_stream_binding(thread_id string) s
 		rt.thread_stream_map[thread_id] = target_stream_id
 	}
 	return target_stream_id
-}
-
-pub fn (rt ProviderRuntime) stream_targets(stream_id string) []CodexTarget {
-	return rt.stream_map[stream_id].clone()
 }
 
 pub fn (rt ProviderRuntime) pending_stream_id() string {

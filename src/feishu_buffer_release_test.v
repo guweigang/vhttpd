@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import codex
 import command
 import executor as execmod
@@ -81,8 +83,8 @@ fn test_feishu_session_clear_preserves_rebound_buffer_and_new_codex_targets() {
 	handled, err := handler.execute(stale, command.NormalizedCommand.from_worker_command(stale), mut activity)
 	assert handled && err == 'feishu_stream_command_retired'
 	assert app.providers.feishu.buffers['message'].content == 'keep'
-	assert app.providers.codex.snapshot('main').stream_map['new'].len == 1
-	assert app.providers.codex.snapshot('main').stream_map['old'].len == 1
+	assert app.providers.codex.snapshot('main').reply_sessions.stream_map['new'].len == 1
+	assert app.providers.codex.snapshot('main').reply_sessions.stream_map['old'].len == 1
 	// Target-only clear uses the stream captured during deletion for target cleanup.
 	current := transport.WorkerWebSocketUpstreamCommand{
 		type_:       'session.clear'
@@ -96,8 +98,8 @@ fn test_feishu_session_clear_preserves_rebound_buffer_and_new_codex_targets() {
 	current_handled, current_err := handler.execute(current, command.NormalizedCommand.from_worker_command(current), mut activity)
 	assert current_handled && current_err == ''
 	assert app.providers.feishu.buffers.len == 0
-	assert app.providers.codex.snapshot('main').stream_map['new'].len == 0
-	assert app.providers.codex.snapshot('main').stream_map['old'].len == 1
+	assert app.providers.codex.snapshot('main').reply_sessions.stream_map['new'].len == 0
+	assert app.providers.codex.snapshot('main').reply_sessions.stream_map['old'].len == 1
 }
 
 fn test_feishu_concurrent_stream_cleanup_preserves_foreign_successors() {

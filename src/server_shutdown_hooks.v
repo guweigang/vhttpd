@@ -21,7 +21,8 @@ fn (mut app App) request_background_network_stop() BackgroundNetworkStop {
 	internal_generation := app.lifecycle.internal_admin.request_stop()
 	app.protocols.mcp.request_stop()
 	upstream_runs := app.websocket.upstream_runs.request_shutdown()
-	bridge_runs := app.providers.feishu.background_runs.request_shutdown()
+	mut bridge_runs := app.providers.feishu.background_runs.request_shutdown()
+	bridge_runs << app.lifecycle.reply_runs.request_shutdown()
 	return BackgroundNetworkStop{
 		internal_admin:      app.lifecycle.internal_admin
 		mcp:                 &app.protocols.mcp
