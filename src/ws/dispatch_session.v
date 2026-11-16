@@ -9,9 +9,8 @@ import net.websocket
 
 // ── Dispatch Session Lifecycle ──
 
-pub fn handle_dispatch_session(rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame) {
+pub fn handle_dispatch_session(rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame, lifecycle &DispatchConnState) {
 	mut ws_server, captured := managed_server()
-	mut lifecycle := &DispatchConnState{}
 	mut state := &DispatchBridgeState{
 		lifecycle:     lifecycle
 		rt:            rt
@@ -202,12 +201,12 @@ fn dispatch_session_close_cb(mut _ws_client websocket.Client, reported_code int,
 	dispatch_session_finalize_with_details(state, reported_code, reported_reason)
 }
 
-pub fn run_dispatch_session(mut run IngressRun, rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame) {
+pub fn run_dispatch_session(mut run IngressRun, rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame, lifecycle &DispatchConnState) {
 	defer { run.finish() }
 	if run.stopped() {
 		client_conn.close() or {}
 		dispatch_session_finalize(&DispatchBridgeState{
-			lifecycle:   &DispatchConnState{}
+			lifecycle:   lifecycle
 			rt:          rt
 			conn_id:     req_id
 			request_id:  req_id
@@ -220,5 +219,5 @@ pub fn run_dispatch_session(mut run IngressRun, rt RuntimeContext, mut client_co
 		})
 		return
 	}
-	handle_dispatch_session(rt.with_ingress(&run), mut client_conn, key, method, path, query, headers, remote_addr, req_id, trace_id, start_ms, open_commands)
+	handle_dispatch_session(rt.with_ingress(&run), mut client_conn, key, method, path, query, headers, remote_addr, req_id, trace_id, start_ms, open_commands, lifecycle)
 }

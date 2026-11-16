@@ -67,7 +67,7 @@ fn test_inbound_dispatch_relay_and_bridge_join_before_app_finalizers() {
 		mut run := inbound_run(mut app, server)
 		match mode {
 			'dispatch' {
-				spawn ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', {}, {}, '', 'conn', 'trace', 0, [])
+				spawn ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', {}, {}, '', 'conn', 'trace', 0, [], &ws.DispatchConnState{})
 			}
 			'relay' {
 				spawn run_relay_websocket_session(mut run, mut app, mut server, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', {}, {}, '', 'conn', 'trace', relay.RelayDescriptor{ id: 'relay' })
@@ -135,7 +135,7 @@ fn test_inbound_stop_before_spawn_closes_original_and_does_not_upgrade() {
 	fd := server.sock.handle
 	mut run := inbound_run(mut app, server)
 	stop := app.request_http_ingress_stop()
-	spawn ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'key', 'GET', '/ws', {}, {}, '', 'late', 'trace', 0, [])
+	spawn ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'key', 'GET', '/ws', {}, {}, '', 'late', 'trace', 0, [], &ws.DispatchConnState{})
 	done := chan bool{cap: 1}
 	spawn fn [stop, done] () {
 		stop.wait() or { panic(err) }
@@ -153,7 +153,7 @@ fn test_inbound_failed_upgrade_releases_socket_and_opening_state() {
 	fd := server.sock.handle
 	assert net.shutdown(fd, how: .write) == 0
 	mut run := inbound_run(mut app, server)
-	ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'key', 'GET', '/ws', {}, {}, '', 'failed', 'trace', 0, [])
+	ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'key', 'GET', '/ws', {}, {}, '', 'failed', 'trace', 0, [], &ws.DispatchConnState{})
 	assert app.websocket.state.ingress.active() == 0
 	assert app.websocket.active_connections() == 0
 	assert C.fcntl(fd, C.F_GETFD, 0) == -1
@@ -180,7 +180,7 @@ fn testsuite_begin() {
 	os.rename(root + '/address.tmp', root + '/address') or { panic(err) }
 	mut server := listener.accept() or { panic(err) }
 	mut run := inbound_run(mut app, server)
-	spawn ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', {}, {}, '', 'signal', 'trace', 0, [])
+	spawn ws.run_dispatch_session(mut run, app.build_websocket_runtime_context(), mut server, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', {}, {}, '', 'signal', 'trace', 0, [], &ws.DispatchConnState{})
 	time.sleep(10 * time.second)
 	exit(91)
 }

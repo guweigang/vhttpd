@@ -113,6 +113,16 @@ pub fn (mut s HubState) register_conn(conn_id string, worker_socket string, meth
 	s.register_owned_conn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers, remote_addr, client, lifecycle, none)
 }
 
+// A dispatch handler may publish the connection ID before its socket attaches.
+// Reserve the lifecycle before dispatching open so only real opening targets can queue.
+pub fn (mut s HubState) reserve_dispatch_open(conn_id string, lifecycle &DispatchConnState) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	if conn_id != '' && conn_id !in s.conns {
+		s.conns[conn_id] = HubConn{ id: conn_id, lifecycle: lifecycle }
+	}
+}
+
 pub fn (mut s HubState) register_owned_conn(conn_id string, worker_socket string, method string, req_id string, trace_id string, path string, query map[string]string, headers map[string]string, remote_addr string, client &websocket.Client, lifecycle &DispatchConnState, serving ?&IngressRun) {
 	s.register_owned_dispatch_conn(conn_id, worker_socket, method, req_id, trace_id, path, query, headers, remote_addr, client, lifecycle, serving, none)
 }

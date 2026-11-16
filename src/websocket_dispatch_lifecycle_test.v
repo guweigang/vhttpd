@@ -15,9 +15,41 @@ fn test_websocket_runtime_builds_hub_context_without_app_capture() {
 	mut runtime := WebSocketRuntime.new(false)
 	mut app := App{}
 	rt := runtime.build_context(app.build_websocket_kernel_port())
+	runtime.state.conns['pending-connection'] = ws.HubConn{
+		id: 'pending-connection'
+		lifecycle: &ws.DispatchConnState{}
+	}
 	assert rt.send_to('pending-connection', 'hello', 'text')
 	assert runtime.state.pending['pending-connection'].len == 1
 	assert rt.rooms('pending-connection').len == 0
+}
+
+fn test_late_websocket_commands_leave_room_for_new_opening_connection() {
+	mut runtime := WebSocketRuntime.new(false)
+	mut app := App{}
+	rt := runtime.build_context(app.build_websocket_kernel_port())
+	for i in 0 .. 1025 {
+		id := 'retired-${i}'
+		lifecycle := &ws.DispatchConnState{ phase: .open }
+		runtime.state.conns[id] = ws.HubConn{ id: id, lifecycle: lifecycle }
+		runtime.state.unregister_owned(id, lifecycle)
+		assert lifecycle.phase() == .closed
+		cmd := transport.WorkerWebSocketFrame{ event: 'send', target_id: id, data: 'late' }
+		failure := rt.process_worker_frame(cmd) or { panic('unregistered send was accepted') }
+		assert failure.error_class == 'websocket_send_failed'
+	}
+	assert runtime.state.pending.len == 0
+
+	current := &ws.DispatchConnState{}
+	runtime.state.reserve_dispatch_open('new', current)
+	sync := transport.WorkerWebSocketFrame{ event: 'send_to', target_id: 'new', data: '{"type":"sync"}' }
+	assert rt.process_worker_frame(sync) == none
+	assert runtime.state.pending['new'].len == 1
+	assert runtime.state.pending['new'][0].data == sync.data
+
+	runtime.state.unregister_owned('new', current)
+	assert runtime.state.pending.len == 0
+	assert rt.process_worker_frame(sync) != none
 }
 
 fn test_ws_dispatch_conn_state_uses_single_lifecycle_source() {

@@ -374,14 +374,20 @@ pub mut:
 // These operate on ws.HubState directly, with zero App coupling.
 
 pub fn hub_send_to(mut hub HubState, conn_id string, data string, opcode string) bool {
-	return hub_send_expected(mut hub, conn_id, none, data, opcode)
+	return hub_send_expected(mut hub, conn_id, none, data, opcode, true)
+}
+
+// Runtime commands address a connection that has already been published.
+// A missing target may have been unregistered while the command was in flight.
+pub fn hub_send_registered_to(mut hub HubState, conn_id string, data string, opcode string) bool {
+	return hub_send_expected(mut hub, conn_id, none, data, opcode, false)
 }
 
 pub fn hub_send_owned_to(mut hub HubState, conn_id string, lifecycle &DispatchConnState, data string, opcode string) bool {
-	return hub_send_expected(mut hub, conn_id, lifecycle, data, opcode)
+	return hub_send_expected(mut hub, conn_id, lifecycle, data, opcode, false)
 }
 
-fn hub_send_expected(mut hub HubState, conn_id string, expected ?&DispatchConnState, data string, opcode string) bool {
+fn hub_send_expected(mut hub HubState, conn_id string, expected ?&DispatchConnState, data string, opcode string, allow_future_open bool) bool {
 	if conn_id == '' {
 		return false
 	}
@@ -414,7 +420,7 @@ fn hub_send_expected(mut hub HubState, conn_id string, expected ?&DispatchConnSt
 		}
 		client_handle = hub_conn.client
 	} else {
-		if expected != none {
+		if !allow_future_open {
 			hub.mu.unlock()
 			return false
 		}
@@ -450,14 +456,6 @@ pub fn hub_broadcast(mut hub HubState, room string, data string, opcode string, 
 				if client := hub_conn.client {
 					targets << HubSendTarget{ id: conn_id, client: client }
 				}
-			} else {
-				mut pending := hub.pending[conn_id] or { []HubPendingMessage{} }
-				if !hub.can_enqueue_unlocked(conn_id, data) { continue }
-				pending << HubPendingMessage{
-					data:   data
-					opcode: if opcode == '' { 'text' } else { opcode }
-				}
-				hub.pending[conn_id] = pending
 			}
 		}
 	}

@@ -372,8 +372,15 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 		return veb.no_result()
 	}
 	mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
+	lifecycle := &ws.DispatchConnState{}
+	app.websocket.state.reserve_dispatch_open(req_id, lifecycle)
 	mut transferred := false
-	defer { if !transferred { run.finish() } }
+	defer {
+		if !transferred {
+			app.websocket.state.unregister_owned(req_id, lifecycle)
+			run.finish()
+		}
+	}
 	websocket_runtime := app.build_websocket_runtime_context()
 	presence := websocket_runtime.presence(req_id)
 	open_frame := websocket_runtime.build_frame('open', method, normalized_path, query, headers,
@@ -425,7 +432,7 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	transferred = true
 	spawn ws.run_dispatch_session(mut run, websocket_runtime, mut conn, key,
 		method.to_upper(), normalized_path, query, headers, remote_addr, req_id, trace_id,
-		start_ms, open_commands)
+		start_ms, open_commands, lifecycle)
 	return veb.no_result()
 }
 

@@ -137,7 +137,7 @@ pub fn (host WebSocketContextHost) unregister_conn(conn_id string, lifecycle &ws
 pub fn (host WebSocketContextHost) send_to(conn_id string, data string, opcode string) bool {
 	mut runtime := host.runtime
 
-	return ws.hub_send_to(mut runtime.state, conn_id, data, opcode)
+	return ws.hub_send_registered_to(mut runtime.state, conn_id, data, opcode)
 }
 
 pub fn (host WebSocketContextHost) join(conn_id string, room string) bool {
@@ -246,7 +246,7 @@ fn (mut runtime WebSocketRuntime) build_relay_session_context() ws.RelaySessionC
 			return runtime.state.bind_outbound(id, lifecycle, session)
 		}
 		send_to_fn:       fn [mut runtime] (conn_id string, data string, opcode string) bool {
-			return ws.hub_send_to(mut runtime.state, conn_id, data, opcode)
+			return ws.hub_send_registered_to(mut runtime.state, conn_id, data, opcode)
 		}
 	}
 }
