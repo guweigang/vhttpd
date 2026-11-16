@@ -6,6 +6,8 @@ import os
 import socket
 import ssl
 import struct
+import time
+from collections import deque
 
 class WebSocket:
     def __init__(self, host, port, path, tls=False):
@@ -52,8 +54,8 @@ class WebSocket:
             if opcode==8:raise EOFError('close frame')
             assert a&128,'fixture expects complete frames'
             return opcode,data
-    def json(self):
-        opcode,data=self.recv();assert opcode==1
+    def json(self, timeout=8):
+        opcode,data=self.recv(timeout);assert opcode==1
         return json.loads(data)
     def close(self):
         try:
@@ -64,18 +66,45 @@ class WebSocket:
         except (OSError,EOFError):pass
         finally:self.sock.close()
 
+def wait_for_control_message(control, expected_type, connection_id=None, timeout=8):
+    deadline = time.monotonic() + timeout
+    recent = deque(maxlen=8)
+    try:
+        while (remaining := deadline - time.monotonic()) > 0:
+            frame = control.json(timeout=remaining)
+            recent.append(frame)
+            assert isinstance(frame, dict), frame
+            kind = frame.get('type')
+            if kind == 'sync':
+                assert isinstance(frame.get('connectionIds'), list), frame
+                if expected_type == 'sync':
+                    return frame
+            else:
+                target = frame.get('connectionId')
+                assert kind in ('connected', 'disconnected') and isinstance(target, str) and target, frame
+                if target == connection_id:
+                    assert kind == expected_type, frame
+                    return frame
+    except TimeoutError as error:
+        raise TimeoutError(f'waiting for {expected_type} id={connection_id!r}, recent={list(recent)!r}') from error
+    raise TimeoutError(f'waiting for {expected_type} id={connection_id!r}, recent={list(recent)!r}')
+
+
 def verify_paseo(host,port,tls=False):
     sockets=[]
     def connect(path):
         ws=WebSocket(host,port,path,tls=tls);sockets.append(ws);return ws
     try:
         base='/ws?serverId=multi-app-fixture&v=2&'
+        # The control stream also carries notifications from earlier or
+        # concurrent clients. Keep the server ID stable and use a new data ID.
+        connection_id = 'fixture-' + os.urandom(12).hex()
         control=connect(base+'role=server')
-        assert control.json()['type']=='sync'
-        client=connect(base+'role=client&connectionId=fixture-connection')
-        notice=control.json();assert notice['type']=='connected' and notice['connectionId']=='fixture-connection'
+        wait_for_control_message(control, 'sync')
+        client=connect(base+f'role=client&connectionId={connection_id}')
+        wait_for_control_message(control, 'connected', connection_id)
         client.send('buffered-before-server-data')
-        data=connect(base+'role=server&connectionId=fixture-connection')
+        data=connect(base+f'role=server&connectionId={connection_id}')
         assert data.recv()==(1,b'buffered-before-server-data')
         data.send('reply-from-server');assert client.recv()==(1,b'reply-from-server')
         client.send(b'\x00\xff\x01',2);assert data.recv()==(2,b'\x00\xff\x01')
