@@ -5,7 +5,8 @@ from remote_soak_sequence import assess
 
 def samples(load, cooldown):
     return [dict(phase=phase,runtime=dict(VmRSS=rss,fd_count=22))
-            for phase,values in [('load',load),('cooldown',cooldown)] for rss in values]
+            for phase,values in [('baseline',[60000]*3),('load',load),('cooldown',cooldown)]
+            for rss in values]
 
 
 class SequenceGateTests(unittest.TestCase):
@@ -36,14 +37,33 @@ class SequenceGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Insufficient'):
             assess(self.result,samples([60000]*6,[]),'mixed')
 
-    def test_transient_resource_excess_also_blocks_full_soak(self):
+    def test_transient_rss_excess_also_blocks_full_soak(self):
         rows = samples([60000]*6,[60000]*3)
-        rows[4]['runtime']['VmRSS'] = 257*1024
+        rows[7]['runtime']['VmRSS'] = 257*1024
         with self.assertRaisesRegex(ValueError,'exceeded 256 MiB'):
             assess(self.result,rows,'mixed')
-        rows[4]['runtime']['VmRSS'] = 60000
-        rows[4]['runtime']['fd_count'] = 40
-        with self.assertRaisesRegex(ValueError,'descriptor growth'):
+
+    def test_isolated_fd_peaks_are_recorded_and_allow_recovery(self):
+        rows = samples([60000]*90,[60000]*3)
+        for index in [42, 76]:
+            rows[index]['runtime']['fd_count'] = 31
+        fd = assess(self.result,rows,'mixed')['fd']
+        self.assertEqual(fd['peak_load_fd'],31)
+        self.assertEqual(fd['load_window_medians'],[22,22,22])
+        self.assertTrue(fd['returned_to_baseline'])
+
+    def test_sustained_fd_growth_blocks_even_if_cooldown_recovers(self):
+        rows = samples([60000]*90,[60000]*3)
+        for row in rows[33:93]:
+            row['runtime']['fd_count'] = 23
+        with self.assertRaisesRegex(ValueError,'Sustained file descriptor growth'):
+            assess(self.result,rows,'mixed')
+
+    def test_cooldown_above_idle_fd_baseline_blocks(self):
+        rows = samples([60000]*6,[60000]*3)
+        for row in rows[-3:]:
+            row['runtime']['fd_count'] = 23
+        with self.assertRaisesRegex(ValueError,'did not return to baseline'):
             assess(self.result,rows,'mixed')
 
 

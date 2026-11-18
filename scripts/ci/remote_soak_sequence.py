@@ -22,6 +22,38 @@ def save(path, value):
     temporary.replace(path)
 
 
+def assess_fd(rows):
+    baseline = [r['runtime']['fd_count'] for r in rows if r['phase'] == 'baseline']
+    load = [r['runtime']['fd_count'] for r in rows if r['phase'] == 'load']
+    cooldown = [r['runtime']['fd_count'] for r in rows if r['phase'] == 'cooldown']
+    if len(baseline) < 3 or len(load) < 6 or len(cooldown) < 3:
+        raise ValueError('Insufficient FD baseline/load/cooldown samples')
+
+    idle_fd = statistics.median(baseline[-3:])
+    settled_fd = statistics.median(cooldown[-3:])
+    # At the nominal 10-second cadence, use up to five minutes per window.
+    # Short preflight cases still have at least three complete windows.
+    window_size = min(30, len(load) // 3)
+    windows = [
+        statistics.median(load[start:start + window_size])
+        for start in range(0, len(load) - window_size + 1, window_size)
+    ]
+    initial_load_fd = windows[0]
+    sustained_growth = any(
+        previous > initial_load_fd and current > initial_load_fd
+        for previous, current in zip(windows[1:], windows[2:])
+    )
+    return {
+        'baseline_fd': idle_fd,
+        'cooldown_fd': settled_fd,
+        'peak_load_fd': max(load),
+        'load_window_samples': window_size,
+        'load_window_medians': windows,
+        'sustained_growth': sustained_growth,
+        'returned_to_baseline': settled_fd <= idle_fd,
+    }
+
+
 def assess(result, rows, workload):
     if result['status'] != 'completed':
         raise ValueError('Workload did not complete successfully')
@@ -42,10 +74,14 @@ def assess(result, rows, workload):
         raise ValueError(f'Retained RSS grew more than 16 MiB: {baseline} -> {settled} KiB')
     if peak > 256*1024:
         raise ValueError(f'Load RSS exceeded 256 MiB: {peak} KiB')
-    if max(r['runtime']['fd_count'] for r in load) > load[0]['runtime']['fd_count'] + 8:
-        raise ValueError('File descriptor growth exceeded the eight-FD budget')
+    fd = assess_fd(rows)
+    if fd['sustained_growth']:
+        raise ValueError('Sustained file descriptor growth during load')
+    if not fd['returned_to_baseline']:
+        raise ValueError('File descriptors did not return to baseline after cooldown')
     return {'baseline_rss_kib': baseline, 'settled_rss_kib': settled,
-            'max_load_rss_kib': peak, 'http_ok': result['http_ok'], 'paseo_ok': result['paseo_ok']}
+            'max_load_rss_kib': peak, 'http_ok': result['http_ok'], 'paseo_ok': result['paseo_ok'],
+            'fd': fd}
 
 
 def main():
