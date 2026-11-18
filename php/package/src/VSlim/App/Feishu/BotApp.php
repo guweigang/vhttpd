@@ -19,6 +19,11 @@ use VHttpd\Upstream\WebSocket\Feishu\Message\PostMessage;
 use VHttpd\Upstream\WebSocket\Feishu\Message\StickerMessage;
 use VHttpd\Upstream\WebSocket\Feishu\Message\TextMessage;
 
+// Keep the package fallback available when the VSlim extension is absent.
+if (class_exists(BotApp::class, false)) {
+    return;
+}
+
 final class BotApp
 {
     public function __construct(
