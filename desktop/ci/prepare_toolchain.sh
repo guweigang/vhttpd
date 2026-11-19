@@ -4,8 +4,8 @@ set -euo pipefail
 # awk. A UTF-8 runner locale can truncate that stream before compilation.
 export LC_ALL=C
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-# shellcheck source=desktop/ci/toolchain.env
-source "$root/desktop/ci/toolchain.env"
+# shellcheck source=scripts/ci/toolchain.env
+source "$root/scripts/ci/toolchain.env"
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 : "${GITHUB_PATH:?GITHUB_PATH is required}"
 : "${GITHUB_ENV:?GITHUB_ENV is required}"
@@ -24,7 +24,12 @@ checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
 # These changes are included in the pinned upstream commits; do not reapply
 # historical workspace patches to a newer dependency.
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
-checkout_pinned "$TCC_REPO" "$TCC_COMMIT" "$toolchain/v/thirdparty/tcc"
+case "$(uname -m)" in
+  x86_64) selected_tcc="$TCC_MACOS_AMD64_COMMIT" ;;
+  arm64) selected_tcc="$TCC_MACOS_ARM64_COMMIT" ;;
+  *) echo 'No pinned macOS TCC bundle for this architecture' >&2; exit 1 ;;
+esac
+checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
 make -C "$toolchain/v" local=1 CC=cc VFLAGS="-cc cc -gc boehm -d use_bundled_libgc"
 "$toolchain/v/v" version
 mkdir -p "$toolchain/modules"

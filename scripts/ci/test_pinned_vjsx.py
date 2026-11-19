@@ -61,14 +61,15 @@ class PinnedVjsxTest(unittest.TestCase):
         self.assertEqual(self.git(self.sdk, 'rev-parse', 'HEAD').strip(), changed)
 
 class ToolchainLockTest(unittest.TestCase):
-    def test_desktop_and_runtime_share_published_language_sources(self):
+    def test_desktop_and_runtime_share_one_canonical_toolchain_lock(self):
         def load(path):
             return dict(line.split('=', 1) for line in path.read_text().splitlines() if line and not line.startswith('#'))
         runtime = load(ROOT / 'scripts/ci/toolchain.env')
-        desktop = load(ROOT / 'desktop/ci/toolchain.env')
-        for key in ['V_REPO', 'V_COMMIT', 'VJSX_REPO', 'VJSX_COMMIT', 'VC_REPO', 'VC_COMMIT']:
-            self.assertEqual(runtime[key], desktop[key], key)
-        self.assertEqual(runtime['TCC_MACOS_ARM64_COMMIT'], desktop['TCC_COMMIT'])
+        self.assertFalse((ROOT / 'desktop/ci/toolchain.env').exists())
+        desktop_setup = (ROOT / 'desktop/ci/prepare_toolchain.sh').read_text()
+        self.assertIn('source "$root/scripts/ci/toolchain.env"', desktop_setup)
+        for key in ['V_COMMIT', 'VJSX_COMMIT', 'VC_COMMIT', 'TCC_MACOS_AMD64_COMMIT', 'TCC_MACOS_ARM64_COMMIT']:
+            self.assertIn(key, runtime)
 
 if __name__ == '__main__':
     unittest.main()

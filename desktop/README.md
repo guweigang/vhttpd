@@ -26,7 +26,7 @@ tags:
 
 交付候选包由[GitHub Actions 源码构建流程](../.github/workflows/workbench-macos-runtime.yml)生成：macOS 15 arm64 构建完整 `.app` 与 zip，记录 SHA256 后保存为 CI 构建产物；macOS 15 和 26 的独立 runner 下载同一候选包，再执行[系统工具验收脚本](./ci/verify_installed_macos.sh)。不将开发机的 App 或 zip 提交到源码仓库。
 
-构建阶段使用[固定工具链提交](./ci/toolchain.env)和[兼容补丁](./ci/prepare_toolchain.sh)，测试阶段使用全新 HOME、仅系统 PATH，并禁止验收进程读取原用户目录、源码 checkout、Homebrew 或执行编译工具。目标系统运行失败时保留该 runner 的环境记录及日志。Finder 打开、GUI 控件、浏览器交互与 Gatekeeper 下载放行单独记录，不以 CLI 回归代替。
+构建阶段使用[统一的固定工具链提交](../scripts/ci/toolchain.env)和[兼容补丁](./ci/prepare_toolchain.sh)，测试阶段使用全新 HOME、仅系统 PATH，并禁止验收进程读取原用户目录、源码 checkout、Homebrew 或执行编译工具。目标系统运行失败时保留该 runner 的环境记录及日志。Finder 打开、GUI 控件、浏览器交互与 Gatekeeper 下载放行单独记录，不以 CLI 回归代替。
 
 **当前无需 Apple 配置，直接使用默认 `release_mode=unsigned`。** 在成功运行的 Actions 页面下载 `workbench-macos-arm64-unsigned-verified`：它只在 macOS 15/26 两个系统均通过后生成，包含原始安装 zip、SHA256SUMS、acceptance.json 和验收说明.txt，保留 14 天。`workbench-macos-arm64-candidate` 是供 CI 验收使用的中间产物。可在下载目录执行 `shasum -a 256 -c SHA256SUMS` 核对安装 zip，再按上述步骤解压完整应用。
 

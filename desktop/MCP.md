@@ -52,4 +52,4 @@ Desktop 使用 V 官方 `vlib/mcp` 提供本机 Streamable HTTP 服务。开发�
 
 MCP 与 GUI 共用[同一个 Worker](./host/worker.v)，使用独立回复通道。应用发现、绑定和切换见[应用上下文](./host/development_application.v)，HTTP 接入见[MCP 服务](./devmcp/server.v)，写入边界见[文件变更](./host/development_files.v)。
 
-针对性测试覆盖[模板安装与作用域](./host/application_creation_test.v)、[真实 HTTP 切换](./devmcp/server_test.v)、[MCP 页面](./development_mcp_test.v)和[新建表单](./component_installation_test.v)。运行包与工具链继续按[固定提交](./ci/toolchain.env)管理。
+针对性测试覆盖[模板安装与作用域](./host/application_creation_test.v)、[真实 HTTP 切换](./devmcp/server_test.v)、[MCP 页面](./development_mcp_test.v)和[新建表单](./component_installation_test.v)。运行包与工具链继续按[统一的固定提交](../scripts/ci/toolchain.env)管理。
