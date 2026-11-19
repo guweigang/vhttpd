@@ -1,0 +1,153 @@
+module main
+
+import host
+import os
+import ui2
+
+struct RuntimeResult {
+	info        host.RuntimeInfo
+	path        string
+	error       string
+	select_path bool
+	downloaded  bool
+}
+
+fn runtime_inspect_task(path string, executable string, select_path bool, results chan RuntimeResult, job host.RuntimeJob) {
+	info := host.inspect_runtime(path, executable, job)
+	if select_path && info.ready {
+		host.save_runtime_selection(path) or {
+			results <- RuntimeResult{ error: err.msg() }
+			return
+		}
+	}
+	results <- RuntimeResult{ info: info, path: path, select_path: select_path }
+}
+
+fn runtime_download_task(tag string, executable string, results chan RuntimeResult, job host.RuntimeJob) {
+	path := host.download_runtime_release(tag, job) or {
+		results <- RuntimeResult{ error: err.msg() }
+		return
+	}
+	results <- RuntimeResult{ info: host.inspect_runtime(path, executable, host.RuntimeJob{}), path: path, select_path: true, downloaded: true }
+}
+
+fn (mut app Workshop) inspect_binary(path string, select_path bool) {
+	if app.runtime_busy { return }
+	app.runtime_busy = true
+	app.runtime_job = host.RuntimeJob{}
+	app.runtime_message = '正在读取运行程序版本…'
+	spawn runtime_inspect_task(path, os.executable(), select_path, app.runtime_results, app.runtime_job)
+}
+
+fn (mut app Workshop) poll_runtime() {
+	for _ in 0 .. 16 {
+		select {
+			progress := <-app.runtime_job.progress {
+				app.runtime_message = progress
+			}
+			else {
+				break
+			}
+		}
+	}
+	select {
+		result := <-app.runtime_results {
+			app.runtime_busy = false
+			if result.error != '' {
+				app.runtime_message = result.error
+				app.runtime_error = true
+				return
+			}
+			if !result.select_path || result.info.ready {
+				app.binary = result.path
+				app.runtime_info = result.info
+				app.runtime_checked = true
+			}
+			app.runtime_error = !result.info.ready
+			app.runtime_message = if result.downloaded {
+				'运行包已安装并切换，可直接启动项目。'
+			} else {
+				result.info.message
+			}
+            if result.info.ready && app.projects.len == 0 && !app.creating {
+                parent := os.join_path(host.workbench_data_dir(), 'environments')
+                os.mkdir_all(parent, mode: 0o700) or { app.runtime_message = '运行包已就绪；无法初始化环境目录。'; return }
+                app.creating = true
+                app.new_auto_start = true
+                spawn create_and_register(host.CreateProjectOptions{name: 'default', parent_dir: parent, template: 'environment'}, app.registry, app.projects.clone(), app.creation_results)
+            }
+			if app.runtime_resume_start && result.info.ready {
+				app.runtime_resume_start = false
+				app.show_runtime = false
+				app.launch()
+			}
+		}
+		else {
+		}
+	}
+}
+
+fn (mut app Workshop) handle_runtime_event(event string) bool {
+	if app.handle_runtime_catalog_event(event) { return true }
+	if event == 'runtime' || event == 'runtime_download' {
+		app.show_runtime = true
+		app.show_shared_relays = false
+		if event == 'runtime' { app.show_runtime_downloads = false; return true }
+		if app.runtime_busy || app.snapshot.pid != 0 || app.snapshot.phase in [
+			.starting,
+			.stopping,
+		] {
+			return true
+		}
+		app.open_runtime_downloads()
+		return true
+	}
+	if event == 'runtime_close' {
+		app.show_runtime = false
+		app.show_runtime_downloads = false
+		app.runtime_resume_start = false
+		return true
+	}
+	if event == 'runtime_cancel' {
+		if app.runtime_busy {
+			app.runtime_resume_start = false
+			select {
+				app.runtime_job.cancel <- true {
+				}
+				else {
+				}
+			}
+			app.runtime_message = '正在取消，当前运行包保持不变…'
+		}
+		return true
+	}
+	if event == 'runtime_refresh' {
+		app.inspect_binary(app.binary, false)
+		return true
+	}
+	if event == 'runtime_bundled' {
+		if !app.runtime_busy && app.snapshot.pid == 0 {
+			bundled := os.join_path(os.dir(os.executable()), '..', 'Resources', 'runtime', 'vhttpd')
+			app.inspect_binary(os.real_path(bundled), true)
+		}
+		return true
+	}
+	return false
+}
+
+fn runtime_local_view(app &Workshop, width f64) []ui2.Element {
+	can_switch := !app.runtime_busy && app.snapshot.pid == 0 && app.snapshot.phase !in [.starting, .stopping]
+	mut rows := [label('runtime_title', host.local_environment_name()+' · 默认运行包', 0, 0, width, 20, workbench_colors.ink),
+		label('runtime_version', if app.runtime_info.ready { 'vhttpd ' + app.runtime_info.version } else if app.runtime_checked { '运行包不可用' } else { '正在识别版本…' }, 0, 36, width, 16, workbench_colors.ink),
+		label('runtime_source', '来源：' + ui_text(app.runtime_info.source), 0, 68, width, 12, workbench_colors.muted),
+		ui2.label('runtime_path', app.binary, ui2.rect(0, 94, width, 52), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 3}),
+		state_notice('runtime_notice', if app.runtime_busy { '正在准备运行包' } else if app.runtime_error { '运行包未就绪' } else if app.runtime_info.ready { '运行包已就绪' } else { '准备运行包' }, app.runtime_message, ui2.rect(0, 158, width, 96), if app.runtime_error { 'warning' } else if app.runtime_info.ready && !app.runtime_busy { 'good' } else { 'info' }),
+		button('runtime_download', if app.runtime_busy { '正在处理…' } else { '下载官方运行包' }, 0, 276, width, !app.runtime_info.ready, can_switch),
+		button('binary', '选择已解压包中的 vhttpd…', 0, 322, width, false, can_switch),
+		button('runtime_refresh', '刷新版本', 0, 378, (width - 12) / 2, false, !app.runtime_busy),
+		button('runtime_bundled', '使用内置版本', (width + 12) / 2, 378, (width - 12) / 2, false, can_switch),
+		ui2.label('runtime_release_hint', '这里设置本机默认版本，用于之后启动的本机运行环境。请先停止当前环境，再选择完整运行包。', ui2.rect(0, 432, width, 54), ui2.TextStyle{size: 11, color: workbench_colors.muted, lines: 3})]
+	if app.runtime_busy { rows << button('runtime_cancel', '取消操作', 0, 500, 110, false, true) }
+	if app.runtime_resume_start { rows << ui2.label('runtime_resume', '项目已保留。运行包就绪后自动继续启动。', ui2.rect(0, 550, width, 48), ui2.TextStyle{size: 12, color: workbench_colors.ink, lines: 2}) }
+	return rows
+}

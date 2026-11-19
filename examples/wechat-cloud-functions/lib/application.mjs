@@ -19,6 +19,10 @@ function integer(value, fallback, min, max) {
 
 export function readConfig(env) {
   const config = {
+    storageRoot: env.WECHAT_STORAGE_ROOT || '',
+    storageBaseURL: env.WECHAT_STORAGE_BASE_URL || '',
+    storageMaxFileBytes: integer(env.WECHAT_STORAGE_MAX_FILE_BYTES, 10485760, 1, 67108864),
+    storageURLTTLSeconds: integer(env.WECHAT_STORAGE_URL_TTL_SECONDS, 600, 1, 3600),
     appId: env.WECHAT_APP_ID || "",
     appSecret: env.WECHAT_APP_SECRET || "",
     driver: env.WECHAT_DB_DRIVER || "pgsql",
@@ -26,6 +30,9 @@ export function readConfig(env) {
     functionTimeoutMs: integer(env.WECHAT_FUNCTION_TIMEOUT_MS, 3000, 10, 60000),
     databaseTimeoutMs: integer(env.WECHAT_DATABASE_TIMEOUT_MS, 30000, 1000, 120000),
     loginTimeoutMs: integer(env.WECHAT_LOGIN_TIMEOUT_MS, 5000, 100, 30000),
+    bodyLimitBytes: integer(env.WECHAT_BODY_LIMIT_BYTES, 16384, 1024, 16777216),
+    documentLimitBytes: integer(env.WECHAT_DOCUMENT_LIMIT_BYTES, 1048576, 1024, 16777216),
+    resultLimitBytes: integer(env.WECHAT_RESULT_LIMIT_BYTES, 1048576, 1024, 16777216),
   };
   if (!config.appId || !config.appSecret || !["mysql", "pgsql"].includes(config.driver)) {
     throw new Error("WECHAT_APP_ID, WECHAT_APP_SECRET and WECHAT_DB_DRIVER are required");
@@ -41,9 +48,9 @@ function parameters(config, count) {
   return Array.from({length: count}, (_, i) => config.driver === "mysql" ? "?" : "$" + (i + 1));
 }
 
-function objectBody(ctx) {
+function objectBody(ctx, limit = 16384) {
   const text = ctx.bodyText("");
-  if (typeof text !== "string" || text.length > 16384) throw new ApplicationError("INVALID_BODY", 400);
+  if (typeof text !== "string" || new TextEncoder().encode(text).length > limit) throw new ApplicationError("INVALID_BODY", 400);
   let value;
   try { value = JSON.parse(text); } catch (_) { throw new ApplicationError("INVALID_JSON", 400); }
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new ApplicationError("INVALID_BODY", 400);
@@ -230,21 +237,45 @@ export async function invokeFunction(main, event, identity, runtime, config) {
   }
 }
 
-export function createApplication(functions, config, {exchangeCode = exchangeWechatCode} = {}) {
+export function createApplication(functions, config, {exchangeCode = exchangeWechatCode, invoke = invokeFunction, storage} = {}) {
   // Explicit allowlist, not a client-selected filesystem path or dynamic import.
   const registry = Object.freeze({...functions});
   return async ctx => {
     ctx.header("cache-control", "no-store");
     const requestId = ctx.runtime.requestId;
     try {
+      if (storage) {
+        const result = await storage.public(ctx);
+        if (result !== undefined) return result;
+      }
       if (ctx.method !== "POST") throw new ApplicationError("METHOD_NOT_ALLOWED", 405);
       if (ctx.path === "/auth/login") return ctx.json({...await login(ctx, config, exchangeCode), requestId}, 200);
+      if (storage && ctx.path.startsWith('/storage/')) {
+        const identity = await authenticate(ctx, config);
+        return await storage.authenticated(ctx, objectBody(ctx, storage.bodyLimit), identity);
+      }
       const match = /^\/functions\/([A-Za-z][A-Za-z0-9_-]{0,63})$/.exec(ctx.path);
       if (!match || !Object.prototype.hasOwnProperty.call(registry, match[1]) || typeof registry[match[1]] !== "function") {
         throw new ApplicationError("FUNCTION_NOT_FOUND", 404);
       }
       const identity = await authenticate(ctx, config);
-      const result = await invokeFunction(registry[match[1]], objectBody(ctx), identity, ctx.runtime, config);
+      const event = objectBody(ctx, config.bodyLimitBytes);
+      // Selection happens only after server-side session authentication. Login,
+      // storage and callbacks remain on the remote server. Business functions
+      // and cloud.database() need no takeover-specific changes.
+      if (typeof ctx.runtime.takeover === 'function') {
+        let forwarded;
+        try {
+          forwarded = ctx.runtime.takeover({app_id: identity.APPID, account: identity.OPENID,
+            method: ctx.method, path: ctx.path, body: JSON.stringify(event),
+            headers: {authorization: ctx.headers.authorization || ''}});
+        } catch (_) { throw new ApplicationError('DEBUG_RESULT_UNKNOWN', 502); }
+        if (forwarded?.handled) {
+          for (const [key, value] of Object.entries(forwarded.headers || {})) ctx.header(key, value);
+          return ctx.text(forwarded.body, forwarded.status);
+        }
+      }
+      const result = await invoke(registry[match[1]], event, identity, ctx.runtime, config);
       return ctx.json({result: result === undefined ? null : result, requestId}, 200);
     } catch (error) {
       const safe = error instanceof ApplicationError ? error : new ApplicationError("INTERNAL_ERROR", 500);

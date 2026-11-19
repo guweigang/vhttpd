@@ -1,5 +1,6 @@
 import {
   buildThreadStartParams as defaultBuildThreadStartParams,
+  buildThreadResumeParams,
   buildTurnStartParams as defaultBuildTurnStartParams,
 } from "./codex-start-params.mjs";
 import {
@@ -312,7 +313,11 @@ export function createThreadTaskCommandHandlers(deps) {
     const instance = streamWithInstance.codexInstance || await deps.resolveCodexInstance(state, streamWithInstance, project, deps.codexInstancePolicyDeps);
     const commands = [...preflight];
     if (state.threadId) {
-      commands.push(codexTurnStart(buildTurnStartParams(streamWithInstance, state, defaults), stream.streamId, instance));
+      await deps.finalizeStreamState(stream.streamId, {
+        status: "resuming_thread",
+        lastEvent: "thread/resume.requested",
+      });
+      commands.push(codexRpcCall("thread/resume", buildThreadResumeParams(state, defaults), stream.streamId, instance));
     } else {
       commands.push(codexRpcCall("thread/start", buildThreadStartParams(state, defaults), stream.streamId, instance));
     }

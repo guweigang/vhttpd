@@ -1,0 +1,353 @@
+{
+  "time_utc": "2026-11-10T01:42:55.373645+00:00",
+  "run": "03-after",
+  "phase": "cooldown",
+  "elapsed_seconds": 330.43545339803677,
+  "pid": 1738891,
+  "binary_sha256": "60da360c10cc76bc5f37c609b95dc275bec98f88c256f31cf7c491c31ef43faf",
+  "groups_kib": {
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/vhttpd": {
+      "Rss": 13920,
+      "Pss": 13920,
+      "Anonymous": 160,
+      "Private_Clean": 13760,
+      "Private_Dirty": 160,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "[anonymous]": {
+      "Rss": 23288,
+      "Pss": 23288,
+      "Anonymous": 23288,
+      "Private_Clean": 0,
+      "Private_Dirty": 23288,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "[heap]": {
+      "Rss": 3356,
+      "Pss": 3356,
+      "Anonymous": 3356,
+      "Private_Clean": 0,
+      "Private_Dirty": 3356,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libgmp.so.10": {
+      "Rss": 132,
+      "Pss": 132,
+      "Anonymous": 16,
+      "Private_Clean": 116,
+      "Private_Dirty": 16,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libunistring.so.5": {
+      "Rss": 176,
+      "Pss": 176,
+      "Anonymous": 24,
+      "Private_Clean": 152,
+      "Private_Dirty": 24,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libp11-kit.so.0": {
+      "Rss": 480,
+      "Pss": 480,
+      "Anonymous": 108,
+      "Private_Clean": 372,
+      "Private_Dirty": 108,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libgnutls.so.30": {
+      "Rss": 916,
+      "Pss": 916,
+      "Anonymous": 76,
+      "Private_Clean": 840,
+      "Private_Dirty": 76,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libhogweed.so.6": {
+      "Rss": 124,
+      "Pss": 124,
+      "Anonymous": 20,
+      "Private_Clean": 104,
+      "Private_Dirty": 20,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libnettle.so.8": {
+      "Rss": 236,
+      "Pss": 236,
+      "Anonymous": 16,
+      "Private_Clean": 220,
+      "Private_Dirty": 16,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libtasn1.so.6": {
+      "Rss": 92,
+      "Pss": 92,
+      "Anonymous": 12,
+      "Private_Clean": 80,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libidn2.so.0": {
+      "Rss": 36,
+      "Pss": 36,
+      "Anonymous": 12,
+      "Private_Clean": 24,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libkrb5.so.3": {
+      "Rss": 280,
+      "Pss": 280,
+      "Anonymous": 64,
+      "Private_Clean": 216,
+      "Private_Dirty": 64,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libstdc++.so.6": {
+      "Rss": 1536,
+      "Pss": 1536,
+      "Anonymous": 60,
+      "Private_Clean": 1476,
+      "Private_Dirty": 60,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libffi.so.8": {
+      "Rss": 48,
+      "Pss": 48,
+      "Anonymous": 12,
+      "Private_Clean": 36,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libsasl2.so.2": {
+      "Rss": 88,
+      "Pss": 88,
+      "Anonymous": 12,
+      "Private_Clean": 76,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/liblber.so.2": {
+      "Rss": 60,
+      "Pss": 60,
+      "Anonymous": 16,
+      "Private_Clean": 44,
+      "Private_Dirty": 16,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libk5crypto.so.3": {
+      "Rss": 96,
+      "Pss": 96,
+      "Anonymous": 16,
+      "Private_Clean": 80,
+      "Private_Dirty": 16,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libzstd.so.1": {
+      "Rss": 96,
+      "Pss": 96,
+      "Anonymous": 12,
+      "Private_Clean": 84,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/usr/lib/x86_64-linux-gnu/libc.so.6": {
+      "Rss": 1812,
+      "Pss": 69,
+      "Anonymous": 24,
+      "Private_Clean": 0,
+      "Private_Dirty": 24,
+      "Shared_Clean": 1788,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libkrb5support.so.0": {
+      "Rss": 52,
+      "Pss": 52,
+      "Anonymous": 16,
+      "Private_Clean": 36,
+      "Private_Dirty": 16,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libldap.so.2": {
+      "Rss": 156,
+      "Pss": 156,
+      "Anonymous": 16,
+      "Private_Clean": 140,
+      "Private_Dirty": 16,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libsqlite3.so.0": {
+      "Rss": 256,
+      "Pss": 256,
+      "Anonymous": 36,
+      "Private_Clean": 220,
+      "Private_Dirty": 36,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libmysqlclient.so.21": {
+      "Rss": 3320,
+      "Pss": 3320,
+      "Anonymous": 196,
+      "Private_Clean": 3124,
+      "Private_Dirty": 196,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libkeyutils.so.1": {
+      "Rss": 28,
+      "Pss": 28,
+      "Anonymous": 12,
+      "Private_Clean": 16,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libgssapi_krb5.so.2": {
+      "Rss": 140,
+      "Pss": 140,
+      "Anonymous": 20,
+      "Private_Clean": 120,
+      "Private_Dirty": 20,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libgcc_s.so.1": {
+      "Rss": 112,
+      "Pss": 112,
+      "Anonymous": 12,
+      "Private_Clean": 100,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/usr/lib/x86_64-linux-gnu/libm.so.6": {
+      "Rss": 364,
+      "Pss": 24,
+      "Anonymous": 8,
+      "Private_Clean": 0,
+      "Private_Dirty": 8,
+      "Shared_Clean": 356,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libcrypto.so.3": {
+      "Rss": 3728,
+      "Pss": 3728,
+      "Anonymous": 384,
+      "Private_Clean": 3344,
+      "Private_Dirty": 384,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libcom_err.so.2": {
+      "Rss": 24,
+      "Pss": 24,
+      "Anonymous": 12,
+      "Private_Clean": 12,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libz.so.1": {
+      "Rss": 84,
+      "Pss": 84,
+      "Anonymous": 12,
+      "Private_Clean": 72,
+      "Private_Dirty": 12,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/usr/lib/x86_64-linux-gnu/libresolv.so.2": {
+      "Rss": 56,
+      "Pss": 30,
+      "Anonymous": 8,
+      "Private_Clean": 0,
+      "Private_Dirty": 8,
+      "Shared_Clean": 48,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libpq.so.5": {
+      "Rss": 136,
+      "Pss": 136,
+      "Anonymous": 20,
+      "Private_Clean": 116,
+      "Private_Dirty": 20,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/root/vhttpd-release-tests/20261110-hotpath-pair/packages/after/runtime/libs/libssl.so.3": {
+      "Rss": 612,
+      "Pss": 612,
+      "Anonymous": 60,
+      "Private_Clean": 552,
+      "Private_Dirty": 60,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2": {
+      "Rss": 232,
+      "Pss": 20,
+      "Anonymous": 16,
+      "Private_Clean": 0,
+      "Private_Dirty": 16,
+      "Shared_Clean": 216,
+      "Shared_Dirty": 0
+    },
+    "[stack]": {
+      "Rss": 240,
+      "Pss": 240,
+      "Anonymous": 240,
+      "Private_Clean": 0,
+      "Private_Dirty": 240,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "[vvar]": {
+      "Rss": 0,
+      "Pss": 0,
+      "Anonymous": 0,
+      "Private_Clean": 0,
+      "Private_Dirty": 0,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    },
+    "[vdso]": {
+      "Rss": 4,
+      "Pss": 0,
+      "Anonymous": 0,
+      "Private_Clean": 0,
+      "Private_Dirty": 0,
+      "Shared_Clean": 4,
+      "Shared_Dirty": 0
+    },
+    "[vsyscall]": {
+      "Rss": 0,
+      "Pss": 0,
+      "Anonymous": 0,
+      "Private_Clean": 0,
+      "Private_Dirty": 0,
+      "Shared_Clean": 0,
+      "Shared_Dirty": 0
+    }
+  },
+  "scope": "Readonly smaps of isolated test runtime; no debugger or forced GC."
+}

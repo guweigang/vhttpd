@@ -1,0 +1,219 @@
+{
+  "date": "2026-11-06",
+  "status": "passed",
+  "scope": "Desktop source workspace binding without installation",
+  "tools": [
+    "source_workspace_get",
+    "source_workspace_prepare",
+    "source_workspace_bind",
+    "source_workspace_unbind"
+  ],
+  "installed_desktop": {
+    "desktop_sha256": "de4534e34edbc763a1eb1ed3471140786a630c79470496474d7613da240e704b",
+    "runtime_sha256": "b04ab2a8215b05377f6fd95401449b382553bcd391bfa6228a95913a29d4a714",
+    "backup": "/private/tmp/vhttpd-update-qa.54t2tU/Workbench Before Source Binding.app",
+    "codesign": "strict verified"
+  },
+  "runtime_rebuilt": false,
+  "environment": {
+    "reuse": "existing local MCP Existing Relay QA data directory and installed runtime 0.9.0",
+    "remote_instances_modified": false,
+    "bodytest_modified": false,
+    "new_hub_or_vm": false
+  },
+  "client": {
+    "connector": "installed DeepSeek Harness dsh-mcp-client",
+    "transport": "Streamable HTTP on loopback",
+    "server": "actual updated Desktop UI, not a test program",
+    "credentials": "actual Desktop GUI-issued Bearer; temporary file removed",
+    "registered_tools": 29,
+    "capability_available_count_matches": true,
+    "model_ui": {
+      "turn": 19,
+      "skills_loaded": [
+        "vhttpd-develop",
+        "vhttpd-debug"
+      ],
+      "scope": "actual skill tool loads and workflow explanation; application writes executed at installed connector layer, not claimed autonomous model flow"
+    }
+  },
+  "flows": {
+    "rejections": [
+      {
+        "name": "source_workspace_prepare",
+        "error": "Error: source_directory_outside_authorization"
+      },
+      {
+        "name": "source_workspace_prepare",
+        "error": "Error: source_directory_outside_authorization"
+      },
+      {
+        "name": "source_workspace_prepare",
+        "error": "Error: source_directory_missing_or_symlink"
+      },
+      {
+        "name": "source_workspace_prepare",
+        "error": "Error: source_template_requires_empty_directory"
+      },
+      {
+        "name": "source_workspace_prepare",
+        "error": "Error: unexpected_source_workspace_argument"
+      },
+      {
+        "name": "files_read",
+        "error": "Error: binding_changed: call context_get"
+      },
+      {
+        "name": "files_read",
+        "error": "Error: path_not_in_development_workspace"
+      },
+      {
+        "name": "source_workspace_unbind",
+        "error": "Error: restore_or_discard_source_changes_before_rebinding"
+      },
+      {
+        "name": "source_workspace_prepare",
+        "error": "Error: stop_current_runtime_first"
+      },
+      {
+        "name": "runtime_start",
+        "error": "Error: source_configuration_missing: create and validate the configured TOML entry"
+      },
+      {
+        "name": "source_workspace_bind",
+        "error": "Error: source_workspace_changed: prepare again"
+      }
+    ],
+    "flows": [
+      {
+        "kind": "empty_template",
+        "modified": {
+          "body": "{\"source_qa\":\"empty\"}",
+          "status": "200"
+        },
+        "baseline": {
+          "body": "{\"ok\":true,\"project\":\"2b5c0ec649da70722a0c9264\",\"message\":\"Hello from vhttpd Workbench\",\"path\":\"/\"}",
+          "status": "200"
+        },
+        "source_restored": true,
+        "agents_restored": true,
+        "installed": false
+      },
+      {
+        "kind": "existing_without_config",
+        "business": {
+          "body": "{\"source_qa\":\"existing\",\"preserved\":\"original\"}",
+          "status": "200"
+        },
+        "new_files_removed": true,
+        "business_restored": true,
+        "metadata_restored": true,
+        "installed": false
+      }
+    ],
+    "registered": 29,
+    "final_unbound": true
+  },
+  "invalid_configuration": {
+    "passed": true,
+    "entry": "dev.toml",
+    "response": {
+      "body": "{\"source_qa\":\"repaired\"}",
+      "status": "200"
+    },
+    "configuration_restored": true,
+    "source_restored": true,
+    "final_unbound": true
+  },
+  "tests": {
+    "host": "4 cases passed: empty/existing/draft runtime config/boundary and inode identity; ephemeral registry omitted",
+    "mcp_http": "source workspace plus existing server_test suites passed; Relay edit scope and stale binding refusal",
+    "skill_format": "develop/debug quick_validate passed",
+    "format": "new source modules and modified development modules formatted; existing main/project formatting retained where possible"
+  },
+  "cleanup": {
+    "mcp_closed": true,
+    "ports_closed": [
+      61946,
+      62244,
+      62245
+    ],
+    "no_credentials_in_tool_results": true,
+    "root_configuration_unchanged": true,
+    "registry_unchanged": true,
+    "all_source_restorations_verified": true,
+    "temporary_source_directories_removed": true,
+    "source_fixture_evidence": "private QA directory",
+    "original_default_restored": {
+      "ui_confirmed": true,
+      "runtime_version": "0.9.0",
+      "pid": 45274,
+      "applications": 0,
+      "data_directory": "/private/tmp/vhttpd-update-qa.54t2tU/data"
+    }
+  },
+  "limitations": [
+    "binding tools are local-only; an existing public editing Relay can access its bound source but cannot change directories",
+    "no public Relay end-to-end or independent-network acceptance added in this batch",
+    "remote release still uses independent app.json/component management contract",
+    "source plan expires after five minutes; in-memory edits/recovery do not survive Desktop exit",
+    "supported text types and private file exclusions retained; runtime execution is not an OS sandbox",
+    "template creation compensates ordinary failures but is not crash-atomic",
+    "Linux/Windows GUI and source workflow not accepted in this batch"
+  ],
+  "earlier_attempts": [
+    "host file-target ownership branch corrected to permit uninstalled source",
+    "self-contained HTTP test corrected for Option propagation, protocol header and notifications/initialized; final suites passed"
+  ],
+  "logs": {
+    "host-tests-final.log": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/host-tests-final.log",
+      "sha256": "79f8b7211ee06fd2850a119d9b4d671a4ebcc97127532fe132b46603554d29e2"
+    },
+    "mcp-tests6.log": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/mcp-tests6.log",
+      "sha256": "4c767ce8009818dc5704b0f26d5f2c686796d15aebbb877b0efcbd47bacc3d09"
+    },
+    "dsh-result.log": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/dsh-result.log",
+      "sha256": "131e45788fc43ab5abd95f20238f4dca619a64d8e44deba6ad9ca9b78c3ced6d"
+    },
+    "dsh-extra.log": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/dsh-extra.log",
+      "sha256": "570cf276f0b57c9b1f8837748c0396c96c97c7133a648e2b648b09e7923db659"
+    },
+    "dsh-skill-turn19.txt": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/dsh-skill-turn19.txt",
+      "sha256": "2aeebbd454e99a54619fa153bee61b2ec3c2f9c14f2cabac1c3d08a59e1f8e72"
+    },
+    "dsh-skills.png": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/dsh-skills.png",
+      "sha256": "affec9ece36a80d87540c036c8e327717a02449f13f257bb4ec1873b5ab44af8"
+    },
+    "build.log": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/build.log",
+      "sha256": "8b53c9e102b6ea92f7bd48671be7ce87a760251abc4146d099a42d7f949cc908"
+    },
+    "desktop-final.txt": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/desktop-final.txt",
+      "sha256": "8d3e34a86db4a9ee4006da40ef3acf6375613f1f4d1e6e695addc7e0f2caa2d2"
+    },
+    "desktop-final.png": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/desktop-final.png",
+      "sha256": "94060480518e90c115ae9490a52a24db5977c0916bb4f429dad7ccaf65d59682"
+    },
+    "design-source-binding.png": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/design-source-binding.png",
+      "sha256": "7d78f628893852bf5a56ccf5095fa9ebc3fb2b138c5215a7b14a29cd52b63595"
+    },
+    "format-verified.log": {
+      "path": "/private/tmp/vhttpd-source-binding-qa/format-verified.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "documentation_checks": {
+    "links": "design document and both changed Skills passed",
+    "markdown_lint": "no enabled checks ran; not claimed lint-validated",
+    "skill_format": "official quick_validate passed for both Skills"
+  }
+}

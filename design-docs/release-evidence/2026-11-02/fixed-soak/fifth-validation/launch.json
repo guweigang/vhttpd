@@ -1,0 +1,36 @@
+{
+  "started_cst": "2026-11-02 22:47:27+08:00",
+  "pressure_starts_cst": "2026-11-02 22:57:27+08:00",
+  "pressure_ends_cst": "2026-11-03 22:57:27+08:00",
+  "expected_end_cst": "2026-11-03 23:07:27+08:00",
+  "unit": "vhttpd-soak-fixed5-24h-20261102",
+  "binary_sha256": "36884c13ad7c03ea66d70e8a561e5a865986e6b34df8dcbaa85ac1ced0ec0080",
+  "status": "running",
+  "cases": [
+    {
+      "workload": "paseo",
+      "baseline_rss_kib": 62124,
+      "settled_rss_kib": 62568,
+      "max_load_rss_kib": 62332,
+      "http_ok": 0,
+      "paseo_ok": 78
+    },
+    {
+      "workload": "http",
+      "baseline_rss_kib": 49940,
+      "settled_rss_kib": 49804,
+      "max_load_rss_kib": 50304,
+      "http_ok": 6392,
+      "paseo_ok": 0
+    },
+    {
+      "workload": "mixed",
+      "baseline_rss_kib": 83276,
+      "settled_rss_kib": 79440,
+      "max_load_rss_kib": 83464,
+      "http_ok": 23961,
+      "paseo_ok": 293
+    }
+  ],
+  "acceptance": "24h memory stability remains pending"
+}

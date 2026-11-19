@@ -27,6 +27,8 @@ pub fn WorkerFrameCodec.read_exact(mut conn unix.StreamConn, size int) ![]u8 {
 	mut out := []u8{len: size}
 	mut read := 0
 	for read < size {
+		// A blocking Unix socket can enter recv before V checks its read timeout.
+		conn.wait_for_read()!
 		n := conn.read(mut out[read..])!
 		if n <= 0 {
 			return error('unexpected EOF')

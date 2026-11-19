@@ -1,6 +1,6 @@
 module codex
 
-import jsonutils
+import json2 as json
 import log
 import net.websocket as ws
 import time
@@ -17,6 +17,14 @@ pub:
 	method          string
 	id_raw          string // raw id value as string (may be int)
 	has_error       bool
+}
+
+// Decode IDs with an integer-first union, avoiding json.Any's float-first
+// conversion and preserving signed 64-bit correlation IDs exactly.
+type WireRpcId = i64 | string
+
+struct WireRpcEnvelopeId {
+	id WireRpcId
 }
 
 pub struct RpcFrame {}
@@ -80,36 +88,35 @@ pub fn SandboxMode.format(val string, to_camel bool) string {
 
 // ── Classification ──
 
-// classify_rpc performs lightweight JSON-RPC message classification using string
-// scanning. Avoids full JSON parse for every incoming frame.
+// Validate only the JSON-RPC envelope. Method-specific params belong to applications.
 pub fn classify_rpc(raw string) RpcClassification {
-	has_method := jsonutils.has_any_top_level_key(raw, ['method'])
-	has_id := jsonutils.has_any_top_level_key(raw, ['id'])
-	has_result := jsonutils.has_any_top_level_key(raw, ['result'])
-	has_error := jsonutils.has_any_top_level_key(raw, ['error'])
-
-	method := if has_method { extract_string_field(raw, 'method') } else { '' }
-	id_raw := if has_id { extract_raw_field(raw, 'id') } else { '' }
-
-	if has_method && !has_id {
-		return RpcClassification{
-			is_notification: true
-			method:          method
+	root := json.decode[map[string]json.Any](raw) or { return RpcClassification{} }
+	if version := root['jsonrpc'] {
+		if version !is string || version.str() != '2.0' { return RpcClassification{} }
+	}
+	has_method := 'method' in root
+	has_id := 'id' in root
+	has_result := 'result' in root
+	has_error := 'error' in root
+	mut method := ''
+	if has_method {
+		value := root['method'] or { return RpcClassification{} }
+		if value !is string || value.str() == '' { return RpcClassification{} }
+		method = value.str()
+	}
+	mut id_raw := ''
+	if has_id {
+		wire := json.decode[WireRpcEnvelopeId](raw) or { return RpcClassification{} }
+		id_raw = match wire.id {
+			string { json.encode(wire.id) }
+			i64 { wire.id.str() }
 		}
 	}
-	if has_method && has_id {
-		return RpcClassification{
-			is_request: true
-			method:     method
-			id_raw:     id_raw
-		}
+	if has_method && !has_result && !has_error {
+		return RpcClassification{ is_notification: !has_id, is_request: has_id, method: method, id_raw: id_raw }
 	}
-	if has_id && (has_result || has_error) {
-		return RpcClassification{
-			is_response: true
-			id_raw:      id_raw
-			has_error:   has_error
-		}
+	if !has_method && has_id && has_result != has_error {
+		return RpcClassification{ is_response: true, id_raw: id_raw, has_error: has_error }
 	}
 	return RpcClassification{}
 }

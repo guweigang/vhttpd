@@ -1,5 +1,7 @@
 module main
 
+import dispatch
+
 import runtime_plan
 import relay
 import worker
@@ -92,4 +94,16 @@ fn test_relay_pipeline_runtime_projects_frame_to_pipeline_exchanges() {
 	assert exchanges[0].identity.id == 'frm-1'
 	assert exchanges[0].created_at_ms == 456
 	assert rt.relay.ingress_exchanges('missing', 'agent:edge', relay.WireFrame{}, 0).len == 0
+}
+
+fn test_relay_pipeline_explicit_route_selects_exactly_one_pipeline() {
+    rt := RelayPipelineRuntime{descriptors:{'shared':[
+        dispatch.PipelineDescriptor{id:'resource/database',ingress:'relay:shared'},
+        dispatch.PipelineDescriptor{id:'debug/control',ingress:'relay:shared'},
+    ]}}
+    frame := relay.WireFrame{version:relay.wire_version,kind:.open,id:'one',channel_id:'one',route:'debug/control'}
+    exchanges := rt.ingress_exchanges('shared','carrier',frame,0)
+    assert exchanges.len == 1
+    assert exchanges[0].pipeline == 'debug/control'
+    assert rt.ingress_exchanges('shared','carrier',relay.WireFrame{...frame,route:'missing'},0).len == 0
 }

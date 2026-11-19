@@ -1,0 +1,665 @@
+{
+  "observations": [
+    {
+      "run": "04-g1h0",
+      "phase": "load",
+      "elapsed_seconds": 180.10097487503663,
+      "gc_epoch": 71,
+      "mapped_free_resident_mib": 21.5,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 524,
+          "bytes": 22208512,
+          "resident_bytes": 22208512
+        },
+        "1": {
+          "blocks": 2,
+          "bytes": 335872,
+          "resident_bytes": 335872
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "load",
+      "elapsed_seconds": 210.10970417503268,
+      "gc_epoch": 83,
+      "mapped_free_resident_mib": 1.29296875,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 14,
+          "bytes": 1318912,
+          "resident_bytes": 1318912
+        },
+        "1": {
+          "blocks": 1,
+          "bytes": 266240,
+          "resident_bytes": 36864
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "load",
+      "elapsed_seconds": 240.1869000340812,
+      "gc_epoch": 96,
+      "mapped_free_resident_mib": 11.43359375,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 172,
+          "bytes": 10194944,
+          "resident_bytes": 10194944
+        },
+        "1": {
+          "blocks": 5,
+          "bytes": 548864,
+          "resident_bytes": 548864
+        },
+        "2": {
+          "blocks": 8,
+          "bytes": 954368,
+          "resident_bytes": 954368
+        },
+        "3": {
+          "blocks": 2,
+          "bytes": 237568,
+          "resident_bytes": 237568
+        },
+        "4": {
+          "blocks": 1,
+          "bytes": 192512,
+          "resident_bytes": 53248
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "load",
+      "elapsed_seconds": 270.21082229702733,
+      "gc_epoch": 109,
+      "mapped_free_resident_mib": 14.375,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 276,
+          "bytes": 15265792,
+          "resident_bytes": 15073280
+        },
+        "1": {
+          "blocks": 1,
+          "bytes": 172032,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 300.28785662702285,
+      "gc_epoch": 120,
+      "mapped_free_resident_mib": 20.6640625,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 474,
+          "bytes": 19947520,
+          "resident_bytes": 19947520
+        },
+        "1": {
+          "blocks": 6,
+          "bytes": 806912,
+          "resident_bytes": 806912
+        },
+        "2": {
+          "blocks": 5,
+          "bytes": 565248,
+          "resident_bytes": 565248
+        },
+        "3": {
+          "blocks": 2,
+          "bytes": 290816,
+          "resident_bytes": 290816
+        },
+        "4": {
+          "blocks": 1,
+          "bytes": 126976,
+          "resident_bytes": 57344
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 330.2962807570584,
+      "gc_epoch": 120,
+      "mapped_free_resident_mib": 18.453125,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 382,
+          "bytes": 17629184,
+          "resident_bytes": 17629184
+        },
+        "1": {
+          "blocks": 6,
+          "bytes": 806912,
+          "resident_bytes": 806912
+        },
+        "2": {
+          "blocks": 5,
+          "bytes": 565248,
+          "resident_bytes": 565248
+        },
+        "3": {
+          "blocks": 2,
+          "bytes": 290816,
+          "resident_bytes": 290816
+        },
+        "4": {
+          "blocks": 1,
+          "bytes": 126976,
+          "resident_bytes": 57344
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 360.30404317600187,
+      "gc_epoch": 122,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 390.3123121430399,
+      "gc_epoch": 122,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 420.32062721508555,
+      "gc_epoch": 122,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 450.3281918030698,
+      "gc_epoch": 122,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 8192,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 480.34046072606,
+      "gc_epoch": 124,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 510.34962560306303,
+      "gc_epoch": 124,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 12288,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 540.3574086480075,
+      "gc_epoch": 124,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 8192,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "04-g1h0",
+      "phase": "cooldown",
+      "elapsed_seconds": 570.3654692800483,
+      "gc_epoch": 124,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 28672,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 60.016008176025935,
+      "gc_epoch": 20,
+      "mapped_free_resident_mib": 21.74609375,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 662,
+          "bytes": 22798336,
+          "resident_bytes": 22798336
+        },
+        "1": {
+          "blocks": 1,
+          "bytes": 159744,
+          "resident_bytes": 4096
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 90.02951779495925,
+      "gc_epoch": 32,
+      "mapped_free_resident_mib": 21.63671875,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 997,
+          "bytes": 22687744,
+          "resident_bytes": 22687744
+        },
+        "1": {
+          "blocks": 1,
+          "bytes": 12894208,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 120.03795981500298,
+      "gc_epoch": 44,
+      "mapped_free_resident_mib": 21.26953125,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 873,
+          "bytes": 21565440,
+          "resident_bytes": 21565440
+        },
+        "1": {
+          "blocks": 4,
+          "bytes": 446464,
+          "resident_bytes": 446464
+        },
+        "2": {
+          "blocks": 2,
+          "bytes": 249856,
+          "resident_bytes": 249856
+        },
+        "5": {
+          "blocks": 1,
+          "bytes": 12935168,
+          "resident_bytes": 40960
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 150.04618426901288,
+      "gc_epoch": 56,
+      "mapped_free_resident_mib": 19.8046875,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 723,
+          "bytes": 19554304,
+          "resident_bytes": 19554304
+        },
+        "2": {
+          "blocks": 7,
+          "bytes": 13586432,
+          "resident_bytes": 733184
+        },
+        "1": {
+          "blocks": 4,
+          "bytes": 479232,
+          "resident_bytes": 479232
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 180.05483021005057,
+      "gc_epoch": 68,
+      "mapped_free_resident_mib": 20.8046875,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 873,
+          "bytes": 21622784,
+          "resident_bytes": 21622784
+        },
+        "1": {
+          "blocks": 1,
+          "bytes": 32768,
+          "resident_bytes": 32768
+        },
+        "2": {
+          "blocks": 1,
+          "bytes": 159744,
+          "resident_bytes": 159744
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 210.06301709497347,
+      "gc_epoch": 80,
+      "mapped_free_resident_mib": 19.92578125,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 842,
+          "bytes": 20537344,
+          "resident_bytes": 20537344
+        },
+        "1": {
+          "blocks": 1,
+          "bytes": 20480,
+          "resident_bytes": 20480
+        },
+        "2": {
+          "blocks": 1,
+          "bytes": 151552,
+          "resident_bytes": 151552
+        },
+        "5": {
+          "blocks": 1,
+          "bytes": 184320,
+          "resident_bytes": 184320
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 240.08253786701243,
+      "gc_epoch": 92,
+      "mapped_free_resident_mib": 17.6953125,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 512,
+          "bytes": 17915904,
+          "resident_bytes": 17915904
+        },
+        "1": {
+          "blocks": 3,
+          "bytes": 266240,
+          "resident_bytes": 266240
+        },
+        "2": {
+          "blocks": 2,
+          "bytes": 360448,
+          "resident_bytes": 360448
+        },
+        "6": {
+          "blocks": 1,
+          "bytes": 12881920,
+          "resident_bytes": 12288
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "load",
+      "elapsed_seconds": 270.09279880602844,
+      "gc_epoch": 104,
+      "mapped_free_resident_mib": 16.1953125,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 410,
+          "bytes": 16273408,
+          "resident_bytes": 16273408
+        },
+        "2": {
+          "blocks": 4,
+          "bytes": 421888,
+          "resident_bytes": 421888
+        },
+        "1": {
+          "blocks": 2,
+          "bytes": 233472,
+          "resident_bytes": 233472
+        },
+        "5": {
+          "blocks": 1,
+          "bytes": 12881920,
+          "resident_bytes": 53248
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 300.1013665560167,
+      "gc_epoch": 114,
+      "mapped_free_resident_mib": 12.4765625,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 254,
+          "bytes": 11489280,
+          "resident_bytes": 11489280
+        },
+        "1": {
+          "blocks": 12,
+          "bytes": 950272,
+          "resident_bytes": 950272
+        },
+        "2": {
+          "blocks": 7,
+          "bytes": 638976,
+          "resident_bytes": 638976
+        },
+        "3": {
+          "blocks": 1,
+          "bytes": 12840960,
+          "resident_bytes": 4096
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 330.11042537598405,
+      "gc_epoch": 114,
+      "mapped_free_resident_mib": 10.16015625,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 182,
+          "bytes": 9060352,
+          "resident_bytes": 9060352
+        },
+        "1": {
+          "blocks": 12,
+          "bytes": 950272,
+          "resident_bytes": 950272
+        },
+        "2": {
+          "blocks": 7,
+          "bytes": 638976,
+          "resident_bytes": 638976
+        },
+        "3": {
+          "blocks": 1,
+          "bytes": 12840960,
+          "resident_bytes": 4096
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 360.1188308229903,
+      "gc_epoch": 116,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 4096,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 390.1270791159477,
+      "gc_epoch": 116,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 420.135652758996,
+      "gc_epoch": 116,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 8192,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 450.1482999100117,
+      "gc_epoch": 116,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 4096,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 480.16142411902547,
+      "gc_epoch": 118,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 510.1753969619749,
+      "gc_epoch": 118,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {
+        "0": {
+          "blocks": 1,
+          "bytes": 8192,
+          "resident_bytes": 0
+        }
+      }
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 540.1871686349623,
+      "gc_epoch": 118,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    },
+    {
+      "run": "05-g1h1-repeat",
+      "phase": "cooldown",
+      "elapsed_seconds": 570.1959899229696,
+      "gc_epoch": 120,
+      "mapped_free_resident_mib": 0.0,
+      "resident_mapped_free_at_or_above_unmap_threshold_mib": 0.0,
+      "unmap_threshold": 7,
+      "ages": {}
+    }
+  ],
+  "excluded": [],
+  "method": "One observation per PID/phase/30-second interval; duplicate read-only observers are not independent replicates. Individual ages verified with immutable free headers/head list and unchanged GC epoch; mutator ABA races remain possible."
+}

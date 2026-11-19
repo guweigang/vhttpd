@@ -1,0 +1,20 @@
+{
+  "time": "2026-11-10T04:05:42.075457+00:00",
+  "pid": 3730524,
+  "start_ticks": "39645663",
+  "exe": "/root/.local/share/vhttpd-workbench/runtimes/sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041/vhttpd",
+  "exe_sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+  "memory": {
+    "VmRSS": "138204 kB",
+    "RssAnon": "129344 kB",
+    "RssFile": "8860 kB",
+    "VmSwap": "0 kB"
+  },
+  "mem_available": "MemAvailable:     866852 kB",
+  "health": {
+    "19887": 200,
+    "19901": 200,
+    "19987": 200
+  },
+  "observer": "active"
+}

@@ -1,0 +1,146 @@
+diff --git a/vlib/v/compiler_tests/lock_codegen_test.v b/vlib/v/compiler_tests/lock_codegen_test.v
+index 076c1b09c1..2dccc43d44 100644
+--- a/vlib/v/compiler_tests/lock_codegen_test.v
++++ b/vlib/v/compiler_tests/lock_codegen_test.v
+@@ -487,7 +487,8 @@ fn main() {
+ 	dup_body := '(void* src, int sz) {\n#if defined(_VPREALLOC)\n'
+ 	assert c_code.contains(dup_body), c_code
+ 	assert c_code.contains('malloc((size_t)sz)'), c_code
+-	assert c_code.contains('malloc_uncollectable((ptrdiff_t)sz)'), c_code
++	assert c_code.contains('memdup(src, (ptrdiff_t)sz)'), c_code
++	assert !c_code.contains('malloc_uncollectable((ptrdiff_t)sz)'), c_code
+ }
+ 
+ fn test_shared_map_field_index_access_reads_payload() {
+diff --git a/vlib/v/gen/c/struct.v b/vlib/v/gen/c/struct.v
+index ea3fc936d9..b6f6d87d3c 100644
+--- a/vlib/v/gen/c/struct.v
++++ b/vlib/v/gen/c/struct.v
+@@ -4370,10 +4370,12 @@ fn (mut g FlatGen) shared_dup_fns() {
+ 		g.writeln('static inline void* __dup${name}(void* src, int sz) {')
+ 		g.writeln('#if defined(_VPREALLOC)')
+ 		g.writeln('\t${name}* dest = (${name}*)malloc((size_t)sz);')
++		g.writeln('\tmemcpy(dest, src, (size_t)sz);')
+ 		g.writeln('#else')
+-		g.writeln('\t${name}* dest = (${name}*)malloc_uncollectable((ptrdiff_t)sz);')
++		// Shared aliases and worker stacks keep the non-moving wrapper alive.
++		// Uncollectable storage would permanently root it and its payload.
++		g.writeln('\t${name}* dest = (${name}*)memdup(src, (ptrdiff_t)sz);')
+ 		g.writeln('#endif')
+-		g.writeln('\tmemcpy(dest, src, (size_t)sz);')
+ 		g.writeln('\tsync__RwMutex__init(&dest->mtx);')
+ 		g.writeln('\treturn dest;')
+ 		g.writeln('}')
+diff --git a/vlib/v/tests/concurrency/shared_gc_memory_test.v b/vlib/v/tests/concurrency/shared_gc_memory_test.v
+new file mode 100644
+index 0000000000..b047864d25
+--- /dev/null
++++ b/vlib/v/tests/concurrency/shared_gc_memory_test.v
+@@ -0,0 +1,107 @@
++// These checks also run with -prod, which removes assert statements.
++struct SharedGCContents {
++mut:
++	values map[string]string
++}
++
++struct SharedGCOwner {
++mut:
++	contents shared SharedGCContents
++}
++
++@[noinline]
++fn allocate_shared_gc_batch(count int) {
++	for i in 0 .. count {
++		mut owner := SharedGCOwner{
++			contents: SharedGCContents{
++				values: {
++					'payload': 'x'.repeat(4096)
++				}
++			}
++		}
++		lock owner.contents {
++			if owner.contents.values['payload'].len != 4096 {
++				panic('shared payload length changed')
++			}
++			owner.contents.values['sequence'] = i.str()
++		}
++	}
++}
++
++fn test_unreachable_shared_wrappers_release_their_payloads() {
++	if !gc_is_enabled() { return }
++	allocate_shared_gc_batch(16)
++	gc_collect()
++	before := gc_memory_use()
++	allocate_shared_gc_batch(4096)
++	gc_collect()
++	after := gc_memory_use()
++	if after > before + 1024 * 1024 {
++		panic('Unreachable shared wrappers retained payloads: ${before} -> ${after}')
++	}
++}
++
++fn shared_gc_waiter(shared contents SharedGCContents, ready chan bool, resume chan bool, done chan bool) {
++	lock contents {
++		ready <- true
++		_ := <-resume
++		if contents.values['payload'] != 'kept'.repeat(1024) {
++			panic('worker lost shared payload during GC')
++		}
++		contents.values['worker'] = 'done'
++	}
++	done <- true
++}
++
++fn test_shared_alias_and_worker_survive_collection() {
++	shared contents := SharedGCContents{
++		values: {
++			'payload': 'kept'.repeat(1024)
++		}
++	}
++	owner := SharedGCOwner{ contents: contents }
++	shared alias := owner.contents
++	ready := chan bool{}
++	resume := chan bool{}
++	done := chan bool{}
++	worker := spawn shared_gc_waiter(shared contents, ready, resume, done)
++	is_ready := <-ready
++	if !is_ready { panic('worker did not become ready') }
++	allocate_shared_gc_batch(128)
++	gc_collect()
++	resume <- true
++	is_done := <-done
++	if !is_done { panic('worker did not complete') }
++	worker.wait()
++	rlock alias {
++		if alias.values['worker'] != 'done' { panic('shared alias lost worker update') }
++		if alias.values['payload'] != 'kept'.repeat(1024) {
++			panic('shared alias lost payload during GC')
++		}
++	}
++}
++
++@[noinline]
++fn start_shared_gc_waiter(ready chan bool, resume chan bool, done chan bool) thread {
++	shared contents := SharedGCContents{
++		values: {
++			'payload': 'kept'.repeat(1024)
++		}
++	}
++	return spawn shared_gc_waiter(shared contents, ready, resume, done)
++}
++
++fn test_worker_keeps_its_only_shared_reference_alive_during_collection() {
++	ready := chan bool{}
++	resume := chan bool{}
++	done := chan bool{}
++	worker := start_shared_gc_waiter(ready, resume, done)
++	is_ready := <-ready
++	if !is_ready { panic('worker did not become ready') }
++	allocate_shared_gc_batch(128)
++	gc_collect()
++	resume <- true
++	is_done := <-done
++	if !is_done { panic('worker did not complete') }
++	worker.wait()
++}

@@ -40,6 +40,6 @@ options.route = "relay/local-mcp"
 [[pipelines]]
 id = "public/mcp-relay"
 ingress = "listener:web"
-match.methods = ["POST", "DELETE"]
+match.methods = ["GET", "POST", "DELETE"]
 match.paths = ["/mcp"]
 egress = "adapter:mcp-relay"

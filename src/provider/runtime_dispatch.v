@@ -154,6 +154,7 @@ pub fn (ctx RuntimeDispatchContext) upstream_launches() []ProviderRuntimeUpstrea
 
 pub fn feishu_upstream_snapshot(snapshot feishu.RuntimeAppSnapshot) upstream.UpstreamSnapshot {
 	return upstream.UpstreamSnapshot{
+		protocol: snapshot.protocol
 		provider:                'feishu'
 		instance:                snapshot.name
 		enabled:                 snapshot.enabled
@@ -171,6 +172,7 @@ pub fn feishu_upstream_snapshot(snapshot feishu.RuntimeAppSnapshot) upstream.Ups
 
 pub fn codex_upstream_snapshot(instance string, state codex.RuntimeStateView, enabled bool) upstream.UpstreamSnapshot {
 	return upstream.UpstreamSnapshot{
+		protocol: state.protocol
 		provider:                'codex'
 		instance:                instance
 		enabled:                 enabled

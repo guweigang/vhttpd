@@ -1,0 +1,15 @@
+{
+  "mode": "candidate-original",
+  "utc": "2026-11-04T06:02:11.313552+00:00",
+  "binary_sha256": "789c29cffdee25c1950b8505710a1575c36e5490fbe98679ec8e0c5afa4aba18",
+  "application_info_assertion": false,
+  "original_entry_sha256": "16bb7eaf9d650480fca3343e216e37e38869eb80482e7d18e57ff3b9f125bccb",
+  "production_apps_sha256": "9d7ee67a51609c1b24cfbd41fb7611089d182059e9289ae8f58595890cfddf57",
+  "application_health": {
+    "ready": true,
+    "http": 200,
+    "application_route_ok": true,
+    "revision_matches": true
+  },
+  "production_pid": 2134650
+}

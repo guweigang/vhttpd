@@ -1,6 +1,6 @@
 module main
 
-import codex
+import conversation_binding
 import executor
 import connection_runtime
 import json2 as json
@@ -16,14 +16,7 @@ struct FeishuCardBridgeRuntime {}
 struct FeishuCardBridgeContext {
 mut:
 	state &feishu.FeishuState @[required]
-	codex &codex.CodexState = &codex.CodexState{}
-}
-
-fn (mut providers ProviderRuntimeHub) feishu_card_bridge_context() FeishuCardBridgeContext {
-	return FeishuCardBridgeContext{
-		state: &providers.feishu
-		codex: &providers.codex
-	}
+	release_binding fn (conversation_binding.Release) = fn (_ conversation_binding.Release) {}
 }
 
 fn FeishuCardBridgeRuntime.default_client_id() string {
@@ -519,7 +512,7 @@ fn (mut providers ProviderRuntimeHub) feishu_card_bridge_proxy_update(req upstre
 fn (mut bridge FeishuCardBridgeContext) retire_authority(mut owner feishu.BridgeAuthority) {
 	bridge.state.mu.@lock()
 	for released in bridge.state.retire_bridge_authority_unlocked(mut owner) {
-		codex_release_feishu_targets_in_state(mut bridge.codex, released)
+		bridge.release_binding(released.binding_release())
 	}
 	bridge.state.mu.unlock()
 }
@@ -587,7 +580,7 @@ fn (mut providers ProviderRuntimeHub) feishu_card_bridge_rotate_creation_capacit
 fn (mut bridge FeishuCardBridgeContext) release_wire_stream(owner &feishu.BridgeAuthority, req upstream.UpstreamSendRequest) {
 	bridge.state.mu.@lock()
 	if released := bridge.state.release_bridge_stream_unlocked(owner, req.target, req.metadata['stream_id'] or { '' }, req.instance, req.metadata['stream_generation'] or { '' }) {
-		codex_release_feishu_targets_in_state(mut bridge.codex, released)
+		bridge.release_binding(released.binding_release())
 	}
 	bridge.state.mu.unlock()
 }

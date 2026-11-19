@@ -1,0 +1,6 @@
+{
+  "initial_failed_attempt": "20261110-upstream-gc-handoff/01-before",
+  "reason": "Harness incorrectly asserted raw Boehm default3, ignoring upstream V gc startup setting1. Failed before load, not runtime regression. New fresh directory used; no acceptance from failed attempt.",
+  "correct_expected_divisor": 1,
+  "v_startup_source_sha256": "6186a98117351e5a61239969d971e415b76c70ee71d59d204be5e2bb4660c9c4"
+}

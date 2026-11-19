@@ -1,0 +1,8 @@
+{
+  "decision": "Do not retain this increment. Roll back only this turn scanner traversal/membership reuse; keep prior directory cache and added semantic regression.",
+  "reason": "Microbenchmark saves only 3.25% beyond prior cache; new whole-package pressure anonymous 59.94-67.36 MiB vs prior-cache single control49.98 MiB. Conservative rejection; exact root not established and control has only one repeat.",
+  "rejected_binary_sha256": "767456d29dec7b7b19badcb91dcdf00994a1fb0db47a2d79c0154d9339553d70",
+  "restored_scanner_sha256": "041e89551cbd5c180bfba82684c6631a294c08c3ab4d59b8edaf099a30c42cc5",
+  "business_changed": false,
+  "no_new_vlang_vjsx_changes": true
+}

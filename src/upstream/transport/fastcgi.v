@@ -9,13 +9,11 @@ import os
 const fcgi_version_1 = u8(1)
 
 const fcgi_begin_request = u8(1)
-const fcgi_abort_request = u8(2)
 const fcgi_end_request = u8(3)
 const fcgi_params = u8(4)
 const fcgi_stdin = u8(5)
 const fcgi_stdout = u8(6)
 const fcgi_stderr = u8(7)
-const fcgi_data = u8(8)
 
 const fcgi_responder = u16(1)
 

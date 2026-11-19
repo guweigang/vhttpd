@@ -1,0 +1,17 @@
+{
+  "status": "failed",
+  "started_utc": "2026-11-02T12:46:03Z",
+  "binary": "/root/vhttpd-release-tests/20261102-fixed3/package/vhttpd",
+  "binary_sha256": "cc0d22074332ef3027d299d1c4efea3550f6b40a17f04bcca56b1c2964bf7580",
+  "retained_rss_budget_kib": 16384,
+  "max_load_rss_kib": 262144,
+  "asset_sha256": {
+    "remote_soak.py": "8ba82131730756fc5d5f53deb83399c79dd2dee64737186af402b32e7e9fc1b9",
+    "ws_client.py": "08ebd66512e24d6c174513597919ff57cf04133e8dba3b6b211a506c7633ccc8",
+    "paseo.mts": "f8d431d53e3a1f02a85e910bab1922529d7cf352783f2f0a283ea81886f3f0b6",
+    "paseo-component.toml": "2e67ee169a67d6aa68141a2d83df052a8b0d168992736956cacaf3a282e0a829"
+  },
+  "cases": [],
+  "current_case": "paseo",
+  "failure": "Retained RSS grew more than 16 MiB: 51348 -> 75588 KiB"
+}

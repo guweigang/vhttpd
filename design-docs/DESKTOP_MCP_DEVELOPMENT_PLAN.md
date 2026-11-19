@@ -1,0 +1,737 @@
+---
+title: Desktop MCP 应用开发与远端运维设计
+description: 定义项目目录与运行目标绑定、MCP 工具增量、项目与平台指引，以及 Agent 客户端分阶段验收。
+tags:
+  - desktop
+  - mcp
+  - vjsx
+  - development
+status: draft
+---
+# Desktop MCP 应用开发与远端运维设计
+
+Agent 负责理解需求、编辑应用和根据运行证据迭代。Desktop 掌管工作区授权、主机连接、配置校验和运行时操作。第一阶段的交付标准是，用户在 Desktop 选定应用后，受信任的 Agent 客户端能完成一次 vhttpd 应用修改、业务验证和失败恢复，并能通过公网 Relay 调用同一个 Desktop MCP。本项目按用户选择使用 DSH、WorkBuddy 实际验收；ChatGPT 网页可作为支持相应接入与认证方式时的另一个客户端，不是当前交付的单独阻塞项。
+
+## vhttpd 与 Desktop 的能力覆盖设计
+
+Agent 需要能发现目标版本提供的能力，查到使用契约，并在授权范围内完成配置、执行、验证和恢复。能力清单按实际入口维护。vhttpd 的 schema、运行时注册表和 Admin 操作描述运行时能力，Desktop 的 Host/Worker 操作描述工作区和主机管理能力。下面的状态按仓库当前 MCP 工具登记核对，区分工具已存在和工作流已验收。
+
+| 能力域 | 已有 MCP 入口 | 需要补齐 |
+| --- | --- | --- |
+| 工作区、应用与模板 | `context_get`、模板发现与创建、`application_install_prepare/apply`、文件 revision 变更和 Desktop 应用绑定；`source_workspace_get/prepare/bind/unbind` 原位绑定空目录及已有源码，无需安装，已通过实际 Desktop 与 DSH 验收 | 源码绑定、已安装应用和平台管理分别授权。源码会话不自动授予安装或远端发布权限；文件类型与私有文件限制沿用开发工具边界 |
+| vhttpd 配置与数据面 | 停机或实时 `schema_get` 覆盖九个配置域，应用变更校验与业务 HTTP 请求，远端 `target_request`；共享配置多字段、多文件编辑及恢复；`application_protocol_probe`/`target_protocol_probe` 提供有界 stream/SSE、WebSocket 文本及业务 MCP 初始化/工具发现 | Bearer、TLS 和 IPv6 已完成客户端复验；Basic、X-API-Key 及 Linux 远端变量引用已通过实调；11/10 Digest GET 与 mTLS stream 探针及随包 Skill 已通过 WorkBuddy 成功、拒绝、恢复验收。Digest 其他模式、mTLS 其他协议专项及其他认证与高级协议待扩展。凭据、可执行/存储路径及来源成员变更仍须使用 Desktop 专用流程 |
+| 应用脚本、兼容库与集成 | vjsx 参考，pipeline、微信云开发兼容、Codex Bot 模板和独立 `guidance_get` 主题，统一的 `vhttpd-workbench` Skill | 微信真实登录、数据库及存储、已有云函数迁移和公网专项验收仍需补齐 |
+| Desktop 主机和环境管理 | 主机登记、连接、断开，环境发现与身份校验接入，以及环境创建、实例启停均已有 MCP 工具，并通过当前 Desktop 与 DSH 隔离环境验收 | 密码认证仍须在 Desktop 完成，首次主机指纹确认继续由 Desktop 管理；工具不接收私钥路径或密码 |
+| 运行包与发布 | 本地启停，远端应用发布及回滚、运行时升级及回滚；官方运行包管理、应用安装及历史查询；共享多字段配置修改和跨会话历史恢复均已通过当前 Desktop 与 DSH 验收 | 配置中受保护值、来源成员及组件身份变更的 MCP 专用契约 |
+| Relay 与流量接管 | 公网 MCP Relay 发布与回收、账号接管与释放；普通 Relay 连接库、配置、启停和恢复；手工 Relay 的字段编辑、Hub/Agent 转换、字段删除、多 include 来源变更及精确恢复；MySQL 专项探针，均有实际 Desktop 与 DSH 验收 | 非 WebSocket 载体、任意嵌套 options 修改及业务表、迁移和具体应用数据的专项验证 |
+| 运维诊断与恢复 | 本机和远端运行图、worker、provider、Relay、WebSocket 统计；日志、事件、安装及发布升级历史；持久化配置历史保存、列出、预检恢复和撤销，含已有本机 GUI 历史；业务 GET/HEAD 验证及有界 SSE、WebSocket 文本、业务 MCP 探针 | 高级协议与认证专项，以及更完整的受控运行计划替换 |
+
+### MCP、指引与 Skills 的分工
+
+- MCP 是发现和执行入口。扩展 `context_get` 绑定上下文，并提供可按能力域查询的目录。每项返回稳定 ID、目标版本、schema 或指引入口、所需授权、对应工具、当前可用性和原因。目录区分运行时支持、Desktop 支持、已对当前会话开放三个状态。运行中的数据以目标实时能力为准，离线时使用对应运行包并注明来源。
+- 配置型能力优先复用 schema、变更集和通用验证。主机连接、运行包操作、远端发布、共享配置变更、Relay 和接管使用有类型的工具，复用 Desktop Host/Worker 或 vhttpd Admin 的既有实现。写操作使用明确目标、预检、可查询的操作记录，并声明恢复方式。凭据、授权授予和可见的交互确认由 Desktop 提供，Agent 能查询所缺的授权和完成后的状态。
+- `vhttpd-workbench` Skill 说明如何选择和组合工具，按需读取开发、部署或调试参考。主题指引随运行包或 Desktop 版本发布，由 `guidance_get` 提供同源内容。项目 `AGENTS.md` 记录实际入口、约束、目标和验证命令。
+- 公网 Relay 与本机 MCP 使用同一能力模型，按工作区、运行目标和操作授予权限。应用编辑会话与平台管理会话分别授权。能力目录显示当前可用范围，Worker 执行时再次校验授权和绑定代次。
+
+### 按项目形态验收
+
+| 项目起点 | Agent 要完成的工作 |
+| --- | --- |
+| 空工作区 | 从能力目录选择模板，创建源码和绑定，校验、启动、请求验证并发布 |
+| 已有 vhttpd 应用 | 发现入口、profile 和现有能力，修改并验证，发布更新并恢复 |
+| 微信云开发兼容应用 | 分别验证从模板新建和已有云函数接入，调用实际云函数，验证所用兼容库能力并发布 |
+| Codex Bot 应用组件 | 用仓库现有组件接入，识别其组件配置、vjsx 和 provider 依赖，校验、安装并验证业务入口 |
+| 纯配置 | 从 TOML 定义 listener、pipeline 和 adapter，核对匹配和未匹配请求。应用级配置走组件发布与回滚。共享环境配置走单独的配置预检、应用与恢复 |
+
+### 实施与覆盖判定
+
+1. 建立可检查的能力清单，按源码注册项与 Desktop 操作逐条登记。为每项记录发现入口、schema 或指引、执行工具、授权、验证和恢复，以及首个支持版本。注册项新增而目录缺失时由测试报出。
+2. 补齐项目入口和 Skill 路由，先覆盖纯 TOML pipeline、微信兼容应用、Codex Bot 和现有 vjsx。验收包含从空工作区启动和从已有源码接入，并以运行请求证明结果。
+3. 补齐共享环境配置、主机与实例、运行包、普通及共享 Relay、运维诊断。优先接通已有 Host/Worker 或 Admin 能力。对运行时注册表中不能复用通用流程的协议与资源逐项增加契约和验证工具。
+4. 每批使用 DSH 或 WorkBuddy 验证发现、指引读取、实际调用和恢复。公网验收另验证凭据范围和目标绑定，发布验收以测试目标的实际业务结果为准。只有执行与验收都有记录的项目才标记为完成。
+
+本节是后续覆盖范围与验收契约。下文保留已实现工具和既有验收记录。
+
+### 当前剩余工作与边界（2026-11-08 核对）
+
+已通过的本地及公网开发、部署、升级、接管与恢复验收继续有效。独立网络出口不属于剩余工作。以下项目分批补工具、指引及 Skill，再用 DSH 或 WorkBuddy 实际验收；实现、自动测试、客户端调用与业务验收分别记录，不以其中一项替代其他项。
+
+| 项目 | 当前状态 | 完成条件 |
+| --- | --- | --- |
+| IPv6 远端目标对话复验 | 已完成：WorkBuddy 对现有 `release-qa` 实际调用 IPv6 业务探针，认证成功/401 拒绝及 TLS 正反例均通过；最终 Desktop 包再次复验通过 | 已核对真实 `address_family=ipv6`、200 正文、TLS 校链校名与固定失败码，未改网络配置 |
+| 认证、TLS 与高级协议 | 11/8 Bearer/TLS、11/9 Basic/X-API-Key 与 Linux 引用解析批次已通过；11/10 Digest（MD5/SHA-256、qop=auth、GET）及 mTLS stream 的 WorkBuddy 成功、拒绝、恢复和随包 Skill 验收通过，当前 Desktop 与发布包已更新 | Digest auth-int/sess/userhash/非 ASCII 及其他协议、mTLS WebSocket/MCP 与其他 TLS 协商版本的客户端专项、加密私钥、OAuth、Cookie/query、外部密钥服务及高级协议仍待扩展；入站服务端认证策略和其他远端配置/部署路径不由探针能力代替 |
+| 受保护配置与运行计划 | 凭据、可执行/存储路径、include 来源成员及组件身份变更仍受限；更完整的受控运行计划替换待补专用契约 | 预览影响、预检、明确授权、应用、生效验证、冲突拒绝及精确恢复 |
+| 微信兼容专项 | 模板、兼容项目入口和基本调用已验收；真实登录、数据库、存储、已有云函数迁移及公网业务专项仍待验收 | 使用真实已授权测试资源逐项验证，不以模拟登录或常量探针替代业务验证 |
+| Relay 与数据库扩展 | 非 WebSocket 载体、任意嵌套 options 及具体业务表/迁移/应用数据验证仍在上表扩展范围中 | 按运行时真实支持能力增加配置契约和验证，保持既有载体及其他路由可恢复 |
+
+密码认证、首次主机指纹确认、授权授予和凭据展示继续由 Desktop 管理。这些是现有交互边界，不表示应把密码、私钥路径或授权提升能力开放给模型。是否扩展边界须另有明确设计。
+
+### Digest 与 mTLS 客户端探针（2026-11-10，本批已验收）
+
+现有 `application_protocol_probe`、`target_protocol_probe` 沿用 `auth_ref`，新增 `probe_auth_kind=digest` 与 `mtls`。Digest 使用配置中的 `probe_digest_username`、`probe_digest_password`，支持 ASCII 凭据、MD5/SHA-256、`qop=auth` 的 `protocol=stream` GET 探针。在原超时预算内先取一次 401 挑战，再至多发送一次认证 GET；不降级 Basic、不跟随重定向、不刷新 nonce，不重放 POST 或 WebSocket 操作。缺失、重复、格式错误或不支持的挑战被拒绝；选择 Digest 后直接收到无挑战的 200 也不算通过。
+
+mTLS 的引用选择同一路由 adapter 中的 `probe_client_cert`、`probe_client_key`，由配置所属主机加载 PEM 证书和私钥，工具参数不接受路径、文件内容或口令。远端沿用 Linux 目标主机引用解析，支持按声明文件计算的相对路径；本机要求配置展开后的绝对路径。服务端证书链、有效期及身份仍强制校验，显式 `listener_certificate` 信任与客户端证书呈现分别处理。发现结果增加 `authentication.protocols`，Digest 声明 stream，mTLS 声明现有 stream/WebSocket/MCP 传输；配置可用性不等于每种协议都已实测。
+
+WorkBuddy 5.9.3 / Hy4 在现有「vhttpd MCP 验收 vjsx 项目测试」实际对话中，使用实际 Desktop 界面签发的本机 Streamable HTTP 会话，发现 109 项工具，读取随包 `guidance_get(debug)` 的新版 Skill，再查询现有 `release-qa` 的认证引用。原 vhttpd 实例保持停止，配置临时指向 IPv4 回环上的专用 Python 协议对端；本批验证客户端认证传输，不表示为 vhttpd 服务端新增了入站 Digest/mTLS 策略，也不计作公网 Relay 或 IPv6 复验。
+
+| 实际工具矩阵 | 通过结果 |
+| --- | --- |
+| Digest 六次 | SHA-256 路径返回 200 与 `digest-peer-ok` SSE 事件；错误凭据、无凭据均返回 `probe_authentication_rejected_401`；不支持挑战返回 `probe_digest_challenge_unsupported`；MD5 路径成功；最后恢复 SHA-256 路径再次成功 |
+| mTLS 新轮次五次 | 正确客户端证书返回 200 与 `mtls-peer-ok` SSE 事件；无客户端证书、不受信客户端证书、错误服务端身份均返回 `stage=tls`、`probe_tls_verification_failed`、`tls_verified=false`；恢复正确证书后再次成功 |
+
+算法名由对端按路径验证的散列及独立原生标准向量共同核对，工具结果本身不返回算法字段。mTLS 对端此次使用 TLS 1.2，三个反例共用固定 TLS 错误码，不能仅从该码推断更细的服务端判决，也不能写成 HTTP 401。对端无凭据审计记录为 Digest 10 个 HTTP 请求、3 次认证成功，mTLS 2 次业务成功，与客户端有效调用矩阵一致。mTLS 的 WebSocket/MCP、其他 TLS 协商版本仍需专项客户端验收。
+
+失败轮次单独保留：夹具最初将 `cert_key` 误写为 `key`，导致目标发现失败，修正后重新发现通过；首次 mTLS 调用返回 `target_redaction_context_unavailable`，未取得 TLS 结果。其后核对配置未变，并通过 Desktop 同一 SSH 主连接读取两份源文件，编码与 TOML 均正常；该次失败原因未确定，不宣称已定位修复。明确发起的新选项查询及五项矩阵才计作通过。客户端两次无效的 deferred 工具名没有到达 Desktop，亦不计作有效探针。锁屏中断期间先恢复配置、关闭对端，人工解锁后重新建立夹具再验收。
+
+原生 Digest 标准向量、默认 mbedTLS 与 OpenSSL 的真实对端正反例、既有协议及有界远端信封回归均通过；最终交付源码在 macOS、现有 Ubuntu 各通过 9 项 Python 回归。新版 `vhttpd-debug` 已随 Desktop 发布，并由 WorkBuddy 实际读取和使用；DSH 安装目录同步更新，但本批不另宣称 DSH 对话加载通过。当前实际 Desktop、`desktop/bin` 应用和 ZIP 已更新并通过标准签名、归档与隔离运行检查，原运行时二进制保持一致。继续使用当前 V 与新编译器，禁用回退，未使用 v_old，未修改网络配置；Ubuntu V 的既有 veb 修改未使用或变更。
+
+收尾已恢复远端原配置和实例标记、停止专用对端并释放端口。实际 Desktop 关闭 MCP 后，WorkBuddy 用旧连接仅调用一次 `context_get`，返回 Streamable HTTP 的 `internal_error`，没有上下文，不宣称 HTTP 401；临时连接器已移除，原 miora 插件 8 项工具保留。更新后的 Desktop 已回到原 `ipv6-probe-qa` 环境停止视图、MCP 关闭。详见[本批结构化验收证据](./release-evidence/desktop-mcp-digest-mtls-2026-11-10.json)。Digest 的 auth-int、sess、userhash、非 ASCII 和其他协议，以及加密私钥、硬件或外部密钥服务、其他认证方案仍待扩展。
+
+### 非 Bearer 与远端变量引用（2026-11-09，本批已验收）
+
+本批已完成实际客户端验收。DSH 对话实际加载新版 `vhttpd-debug`；WorkBuddy 5.9.3 / Hy4 使用实际 Desktop 界面签发的授权，经本机 Streamable HTTP 调用工具，复用 `release-qa` 验证远端 IPv6 上的 Basic、X-API-Key 成功、无认证与错误凭据返回 401、TLS 名称错误拒绝。随后实际验证凭据引用缺失、证书引用缺失及运行时停止分别拒绝；恢复后在最终安装包上重新查询选项，Basic、API Key 均返回预期 200，已知配置值反射被遮盖。此批未重做公网 Relay 验收，业务数据为 text/plain，不计作 SSE 或其他业务协议认证验收。
+
+正式 Desktop 包已通过全部标准发布检查，当前实际 Desktop 及 `desktop/bin` 应用、ZIP 已更新。实测发现的远端脚本大小问题已通过压缩可信实现与请求的 stdin 信封修复，保留原 16000 字节上限及超限拒绝；结果继续遮盖原始配置及主机档案中的已知凭据，且不展开 Mac 环境。退出实际 Desktop 后，WorkBuddy 使用旧连接仅调用一次 `context_get`，未取得上下文，客户端显示 Streamable HTTP 的 internal_error；不宣称收到 HTTP 401。验收后恢复远端原配置及实例标记、归档专用夹具、释放测试端口，移除临时 WorkBuddy 连接器并保留原插件；更新后的 Desktop 已恢复原环境，运行时停止、MCP 关闭。
+
+现有 `application_protocol_probe`、`target_protocol_probe` 的 `auth_ref` 新增 Basic 与固定 `X-API-Key` 两种方案：路由对应 adapter 通过 `probe_auth_kind=basic` 配置 `probe_basic_username`/`probe_basic_password`，或通过 `probe_auth_kind=api_key` 配置 `probe_api_key`。默认 Bearer 保持兼容。MCP 不接收原始凭据、自选认证头或证书路径；选项发现返回认证类型及可用性诊断，响应遮盖原始、Basic 编码及反射凭据。
+
+远端探针已改为在目标主机解析引用和执行传输，当前引用解析要求 Linux `/proc` 与 Python 3.11+ 的 `tomllib`，仅作用于探针和选项发现路径，避免在 Desktop 编译远端配置时展开 Mac 环境。支持 `${env.NAME}`、`${env.NAME:-default}`、`${config.dir}` 和 `${paths.root}`，目录按声明所在 include 文件计算。环境取自同用户、精确配置路径唯一匹配的运行中 vhttpd 进程；没有匹配、不可读或有歧义时拒绝，需要环境的调用返回 `remote_probe_runtime_environment_unavailable`。缺失或不支持的表达式返回 `remote_probe_reference_unavailable`。不读取任意 PID，不使用 SSH 登录或 Desktop 环境作替代，不执行 shell、不自动加载 `.env`。远端公钥证书引用在该主机解析和读取；不返回解析后的私有值、证书文件或路径，TLS 仍校验链、有效期和名称。
+
+macOS 已通过原生认证文件、三份协议/TLS/schema 测试文件及远端信封/已知凭据遮盖测试文件；macOS 和现有 Ubuntu 各通过 10 项 Python 回归，覆盖三种认证、IPv4/IPv6、TLS 拒绝、反射遮盖和恢复。实际目标 `/proc` 环境选择补充检查验证唯一匹配成功、歧义/未匹配拒绝及恢复。Linux V 目录有其他任务的既有变更，本批未使用或修改该编译器；远端产品变更为 Python，使用原有隔离运行时验证。正式 macOS 包使用当前 V、新编译器及 Boehm，禁用回退；未使用 v_old，运行时二进制与更新前完全一致。
+
+[本批验收证据](./release-evidence/desktop-mcp-auth-references-2026-11-09.json)记录了最终包的成功、拒绝、恢复、遮盖及旧连接失效结果，也保留了修复前失败轮次、一次人工确认超时和客户端无效工具名；这些失败不计作通过。该批次结束时 Digest、mTLS 及其他认证仍待扩展；Digest/mTLS 后续实现与验收范围见上节 11 月 10 日记录，OAuth 交换、Cookie/query、外部密钥服务与高级协议仍在待办中。下节 11 月 8 日的字面量拒绝是当时版本记录，探针路径现已由上述目标主机引用解析取代。
+
+### 远端 IPv6、专用 Bearer 与 TLS 探针（2026-11-08）
+
+新增只读 `application_probe_options_get`、`target_probe_options_get`。它们按绑定范围返回业务监听器、地址族、TLS 状态、可用认证引用和证书信任选项，排除 Admin，不返回令牌、证书文件内容或私有路径。`source=configuration` 只表示配置发现，不能替代实际连接证据。
+
+`application_protocol_probe`、`target_protocol_probe` 增加 `auth_ref`、`tls_trust` 与 `tls_server_name`，沿用有界 stream/WebSocket/业务 MCP 探针。认证引用仅选择当前业务路由对应 adapter 的专用 `options.probe_bearer_token`，工具不接收原始令牌、任意 Authorization、URL、CA 路径或私钥。TLS 默认系统信任，可显式选择所选 listener 的证书为信任源；始终验证证书链和身份，身份参数不改变固定回环连接目标。结果区分 connect、tls、authentication、protocol 阶段，401/403 和证书错误返回固定诊断，凭据回显遮盖。Linux 同时处理 TLS 对端关闭导致的 SIGPIPE，避免探针退出整个进程。
+
+远端凭据必须来自远端实际配置的字面量，环境变量引用在连接前返回 `remote_probe_credential_requires_literal_value`；远端显式证书信任路径使用变量时返回 `remote_probe_tls_trust_requires_literal_path`。发现结果隐藏不可用引用及 Desktop 环境展开的证书主机名。此处是明确拒绝规则，尚不表示已实现远端密钥解析。
+
+WorkBuddy 5.9.3 的实际对话“vhttpd MCP 验收 vjsx 项目测试”完成本机与现有 Ubuntu `release-qa` 各六次调用：IPv6 无凭据返回 401；IPv6 专用 Bearer 返回 200 与 `secure-probe-event`；系统信任拒绝自签证书；显式 listener 证书信任且身份 localhost 时 IPv6 TLS 验证成功；wrong.invalid 身份被拒；IPv4 TLS 对照成功。最终已安装 Desktop 再次完成远端正例、两个变量引用反例与恢复复验。反例是连接前工具错误，不冒充带 stage 的业务响应。本批响应为 text/plain、events 为空，不计作持续 SSE、认证 WSS 或业务 MCP 的客户端专项验收。
+
+同时修复只取首个 `tools/list` 页面导致客户端找不到远端工具的问题：初次 JSON 列表聚合授权范围内的完整目录，显式 cursor 保留分页；鉴权、撤销和边界保持有效。WorkBuddy 界面实际显示 109/109，并成功调用此前不在前 50 项中的 targets/status/options 工具。自动回归覆盖 121 项目录、显式分页、未授权与撤销。
+
+`vhttpd-debug` 随最终包发布，DSH 实际 `skill(name="vhttpd-debug")` 加载验证发现步骤、认证与 TLS 参数、远端字面量约束及失败不盲重放。macOS 原生两种 TLS 后端、Ubuntu 原生和 Python IPv4/IPv6 TLS/认证矩阵通过；最终标准 macOS 包通过签名、归档提取、全新 HOME、无开发树/编译器环境的运行验证。全部使用当前 V 与 `-new-compiler`，禁用回退，未使用 v_old。当前实际 Desktop 已更新。隔离应用和运行进程验收后回收，原配置及实例身份恢复，临时 MCP 连接器移除；未修改系统网络、代理、路由或 OrbStack 网络配置。
+
+详细记录见[本批验收证据](./release-evidence/desktop-mcp-secure-probes-2026-11-08.json)。非 Bearer 认证、高级协议、远端变量凭据与证书解析，以及上表其他能力域仍按后续批次推进。
+
+第一批已实现只读 `capabilities_list`。Desktop 目录从工具注册规格生成，返回能力域、权限、会话可用性和不可用原因。传入 `include_runtime: true` 时，通过现有 `schema_get` 路径返回目标实时或随包 schema，无法读取时仍返回 Desktop 目录并附上原因。`desktop/devmcp/server_test.v` 将目录中的可用项与实际 `tools/list` 比对，覆盖工作区、已绑定管理会话和只读 Relay。使用支持 Relay 的 0.9.0 测试运行包通过了该测试文件，包括停机 schema、应用切换和实际 Relay 编辑回归。`vhttpd-develop` 已加入能力发现步骤。运行时注册表以外的操作与上表未接入的 Desktop 能力仍按后续批次实施。
+
+DSH 客户端验收通过安装包内的 `dsh-mcp-client`，在隔离工作区使用 Streamable HTTP 实际完成工具注册、`capabilities_list`、`project_create` 和带 `include_runtime` 的目录查询。目录版本为 1，共 37 项，当前可用 20 项，与 DSH 注册结果一致。未授权应用发布显示 `management_session_required`。vhttpd 0.9.0 停机时从 `runtime_package` 读取了 listeners、resources、engines、adapters、transforms、policies、providers、pipelines、relays 九个域。重建测试运行包后，在独立的已绑定管理会话复验。DSH 实际注册 35 项，与目录可用项一致。应用发布可见，`project_create` 返回 `workspace_session_required`。`guidance_get(develop)` 从新构建的 0.9.0 运行包返回包含 `capabilities_list` 步骤的指引。本轮证据覆盖 DSH 客户端连接器层，模型对话因模型路由不可用未通过。
+
+## 现有实现
+
+Desktop 的开发 MCP 默认关闭，开启后在本机提供带 Bearer 凭据的 Streamable HTTP。应用绑定模式由 Desktop 选定本地运行环境和应用，再从配置推导应用源码目录。MCP 和 GUI 共用 Worker，应用切换会递增选择代次并清空预览。源码修改已有基于 revision 的预览、配置校验、停机应用及会话内恢复；`schema_get` 在运行时使用 Admin 查询并返回 `source: live_admin`。停止时通过所选运行包的 `vhttpd --schema` 读取同一份目录，返回 `source: runtime_package` 和运行包版本。旧运行包缺少该命令时返回 `runtime_schema_unavailable`。配置校验和业务验证是两个独立步骤。 [Desktop MCP 开发服务](../desktop/MCP.md) · [应用上下文实现](../desktop/host/development_application.v) · [Worker 开发入口](../desktop/host/development.v)
+
+本文规划的是 Desktop 的开发与运维工具。应用自身通过 vhttpd 提供的业务 MCP 属于另一条接口。 [vhttpd MCP](./MCP.md)
+
+## 项目目录与运行目标
+
+**源码工作区**是授权读写的目录，**运行目标**是执行校验、启停、请求或发布的环境和应用。已安装应用模式继续绑定现有本机环境与应用；新增源码模式直接使用 Desktop 授权目录，不要求安装或存在应用清单，运行目标为该源码目录的本地开发实例。源码绑定与远端发布授权分别处理，绑定成功不表示配置可运行。
+
+| 对象 | Desktop 保存或解析的字段 | MCP 返回的字段 |
+| --- | --- | --- |
+| 源码工作区 | `workspace_id`、规范化根目录、应用标识、应用配置路径、入口与组件清单路径（如存在） | 工作区 ID、显示名、应用标识及应用相对路径 |
+| 运行目标 | `target_id`、本地或远端、环境标识、应用标识、运行包版本及包标识 | 目标 ID、环境与应用名、实际运行包版本、状态、允许操作和重启影响范围 |
+| 当前绑定 | `workspace_id`、`target_id`、`binding_revision`、授权生命周期 | 相同的 ID 和代次，用于拒绝过期调用 |
+
+Desktop 提供两种入口。已有应用从环境与应用选择器进入，按应用归属绑定源码。未安装源码使用「打开源码目录（无需安装）…」，先停止当前受管实例，再选择并授权已有目录。目录可以为空，也可以已有仓库；Desktop 不复制源码、不生成安装记录。MCP 可在这个不可扩大的授权根内，用 `source_workspace_prepare` 预览、`source_workspace_bind` 绑定相对目录及可选 TOML 入口。完全空目录可选择模板初始化；已有文件或 `.git` 时省略模板，直接接入并通过 revision 变更补齐文件。缺少或无效配置不阻止绑定，启动前仍须补齐本机认证 Control、校验配置并验证业务。解绑保留文件，源码登记仅在当前会话内有效。
+
+每个服务实例只有一个当前绑定。已有应用由 Desktop 切换；源码模式允许本机 MCP 在 Desktop 已授权根内预检并切换，公网 Relay 不提供这四个绑定工具。Worker 串行执行，切换更新代次、清空预览并使旧 Relay 授权失效。源码模式的所有绑定相关调用均要求 `binding_revision`，过期调用返回 `binding_changed`，客户端须重读上下文。切换或解绑前必须停止自有运行时，并恢复已应用变更，或在确认保留后显式 `changes_discard`；不会丢弃待恢复记录。
+
+每次文件操作仍经边界检查。只接受绑定目录内支持的相对文本文件路径，拒绝穿越、符号链接及私有或不支持的文件类型。已安装应用模式继续隔离其他应用和共享环境配置；源码模式覆盖当前整个源码项目，允许编辑其配置及内部 include，不能借 include 读取绑定目录外文件。`AGENTS.md` 可经项目指引和 revision 工具维护。预览记录项目、目录身份与文件 revision，提交时复查；关闭服务后撤销访问。源码授权与恢复记录均不跨 Desktop 会话保留。
+
+## MCP 公网接入
+
+首期支持三种入口。桌面客户端直连本机 MCP。ChatGPT 可经 Secure MCP Tunnel 接入，也可在工作区支持相应认证方式时走公网入口。其他 Web Agent 可直接配置 Relay 提供的 HTTPS Streamable HTTP URL 和客户端凭据。Desktop 到远端运行目标的主机连接独立于这三种入口。 [OpenAI Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) · [Desktop 主机管理](../desktop/host/remote_servers.v)
+
+公网 MCP 经过两段连接。Web Agent 使用 HTTPS Streamable HTTP 访问远端 vhttpd Hub 的 MCP 入口，bodytest 单端口部署使用 `/mcp`。Relay 两端都运行 vhttpd。本机 Desktop 管理的 vhttpd Relay Agent 主动连接远端 Hub 的 `/vhttpd/relay/desktop-mcp`，建立全双工 WebSocket 长连接。Hub 沿这条已建立的连接把请求交给本机 Agent，由 `mcp-upstream` 转到 loopback 上的 Desktop MCP `/mcp`，响应沿同一连接返回。远端向本机发送请求时复用这条长连接。用户在 Desktop 选定应用后，选择可信 Relay 并开启「通过 Relay 发布」，为当前绑定发布有期限的路由。界面提供 URL、客户端认证配置、到期时间及撤销入口。 [Relay Hub 示例](../examples/config/mcp-relay-public-v2.toml) · [Relay Agent 与 MCP 上游示例](../examples/config/mcp-relay-local-upstream-v2.toml)
+
+- **身份与范围**。Hub 对客户端认证并执行路由级限流。Relay 连接凭据、Web Agent 凭据和本机 MCP 凭据分别管理。首期支持 HTTPS 下的短期、可撤销 Bearer 凭据，按路由和权限签发，默认只读。开启编辑时在 Desktop 明确授权源码写入、启动和停止的范围。Desktop 在 Worker 执行前再次检查路由授权、工具权限和绑定代次。客户端凭据、Relay Token 和本机 MCP Token 不写入工具结果或日志。只接受 OAuth 的客户端需另行适配。
+- **转发与会话**。只开放登记的 MCP 路径，目的地固定为该 Desktop 实例的 loopback MCP。转发初始化、POST 和会话终止所需的头、状态与响应；按 Desktop 宣告的能力处理 SSE，若未提供 GET 事件流则保留正确的 HTTP 语义。路由、客户端身份与 MCP 会话关联。断线时返回可识别的不可用状态，重新连接后允许重新初始化，变更调用由客户端先查状态再决定是否重试。
+- **撤销**。绑定切换、凭据撤销、路由到期或关闭 MCP 后，旧路由拒绝新调用。Hub 发现 Desktop 离线时停止转发；Desktop 也独立拒绝失效授权。重新发布签发新路由和客户端凭据。公网接入复用现有工作区文件边界及共享运行时保护。
+
+### Relay 创建也由 MCP 编排
+
+新增 `relay_create_prepare`、`relay_create_apply`、`relay_status` 和 `relay_revoke`。用户先在 Desktop 连接远端主机、选择环境，并授权这次操作。工具从现有主机连接和 Worker 执行，不接收 SSH 地址、密码、私钥、任意命令或任意上游 URL。客户端失联时可从 Desktop 继续查询或撤销。
+
+- `relay_create_prepare` 接收已授权的目标 ID、当前绑定代次和只读或编辑模式。校验环境、端口和路由冲突，返回计划 ID、HTTPS 回源端口、MCP 路径、WSS carrier 路径及部署影响。
+- `relay_create_apply` 执行短期计划，使用已有运行包启动专用 Hub 或配置已有 Hub，并启动本机出站 Agent。默认用独立进程隔离现有业务监听；需要改动共享进程时在计划中显式列出影响。重复调用返回同一个操作结果。
+- `relay_status` 分别报告 Hub 就绪、等待域名、Agent 已连接、MCP 握手可用及已撤销。域名和 TLS 配置仍可由用户在远端网关完成。凭据由 Desktop 保存并通过专用界面交给用户，工具结果只返回可复制的非凭据连接信息。
+- `relay_revoke` 先使本机授权失效并断开出站 Agent，再回收该发布创建的远端专用路由或进程。共享 Hub 的其他路由保持运行。
+
+创建工具通过本机管理会话提供，或者通过另外已授权的管理入口提供。公开的应用开发端点只承载其绑定范围内的开发工具，避免公网客户端利用开发凭据开通更多路由。
+
+## 第一阶段的 MCP 工具
+
+| 改动 | 工具 | 契约 |
+| --- | --- | --- |
+| 新增 | `source_workspace_get`、`source_workspace_prepare`、`source_workspace_bind`、`source_workspace_unbind` | 本机源码会话查询、预检、原位绑定和释放。支持空目录及缺少或无效配置的已有项目；模板初始化只接受完全空目录，计划有效期五分钟。所有切换在 Desktop 授权根内执行，不安装应用 |
+| 扩展 | `context_get` | 返回结构化绑定、代次、运行包与脚本 profile、能力、影响范围、指引目录和可用模板。以应用相对路径代替本机绝对路径 |
+| 新增 | `guidance_get` | 按主题读取项目指引、开发工作流和版本化 API 参考。返回来源、版本及正文。未知版本或主题返回明确错误 |
+| 扩展 | `schema_get` | 运行中读取目标实时 schema。停止时可读取与目标包匹配的随包 schema，并标明来源。包内缺失时明确返回不可用 |
+| 复用 | `templates_list`、`files_list`、`files_read` | 返回模板和应用范围内的内容与 revision。模板带适用版本或 profile，限制与当前行为一致 |
+| 复用并加固 | `changes_prepare`、`changes_validate`、`changes_apply`、`changes_restore`、`changes_discard` | diff、配置校验、应用和恢复沿用现有流程；对预览和变更检查绑定与 revision，冲突时重新读取并预览 |
+| 复用并补充结果 | `runtime_status`、`runtime_start`、`runtime_stop`、`logs_query`、`application_request` | 状态和启停结果报告作用范围。经 Relay 启动或重启时先返回受理，轮询 `runtime_status.readiness` 为 `ready` 后调用 `application_request`。本机直连启动等待就绪。日志尽可能返回应用标识及请求关联信息。业务验证只调用选定应用的业务监听器 |
+
+启动、停止及源码写入遵循 Desktop 授权。第一阶段验收使用专用本地测试环境。若环境承载多个应用，执行停机前必须按该环境的授权策略核对影响范围。保留已知凭据脱敏与占位符检查。恢复使用现有会话内记录，其覆盖范围是应用文件，Desktop 退出后恢复记录失效。
+
+## 项目指引与平台 Skills
+
+### 应用根目录的 `AGENTS.md`
+
+由应用模板生成，已有应用可维护自己的版本。写入入口、应用清单和允许编辑的目录、目标兼容范围、生成文件、可重复运行的验收请求及预期响应、适用 Skill。可以记录应用特有的业务规则与测试数据约定。运行目标、实时状态和实际能力以 `context_get` 为准。项目指引只作为开发上下文，授权由 Desktop 及 Worker 执行。MCP 通过 `guidance_get` 的项目主题返回该文件；缺失时返回空状态及适用的平台工作流。
+
+### 平台 Skill
+
+[统一的 vhttpd-workbench Skill](../src/development_guidance/vhttpd-workbench/SKILL.md) 是客户端安装和发现的唯一入口。根 `SKILL.md` 只写触发条件、通用约束和分流规则；`agents/openai.yaml` 提供显示名称。根据任务按需读一份参考。
+
+| 任务 | 随 Skill 安装的参考 | Desktop MCP `guidance_get` 主题 |
+| --- | --- | --- |
+| 开发、绑定源码、编辑与验证 | [develop.md](../src/development_guidance/vhttpd-workbench/references/develop.md) | `workflow` |
+| 主机、发布、运行包与 Relay | [deploy.md](../src/development_guidance/vhttpd-workbench/references/deploy.md) | `deploy` |
+| 诊断、认证探针与恢复 | [debug.md](../src/development_guidance/vhttpd-workbench/references/debug.md) | `debug` |
+
+新打包的运行包在 `skills/vhttpd-workbench` 放完整 Skill，原有 vjsx 和三份项目技术契约独立放在 `guidance/`。运行包的 `develop`、`vjsx` 和 Desktop 的原有指引主题名保持兼容。历史验收记录里的三个 Skill 名称对应当时的安装布局。
+
+### 微信云开发兼容项目
+
+这类应用以 `examples/wechat-cloud-functions` 为参考，云函数和业务接口由 vhttpd 运行。现有示例包含 `lib/cloud` 服务端兼容库和小程序 `utils/vhttpd.js` 客户端。开发入口按项目现状区分。
+
+- 空工作区用 `project_create` 的 `environment` 模板创建环境。通过 `application_templates_list` 发现 `wechat-cloud-functions`，再用 `application_install_prepare` 和 `application_install_apply` 生成并安装最小可运行组件。模板复用示例中的兼容库与客户端，提供应用入口、vhttpd 配置、最小云函数和验证请求。基础库随模板和应用制品交付，并记录版本。
+- 已有项目先调用 `context_get`，检查应用入口、`cloudfunctions/` 和现有兼容库。保留业务代码与目录结构，按缺少的依赖生成变更，经 diff 和校验后应用。已绑定应用的公网会话继续操作绑定范围内的文件。
+- `vhttpd-develop` 增加微信云开发兼容项目的触发条件与操作步骤。先识别项目是初始化还是接入，再查与运行包及兼容库版本匹配的开发契约。契约通过 `guidance_get` 的独立主题提供给 Web Agent，覆盖 `wx-server-sdk` 兼容接口、身份上下文、函数互调、数据库和存储、客户端接入、已支持的选项及错误行为。项目 `AGENTS.md` 只记录该应用实际使用的入口、库版本和验证方式。
+- 本地验证沿用文件 revision、变更校验、启动和 `application_request`。发布沿用 `vhttpd-deploy` 与应用发布工具，预检确认制品包含应用入口、云函数和服务端兼容库。业务验证调用真实云函数入口并检查返回，失败时用 `vhttpd-debug` 查应用日志，按变更或发布记录恢复。
+
+验收在测试环境覆盖两条路径。用 DSH 或 WorkBuddy 从模板创建新项目，再接入一份已有云函数项目，确认原有文件得到保留。客户端通过公网 MCP 读取兼容契约、修改云函数、校验并运行，验证客户端请求契约和至少一种实际使用的基础库能力。随后发布到测试目标，验证远端调用并回滚。本批已完成模板创建、工作区安装和独立应用绑定。微信真实登录、数据库和存储链路、已有云函数迁移与公网 Relay 专项验收继续单独跟踪。
+
+### 三类组件的 DSH 验收
+
+DSH 安装包内的 `dsh-mcp-client` 通过本机 Streamable HTTP 调用 `application_templates_list`、`application_install_prepare` 和 `application_install_apply`。切到应用绑定管理会话后，通过 MCP 发布基线、更新同一安装 ID、回滚并轮询到完成。每次都在隔离 Ubuntu 目标验证真实业务响应。
+
+| 组件 | 本机验证 | Ubuntu 基线 → 更新 → 回滚 |
+| --- | --- | --- |
+| 纯 TOML pipeline | GET /healthz 返回 200 和 pipeline-ok，未匹配路径返回 404 | c58f21587b2aeea7541b8018 → 945363a3650d935a3c892496 → 0c2be5883d03f150398bb860 |
+| 微信云开发兼容 | GET /healthz 经兼容 SDK 调用 hello，未配置登录返回 503 | 6d2728ae60e0c433d0d6bdbf → 01b4865af7e74386889b91c9 → 5bb30a5e09ad1e187f741215 |
+| Codex Bot | GET / 返回应用 JSON，默认关闭外部 provider 启动 | 61b0433618d894b68e0112ac → a2a50c61821534ad36e08c40 → f1f8be21efab590f08f77a48 |
+
+`vhttpd-develop`、`vhttpd-deploy` 和 `vhttpd-debug` 增加三类项目的操作与验证流程。自动测试验证模板安装、无脚本组件可绑定、私有文件排除和跨会话安装计划拒绝。此次验收在 DSH 客户端连接器层执行，远端业务请求直接由 Ubuntu 测试监听器响应。测试实例已停止。
+
+### 本机运行包与运行时诊断
+
+- `runtime_package_get` 返回所选本机运行包的版本、来源和可用性。文件系统路径留在 Desktop。远端运行包继续通过 `target_status` 查询。
+- `runtime_diagnostics_get` 从运行中的本机 Admin 读取 `graph`、`workers`、`providers`、`relay` 四类状态，使用固定查询和受限字段。诊断面覆盖整个本机环境，所以需要本机 MCP 会话。停机时可以查询运行包和 schema。
+- `vhttpd-debug` 按运行图、worker、provider 和 Relay 状态给出排查顺序。`vhttpd-deploy` 说明如何区分本机复现所用的包与远端包。
+- DSH 安装包内的 MCP 客户端通过 Streamable HTTP 实测。停机时读到运行包 0.9.0，诊断调用返回 `runtime_not_running`。启动后运行图返回 5 个节点、3 条边，另三类接口均返回结构化状态。测试环境未配置独立 worker、provider 实例或 Relay Agent，三类列表均为空。随后默认 Desktop MCP 自动回归通过。真实 Relay 的历史回归曾在长连接握手成功后遇到运行时启动请求 HTTP 504，根因和修复后的公网验收见下文。任意 Admin 路径作为 topic 被拒绝，测试实例已停止。
+
+### 2026-11-08 IPv6 协议探针与客户端验收
+
+`application_protocol_probe` 和 `target_protocol_probe` 复用既有权限、监听器选择和有界协议流程，新增配置驱动的 IPv6 回环连接。IPv4 绑定使用 127.0.0.1，::1 或 :: 绑定使用 ::1，HTTP Host 使用带方括号的 IPv6 authority。结果返回 `address_family`，不新增任意地址、URL、请求头或凭据参数。远端 Python 载体使用相同选择。本批同时修正 vhttpd HTTP 监听的绑定预检与服务启动，使其按配置选择 IPv4/IPv6 地址族，而非固定使用 IPv4。
+
+实际 WorkBuddy 5.9.3 对话「vhttpd MCP 验收 vjsx 项目测试」通过本机 Streamable HTTP 连接实际 Desktop 的隔离源码工作区 `project`。服务名称为 `vhttpd_ipv6_qa`，未使用测试程序启动 Desktop MCP。工具操作均在客户端实际对话中执行：
+
+| 步骤 | 实际结果 |
+| --- | --- |
+| 指引与基线 | `context_get` 返回 source_workspace、installed=false；`guidance_get(debug)` 读到新增地址族指引。web4 与 web6 的 `stream /probe` 分别返回 HTTP 200、ipv4/ipv6 及 ipv6-baseline |
+| 控制面隔离 | admin 探针被 `listener_belongs_to_another_application` 拒绝；运行 PID 保持不变 |
+| 编辑与校验 | 变更 `a9e6f15064c7cd48facb6768` 仅替换 options.body 一行，保留凭据占位符；prepare、validate、apply 成功 |
+| 生效 | 启动就绪后两条监听均返回 HTTP 200、各自正确地址族及 ipv6-edited |
+| 恢复 | 停止、changes_restore、重新启动后，两条监听均恢复 HTTP 200 和 ipv6-baseline |
+| 停止与授权关闭 | 最终 stopped、pid=0，配置 revision 恢复为 `5566fa918a1d794b9fa57607c862be81c7c8a06792ae71246afccfe4acccac78`；独立逐字节比较一致。Desktop 关闭 MCP 后，WorkBuddy 单次旧 context_get 失败、无上下文，独立 TCP 检查确认 MCP、IPv4、IPv6 与 Admin 测试端口全部关闭 |
+
+WorkBuddy 的关闭后错误经客户端封装为 Streamable HTTP POST failure，附 `{"error":"internal_error"}`，不据此断言服务端返回了 401。端口关闭检查补充证明该临时服务已停止。临时连接器已从 WorkBuddy 回收，原有连接器保留。
+
+新版 `vhttpd-debug` 已安装到 DSH；其既有 vhttpd 验收对话第 20 轮实际重新加载 Skill，正确说明地址族选择、Host 方括号、联合核对协议数据、TLS/高级帧边界及失败不重放。macOS 和 Ubuntu 均通过原生探针及监听地址单元测试；远端脚本的 MCP 成功/失败会话清理在两平台通过，macOS 另验证 IPv4/IPv6 SSE 数据、WebSocket 回声及 Host authority。真实 vhttpd 双回环监听测试通过。常规 make 的整体 lint-safety 被既有回调注入检查阻断，本批直接执行的相关测试通过。
+
+Desktop 与运行包均由当前 V 编译器通过标准 desktop/build.sh 生成，生产构建开启 Boehm GC，并以 V_MACOS_V3_NO_FALLBACK=1 禁用自动回退；旧编译器核对已取消，不纳入交付或验收证据。macOS 15.0 最低版本、可迁移依赖、深度严格签名、归档安装与内置应用运行检查通过；打包后的真实双回环监听测试再次通过。仓库 Desktop 包与当前实际 Workbench IPv6 QA.app 均已更新，随包 debug Skill 核对通过；实际界面重新打开后保持隔离环境停止。原包保留为 Workbench Before IPv6.app。[脱敏验收记录](release-evidence/desktop-mcp-ipv6-2026-11-08.json)
+
+客户端业务 fixture 是 text/plain 固定响应，events 为空，不计为 SSE 连续推送验收。本批尚未在客户端对话中对已登记远端目标调用 IPv6 target_protocol_probe；该入口目前由原生选择逻辑和远端脚本回归覆盖。认证、TLS、IPv6 高级协议及运行计划等其他待办继续按能力清单跟踪。全程未修改代理、路由或系统网络配置。
+
+### 2026-11-06 无需安装的源码工作区验收
+
+当前 Desktop 新增「打开源码目录（无需安装）…」。选定已有目录并授权后，本机 MCP 直接绑定其源码，不要求 `app.json`、安装槽或有效的 `vhttpd.toml`。新增 `source_workspace_get`、`source_workspace_prepare`、`source_workspace_bind`、`source_workspace_unbind`，源码会话实际注册 29 项工具，与 `capabilities_list` 的可用项一致。实现见 [源码绑定与边界](../desktop/host/source_workspace.v)、[工具规格](../desktop/devmcp/source_workspace.v) 和 [Desktop 入口](../desktop/development_mcp.v)。
+
+`prepare` 接受授权根内的相对目录、可选相对 TOML entry；`bind` 使用五分钟计划并复查目录身份及源码 revision。空目录可用 vjsx-http、vjsx-api 或 environment 模板预览初始化，预检不在目标写文件，提交独占创建；已有项目省略模板，所有文件留在原位。未安装项目的普通 `app.json` 不强制解释为 vhttpd 组件清单。目录穿越、符号链接、越界 include 和目录被替换均拒绝。模板初始化对普通失败有补偿，不承诺进程崩溃时的原子恢复。
+
+源码上下文单独报告绑定与配置就绪：缺少配置、配置无效、可运行配置及目录身份变化。没有 TOML entry 时仍可编辑和恢复支持的文本文件；要启动须新增或修复所选入口并提供认证的本机 Control。校验成功仍须启动并请求业务接口。源码模式可编辑项目内部配置与 include，私有文件、大小及支持类型的限制继续保留，运行脚本不构成操作系统沙箱。启停影响整个源码项目。
+
+本批使用已安装 DSH 的真实 dsh-mcp-client，通过实际更新后的 Desktop 界面签发的本机 Streamable HTTP 配置完成以下流程；没有用测试程序代替 Desktop 提供服务。
+
+| 项目起点 | 实际调用及结果 |
+| --- | --- |
+| 空目录 | prepare 预检后目标仍为空，bind 初始化但不安装；通过文件 revision 同时编辑 main.mjs 与 AGENTS.md，校验、应用、启动，业务返回 HTTP 200 和 source_qa=empty。停机恢复源码与 AGENTS 字节，重启后恢复模板基线 HTTP 200，再停止并解绑 |
+| 已有业务源码、无 TOML entry | 原位绑定，保留 business.js 与普通项目 app.json；先验证无配置时可编辑与恢复文本、运行被拒绝，再通过 MCP 补配置和入口。实际运行返回 HTTP 200、source_qa=existing、preserved=original；恢复后新增配置和入口均不存在，业务及元数据逐字节一致 |
+| 已有无效配置、自定义 dev.toml | 绑定后明确显示 configuration_invalid；MCP 修复配置并修改入口后运行，返回 HTTP 200 和 source_qa=repaired。随后恢复原始无效配置与入口字节，状态重新显示 configuration_invalid，停止并解绑 |
+
+DSH 另通过 11 项拒绝检查，覆盖绝对/越界路径、符号链接、已有目录套用模板、未知参数、旧绑定代次、越界文件、未恢复就解绑、运行中切换、无配置启动，以及预检后发生外部修改。Host 自动回归补充检查越界 include、目录 inode 被替换和源码登记不写入项目注册表；新源码与原应用模式的真实 HTTP 回归均通过，包含公共编辑授权可读当前源码、本机绑定工具不向 Relay 注册及旧 Relay 不能跟随新绑定。
+
+`vhttpd-develop` 与 `vhttpd-debug` 已更新并安装到当前 Desktop 和 DSH。Desktop 的 guidance_get(workflow) 返回同源版本 2，develop/vjsx API 继续从原目标运行包获取。DSH 桌面会话第 19 轮实际调用 skill 重新加载两份新版，正确说明初始化、绑定、校验、就绪、恢复、解绑与安装/发布的差别。业务写入由已安装连接器层执行，不记为模型自主完成全部开发；本批没有新增公网链路验收。
+
+绑定变化要求先停止自有实例，并恢复或明确 discard 已应用变更；解绑只释放绑定，不删除文件、不撤销初始化。源码授权根不能由 MCP 扩大，四个源码绑定工具仅本机可用。公开编辑 Relay 可以使用当前绑定的文件和运行工具，但不能切换目录；绑定代次改变使旧授权失效。源码登记、计划及编辑恢复记录只在当前 Desktop 会话内有效。远端发布仍走独立组件/app.json 与管理授权流程，不因源码绑定自动开放。
+
+当前 Workbench Update QA.app 已更新为生产构建并通过严格签名验证，旧包保留为 Workbench Before Source Binding.app；内置 0.9.0 运行时字节保持不变。验收复用原隔离 Desktop 数据和本机运行包，没有创建远端实例、VM 或 Hub，未修改 bodytest。所有测试实例均停止，临时 MCP 关闭、旧连接被拒绝、凭据文件清除；原隔离根配置与登记表未变，临时源码目录已回收并保留私有证据副本。新版 Desktop 已返回原数据目录，界面确认 default 运行 0.9.0、已加载 0 个应用。详细结果见 [脱敏验收证据](release-evidence/desktop-mcp-source-binding-2026-11-06.json)。能力整体仍为 partial，其他能力域的待办继续按上方清单跟踪。
+
+### 2026-11-06 应用业务协议探针
+
+新增 application_protocol_probe 与 target_protocol_probe，绑定管理会话列出 107 项工具。参数为 protocol（stream/websocket/mcp）、配置中的业务 listener ID、相对 path，以及可选 message、timeout_ms 和 max_items。本机检查应用归属，远端从已登记且已连接的目标完整配置解析监听器，并在 Worker 执行前后校验绑定和授权。只允许明文 IPv4 loopback HTTP 或 WebSocket 监听；不接收 URL、认证头、凭据或任意 Admin 路径，也不跟随重定向。
+
+- stream 对 GET 响应采样，支持 Content-Length、连接结束和 HTTP chunked framing。采集预算 100–5000 ms、最多 64 KiB，SSE 只计算完整 data 事件，最多 1–8 条。截止时保留已收到的样本，达到事件数后主动关闭连接。有限 SSE 响应和持久在线流是不同证据，200 普通 JSON 不等于流式验证通过。
+- websocket 验证升级与 Sec-WebSocket-Accept，发送可选的单条受限文本，处理 Ping/Pong，收集有界文本帧并发 Close。握手成功和 received_text/messages 分别报告，调用者仍须核对业务预期。当前不处理分片、压缩、二进制或超大帧。
+- mcp 使用应用业务端点的 Streamable HTTP：initialize（2025-03-26）、notifications/initialized、tools/list，接受 JSON 或 SSE JSON-RPC，允许响应之前出现通知，返回有界工具名和总数。会话 ID 保留在内部，退出及失败时尽力 DELETE，不保证服务端确认删除。无需会话的服务同样可查。未实现认证、tools/call 和完整工具目录分页。
+
+两个工具均归为需要编辑授权的探针，因为 WebSocket 消息可能修改业务状态；只读 Relay 不提供本机探针。远端另由 Desktop 确认具体目标、监听器、协议及路径。协议失败不会重启或修改配置，不自动重放已发送的消息。已知配置秘密继续由既有脱敏逻辑处理，业务样本本身仍按应用数据看待。
+
+实现见 [本机协议传输](../desktop/host/protocol_probe.v)、[远端执行](../desktop/host/mcp_inspect.v)、[远端 stdlib 传输](../desktop/host/remote_scripts/protocol_probe.py)、[工具规格](../desktop/devmcp/protocol_probe.v) 和 [调试 Skill](../src/development_guidance/vhttpd-workbench/references/debug.md)。远端执行复用 Desktop 的 SSH 管理会话；这不改变公网 MCP 的 HTTP → vhttpd WebSocket Relay → 本机 Desktop 链路。
+
+已安装 DSH 的真实 dsh-mcp-client 使用实际 Desktop 界面签发的本机 Streamable HTTP 连接，对本机及原 Ubuntu mcp-shared-config-qa 均调用三种探针：SSE 返回 protocol-first/protocol-second，WebSocket 返回 echo:connected 与 echo:protocol-qa，业务 MCP 初始化并发现 echo。两端复用原 0.9.0/0.9.1 运行包；未新建实例、VM 或 Hub，未修改 bodytest。业务接口由临时 vjsx 应用提供；这里的 SSE 为有限响应，持续 chunked 和截止采样另由真实 socket 回归覆盖。本机另验证 7 项参数/归属/路径拒绝和一个错误 MCP 路径的结构化失败。
+
+DSH 模型第 18 轮实际通过 skill 重新加载新版 vhttpd-debug，解释了三种模式、授权、上限、握手与回包的区别、清理和不支持范围；业务调用由客户端连接器层执行，未描述成模型自主完成。首次 PHP 示例验收因原运行包报告 worker socket ownership mismatch 返回 503，保留失败证据后改为 vjsx；本批未修复或声称验收 PHP Worker。
+
+最终生产构建已安装到实际 Workbench Update QA.app，严格签名验证通过，保留 Workbench Before Protocol Probes.app；内置运行包字节与原包一致。最终包重新通过 DSH 本机三种探针、7 项拒绝和错误 MCP 路径验证，远端三种探针也再次通过，具体目标确认框已在界面核对。一次远端复验在 Worker 正在刷新时于入队前被拒绝，未发送业务消息；读取 host_inventory_get 确认连接和空闲后重新确认提交，未盲目重放已发送消息。
+
+macOS 与 Ubuntu 的真实 socket 回归通过，覆盖持续 chunked SSE、在下一 chunk 边界截止时保留已收事件、WebSocket 掩码/Ping/文本交换、无效握手、MCP JSON/SSE（含前置通知）与 DELETE 会话清理。两端工具授权和 JSON schema 回归通过；远端 Python stdlib 另有成功及 RPC 错误两条会话清理回归。Linux 使用既有 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev、GCC、gc none 和 -nocache，复用 vjsx 259620f1981a3573777ec8cda72883b1866404a7 及原生 QuickJS，依赖工作区未修改。没有因本批改动重建或升级运行时。Skill 格式与 V 格式检查通过。
+
+本机与远端均由 DSH 停止隔离实例，独立检查业务和测试管理端口关闭后逐字节恢复原根配置，移除临时 qa-protocol include 和组件，确认控制凭据未出现在 MCP 响应。界面关闭 MCP 并清除临时客户端凭据，回收本批 SSH 管理监听和测试公钥。已回到原 default 数据目录，核对上批留存的同一空 default 进程身份后正常停止并由新版 Desktop 启动，界面确认运行中；未强杀其他实例。详细结果见 [脱敏验收证据](release-evidence/desktop-mcp-protocol-probes-2026-11-06.json)。
+
+本批完成上述有界基础协议入口，整体能力仍为 partial。配置凭据/源成员变更、微信专项及完整受控运行计划替换等其他待办仍按能力清单跟踪；源码原位绑定已由后续同日验收补齐；认证、TLS、IPv6 及高级协议行为未由这些探针覆盖。
+
+### 2026-11-05 共享配置编辑与持久化历史恢复验收
+
+本批新增 12 个管理工具，绑定管理会话共 105 个工具。实现见 [共享字段编辑器](../desktop/host/mcp_config_edit.v)、[历史归档与恢复](../desktop/host/mcp_config_history.v)、[工具规格](../desktop/devmcp/config_edit.v) 和 [统一执行器](../desktop/host/mcp_relays.v)。本机与已连接的受管远端复用既有 Admin 多文件 changeset、Worker 重启与停机恢复；公开应用 Relay 不开放这些管理工具。
+
+| 流程 | 工具 |
+| --- | --- |
+| 发现配置与安全字段 | shared_config_get |
+| 预览、独立预检、应用、本次变更恢复 | shared_config_edit_prepare / preflight / apply / restore |
+| 查询异步操作 | shared_config_operation_get |
+| 持久化版本保存与列出 | config_history_capture、config_history_list |
+| 按版本预览、预检、恢复与撤销恢复 | config_history_restore_prepare / preflight / apply / undo |
+
+编辑按 domain、component、field 键段数组与 value 或 remove 定位；一次最多 32 项，支持标量、数组及已存在组件中的可选字段插入/删除。域覆盖 listeners、resources、engines、adapters、transforms、policies、providers、pipelines、server、observability。pipeline 使用稳定 ID，resources/policies 使用 category/id。已有字段在真实来源原地修改，多个 include 合并为同一个计划；不接收 raw TOML、文件路径或整个对象。候选与预期完整 TOML 树必须一致，删除最后一个 dotted 子字段时允许其隐式空父表随之消失。数组替换覆盖数组值内部内容与注释，未改动的周边内容保留。Relay 角色和凭据操作继续走专用工具。
+
+配置发现和预览只输出安全值，敏感值、未知私有选项和原始凭据不返回。凭据、secret resource 身份、可执行/存储路径、应用组件来源、include 关系、Control/Admin 监听及其管线受保护；完整配置及引用必须校验通过。历史恢复也拒绝改变这些保护内容，要求当前和历史来源成员及组件身份一致。缺失/改名源文件、来源拓扑变化或受保护值恢复仍使用 Desktop 专用恢复流程，本批不是任意 TOML 文件读写入口。
+
+config_history_capture 可保存手工维护、正在运行且确认生效的配置；准备编辑前也保存生效基线，发布就绪后保存结果。相同 revision 去重。每个环境归档最多 20 个版本、16 MiB，由用户私有目录和文件权限保护，包含精确原文但不向 MCP 输出。远端历史保存在当前 Desktop，以保存主机、实例和配置根目录隔离。本机列表同时读取已有 Desktop GUI 历史，不要求版本由 MCP 创建。列表可在运行时停止时查询；远端主机须已连接。
+
+历史 version_id 在 Desktop 关闭重开后保留，旧 plan_id 和操作记录不保留。新恢复准备要求当前环境运行且生效，通过版本 ID 生成五分钟计划，展示安全前后配置，固定完整源 revision、boot、目标和授权代次。独立预检后经 Desktop 确认执行，先返回 accepted，再轮询；每次应用和恢复重启整个环境。恢复原变更或撤销历史恢复支持受管实例停止后的精确源恢复。并发修改不覆盖。历史写入失败时须核对实时状态，不能把“已生效但保存历史失败”当成已回滚。
+
+DSH 实测分两段完成，服务端始终为实际安装运行的 Workbench Update QA.app，连接由界面签发。写流程使用已安装 DSH 的真实 dsh-mcp-client、Streamable HTTP；模型对话另实际调用 skill 重新加载 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 与 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，正确说明新工具、历史持久化/会话计划的区别、已有 GUI/手工配置、异步验证、全环境重启和受保护范围。未将连接器写流程描述为模型自主完成。
+
+- 复用原本机隔离 pipeqa 环境、现有 Ubuntu mcp-shared-config-qa 实例和两端运行包（本机 0.9.0、远端 0.9.1），未升级运行包、创建实例/VM/Hub 或改动 bodytest。手工设置 qa-shared/routes.toml 与 response.toml，不含 MCP 创建标记。
+- DSH 从完整基线保存版本，在一次两文件计划中修改匹配路径、插入 GET 方法、修改 fixed-response 响应并删除可选数值字段。旧路径变为 404，新路径返回 200 / shared-after；HEAD 返回 404。本机与远端均验证。
+- 预检旧计划后，另一个计划把状态改为 201。旧计划执行失败，201 保留；恢复临时计划后回到 200。15 项拒绝覆盖未预检执行、Admin 监听、应用来源、敏感/执行字段、对象值、未解析引用、重复编辑、缺失删除、原始 URL、外层/嵌套来源注入、value/remove 冲突及错误/跨目标历史 ID。
+- 真正关闭并重开 Desktop，使用新签发的管理连接。旧编辑计划被拒绝，持久化版本仍可列出。以已有本机 GUI 版本和远端保存的手工版本各创建新恢复计划，恢复后旧业务路径及响应回到基线，完整 source_revision 与最初一致。
+- 分别停止本机及远端运行时，再用 config_history_restore_undo 撤销历史恢复。两端恢复修改后的路径和响应；随后重新按版本生成新计划，最终恢复基线并停止测试实例。四份源文件的独立字节比对及收尾结果见结构化证据。
+
+过程中两次界面确认超时，分别发生在重复提交和实例启动，返回 management_request_expired；没有因此额外发布配置。核对生效状态后继续，保留初始历史基线，没有盲目重放写入。最终证据单独记录成功流程。
+
+macOS 的编辑/持久化历史、既有 Relay 编排及 HTTP MCP 集成通过；Ubuntu 的新编辑与历史、既有 Relay 编辑和已有 GUI 恢复测试通过。最后的 secret resource 保护回归也在两端通过。Linux 使用原 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev、GCC、gc none、-nocache，复用既有锁定 vjsx 259620f 与原生 QuickJS，未修改原依赖。两份 Skills 格式检查和 DSH 实际加载通过。
+
+当前 Desktop 主程序及随包/DSH Skills 已更新，内置运行包沿用上一批构建；原应用保留为 Workbench Before Shared Config History.app。恢复测试根配置、移除临时 include、关闭 MCP 与测试管理监听后恢复原 default 环境。历史文件仍留在隔离 Desktop 数据目录供复核，不进入应用发布制品。详见 [共享配置与历史恢复验收证据](release-evidence/desktop-mcp-shared-config-history-2026-11-05.json)。
+
+### 2026-11-05 Relay 模式转换、字段删除与多文件编辑验收
+
+本批扩展既有 5 个编辑工具，绑定管理会话仍列出 93 个工具。实现见 [Relay 源编辑器](../desktop/host/mcp_relay_edit.v)、[执行与多文件恢复](../desktop/host/mcp_relays.v)、[本机停机恢复](../desktop/host/mcp_relays_local.v)、[工具参数与确认](../desktop/devmcp/ordinary_relays.v) 和 [运行时 include 合并](../src/config/runtime_plan_loader.v)。公开应用 Relay 不因此获得管理权限。
+
+| 入口 | 本批新增契约 |
+| --- | --- |
+| relay_config_get | 返回 sources 和 field_sources，定位同一 Relay 在多个 include 中各字段的物理来源；凭据和完整载体 URL 不返回。 |
+| relay_config_edit_prepare | updates 增加 mode 和 carrier；remove_fields 删除已有标量赋值，不用空值模拟删除。已有字段在原文件编辑，新字段进入 mode 所在文件；无 mode 时使用首次声明源。计划列出全部改变的 sources、自动删除字段及安全前后值。 |
+| relay_config_edit_preflight | 使用同一个 Admin changeset 预检完整多文件候选，固定完整源 revision、boot、目标和凭据引用；未预检不能应用。 |
+| relay_config_edit_apply / restore | 确认后先受理，再查询 relay_operation_get。发布、重启、生效检查及精确恢复覆盖全部改变的文件；本机和受管远端均支持运行时已停止时恢复。 |
+
+agent → hub 要有有效监听引用和认证，使用 WebSocket carrier，自动移除 url、autostart、reconnect_delay_ms。hub → agent 必须提供匹配 Relay ID 的已保存 connection_id，私下复制 Token 和 Agent URL，自动移除 listener、path、auth；按目标连接意图选择 autostart。只支持运行时已有的 hub/agent 角色与 WebSocket 载体，没有新增其他传输协议。数据库导出、接管或管线对角色的约束仍由完整预检检查。
+
+remove_fields 支持 mode、carrier、node_id、path、listener、autostart、max_channels、channel_buffer、reconnect_delay_ms、token、url、auth。删除与更新同一字段、重复删除、字段不存在及原始凭据/URL 输入均拒绝。必填字段删除仍须通过整环境校验。auth 认证引用参与安全预览，凭据只展示存在与否。普通表、带引号表名、inline 与 dotted 赋值的编辑/删除均用完整 TOML 语义比对约束；保留未编辑内容与注释。任意嵌套 options 修改、创建/删除物理文件及环境目录外来源不在工具范围。
+
+原运行时按 Relay ID 拒绝任何重复声明，不能读取字段分散的配置。本批增加字段来源记录，允许不同 include 贡献同一个 Relay 的不同顶层字段；重复字段即使值相等也拒绝，false/zero 不因默认值丢失。其他命名配置仍沿用原重复 ID 检查。Desktop 验证器与目标运行包均须包含该支持，旧包不能直接读取这种配置。运行包版本号仍为开发中的 0.9.0，验收以具体二进制摘要区分。
+
+多文件候选通过既有 Admin changeset 校验与发布。停机本机恢复复用 FileStore 的全量暂存、原文复查及普通失败补偿；远端恢复在核对全部成员、路径、完整 revision 和原文后先暂存全部文件，再替换，普通失败回退已替换文件。它们不声明跨文件崩溃原子性或 Desktop 重启后的恢复能力。计划和恢复记录仍限当前 Desktop 会话；全部应用和恢复会重启整个目标环境。
+
+实际验收使用更新后的 Workbench Update QA.app，界面绑定原 pipeqa 并签发管理连接；已安装 DSH 的真实 dsh-mcp-client 经 Streamable HTTP 执行写流程。DSH 桌面对话另实际调用 skill 重新加载新版 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 与 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，正确解释转换条件、自动删除、来源定位、冲突、旧包兼容性和恢复，并给出不含凭据的示例。完整写流程属于连接器验收，不将它记为模型自主执行全部写操作。
+
+- 复用本机原隔离环境与 Ubuntu 已有 mcp-shared-config-qa 实例，没有新建 VM、远端实例或独立 Hub 进程，没有改动 bodytest。两端 legacyedit 都预置为手工 mode.toml + options.toml，不带 MCP 标记。Relay 载体仍由本机 vhttpd 主动连接远端 55311 WebSocket；SSH 只用于 Desktop 管理。
+- DSH 经正常运行包预检、升级和回滚流程，在同一远端实例临时选择本批 Linux Boehm 构建。基线 HTTP → 远端 Hub → WebSocket → 本机 pipeqa 返回 200 / pipeline-ok。
+- 一次远端计划修改 mode.toml 中 path、options.toml 中 node_id，并删除 max_channels，发布后旧 Agent 流量失效。一次本机计划更新私有连接引用与 node_id/reconnect_delay_ms，并删除 channel_buffer；两个来源同计划发布，注册及 200 / pipeline-ok 恢复。读取确认两个字段的赋值均已删除。
+- 本机 Agent 转成 Hub 后，远端业务不再返回 200；对新本机路径执行非注册式认证 WebSocket 探测成功。再将 Hub 转回 Agent，恢复 registered 和真实业务 200。嵌套转换计划按逆序恢复，并核对相应角色及业务状态。
+- 重复提交返回同一操作 ID。旧多源计划在另一计划修改 node_id 后执行失败，temporary 值没有被覆盖。12 项拒绝用例覆盖未预检应用、非法模式/载体、原始 Token/URL、更新与删除冲突、未知或不存在字段、重复删除、小数数值、未知监听和来源路径注入。
+- 分别停止本机与远端运行时后，通过 MCP 恢复原多文件计划。完整 source_revision 都回到各自基线，Relay 业务和两端其他业务监听恢复。独立字节比对确认四个原 TOML 文件（含注释、凭据）完全一致；所有 MCP 结果中均未出现测试载体凭据。
+
+macOS 编辑、普通 Relay、片段合并与原有 include 覆盖测试通过；HTTP MCP 集成在允许本机监听的环境通过。Ubuntu 编辑、普通 Relay、片段合并与 include 覆盖四套测试通过，使用 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev、GCC、gc none 和 -nocache。Linux 原 /usr/local/share/vhttpd/vjsx 版本与当前锁定提交不同，未修改它；复用已有干净的 /home/guweigang/vhttpd-db-probe-qa/vjsx 259620f 和原生 Linux QuickJS。Linux 交付验收包另以 GCC、Boehm 构建并通过 GC 校验。两份 Skill 格式检查和 DSH 实际加载通过。
+
+Desktop 主程序、内置运行时和两份 Skills 已更新，更新前包保留为 Workbench Before Structural Relay Edit.app。收尾通过 DSH 回滚远端原包并停止两端隔离运行时，恢复原根配置和连接库、移除测试 include，测试包保留在安装目录之外。临时 MCP、测试 SSH 与 Relay 监听回收后恢复原 default 环境。详见 [结构编辑验收证据](release-evidence/desktop-mcp-relay-structural-edit-2026-11-05.json)。
+
+### 2026-11-05 已有手工 Relay 编辑与恢复验收
+
+本批新增 5 个本机管理 MCP 工具，当前绑定应用会话可列出 93 个工具。已有 Relay 不再要求 MCP 归属标记。实现见 [已有 Relay 编辑](../desktop/host/mcp_relay_edit.v)、[MCP 契约与确认](../desktop/devmcp/ordinary_relays.v)、[统一执行与恢复](../desktop/host/mcp_relays.v) 和 [本机恢复](../desktop/host/mcp_relays_local.v)。
+
+| 工具 | 契约 |
+| --- | --- |
+| `relay_config_get` | 发现 Relay ID、相对源文件、可编辑字段和安全值。省略 relay_id 列出全部定义；不返回 Token 或完整载体 URL。 |
+| `relay_config_edit_prepare` | 对已有定义预览字段补丁，返回安全的前后值、全环境源 revision、目标、五分钟计划及重启范围。定位其真实源文件，不迁移到根文件，也不添加归属标记。 |
+| `relay_config_edit_preflight` | 对同一计划执行运行时 Admin 全配置预检，复查源 revision 和 boot identity。尚未预检的计划不能应用。 |
+| `relay_config_edit_apply` | Desktop 确认后先返回受理，查询 relay_operation_get 到终态；发布并重启整个已有环境，核对磁盘与生效版本。重复提交返回同一操作 ID。 |
+| `relay_config_edit_restore` | 在完整当前源仍匹配时恢复原始字节并验证生效。受管实例停止后也能恢复经过边界检查的 include 源，不需要先删除手工配置。 |
+
+本批支持 node_id、path、listener、autostart、max_channels、channel_buffer 和 reconnect_delay_ms。凭据与 Agent URL 只能通过匹配 Relay ID 的已保存 native connection_id 引用更新；源凭据默认原样保留。预检和应用会复查引用，防止批准后连接库变化导致使用错误凭据。该批结束时，模式转换、字段删除及同一 Relay 的多源定义尚不支持；这三项已由上方后续结构编辑批次完成。环境目录外源文件仍拒绝，整体 coverage 仍为 partial。
+
+编辑采用 TOML 标量位置替换，并用完整解析结果核对选定字段以外的配置保持一致。普通表、带引号的表名、inline 和 dotted 写法均有验证；缺少的允许字段会在对应作用域插入。保留注释、空白、私有值和其他配置。恢复保留整个原文件字节，并固定全环境版本，避免覆盖并发修改。应用、恢复和既有启停一样会重启环境中的全部应用；公开应用 Relay 不获得这些管理权限。
+
+已更新并安装 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 和 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)。DSH 桌面对话实际重新调用 skill 工具加载两份文案，正确识别无需 MCP 标记、include 来源、独立预检门槛、凭据引用、并发冲突和停机恢复，并列出结构变更限制。Skill 格式验证与 DSH 安装包实际加载器检查均通过；Desktop guidance_get(deploy) 返回同源新流程。
+
+实际工具验收使用更新后的 Workbench Update QA.app 界面绑定 pipeqa 并签发的管理连接，由已安装 DSH 的 dsh-mcp-client 经 Streamable HTTP 执行。该部分记录为 DSH 连接器执行，模型对话另验证 Skill，不将全部写流程记为模型自主完成。测试脚本预置手工配置，不通过 MCP 创建或标记待编辑 Relay。
+
+- 复用本机内置运行包和 Ubuntu 的 mcp-shared-config-qa 实例。两端 Relay legacyedit 均定义在 qa-relay-edit/relay.toml，由根配置 include 引入，没有 MCP 标记。远端临时使用 55311 监听，本机主动建立 WebSocket 长连接。复用上轮已验证的 Linux Boehm 测试包，通过 DSH 临时选择，结束后回滚原包；没有新建 VM、实例或独立 Hub 进程，没有改动 bodytest。
+- 基线经远端 HTTP → WebSocket Relay → 本机 pipeqa 返回 HTTP 200 和 pipeline-ok。修改 Hub 的 node_id、path 并新增 max_channels 后，旧 Agent 失联且转发不再返回 200。再通过已保存连接引用更新 Agent 的私有 URL，并编辑 node_id、reconnect_delay_ms、补充 max_channels，重新注册后恢复 HTTP 200 和 pipeline-ok。
+- 相同 Agent 计划重复提交返回同一操作 ID。12 个拒绝用例覆盖未预检应用、原始 Token/URL、模式转换、错误布尔类型、无效数值/路径、未解析监听引用、未知 Relay/计划、旧绑定及任意来源路径注入。
+- 并发测试先预检一个旧计划，再应用另一个计划修改 node_id。旧计划执行失败，当前值仍为 temporary，未被覆盖；恢复临时计划后回到 local-after。
+- 先停止本机运行时，再通过 MCP 恢复原 Agent include；先停止远端实例，再通过 MCP 恢复原 Hub include。两端完整 source_revision 均回到最初值，原 Relay 业务及两端其他业务监听恢复正常。独立文件比对确认注释与凭据逐字节一致。
+- 真实 DSH 调用发现通用 JSON 解码器将整数表示为浮点数的问题，已修正为只接受范围内的数学整数并编码为 TOML 整数；新增真实 JSON 解码回归，继续拒绝小数、巨大值和负值。macOS 编辑、普通 Relay、HTTP MCP 三个套件通过；修正后编辑与 HTTP MCP 再次通过。Ubuntu 编辑及普通 Relay 两套件通过，最终 dotted 和 JSON 数字回归也重新通过。Linux 使用既有 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev、GCC 与 gc none，没有更改编译器或原依赖工作区。
+
+当前 Desktop 主程序和随包 Skills 已更新，内置运行时复用上一批构建。原应用备份为 Workbench Before Existing Relay Edit.app。收尾恢复原 default 环境并在界面确认运行中；隔离环境恢复原运行包、根配置，验证后移除临时 include 和连接引用，关闭临时 MCP、测试 SSH 与 Relay 监听。测试包重新保留在已安装目录之外。见 [已有 Relay 结构化验收证据](release-evidence/desktop-mcp-existing-relay-edit-2026-11-05.json)。
+
+### 2026-11-05 数据库 Relay 专项探针验收
+
+本批新增两个本机管理 MCP 工具，当前绑定会话共 88 个工具。实现见 [数据库 Relay 编排](../desktop/host/mcp_database_relays.v)、[工具契约](../desktop/devmcp/ordinary_relays.v)、[专用 Admin 入口](../src/admin_relay_database.v) 和 [固定查询结果校验](../src/relaydb/probe.v)。
+
+| 工具 | 契约 |
+| --- | --- |
+| `relay_database_resources_list` | 读取运行中的生效配置，列出数据库 Relay 客户端资源及 Hub 的 db-resource 导出。返回资源、Relay、路由、远端资源和导出访问模式，不返回数据库地址或凭据。 |
+| `relay_database_probe` | 只接受 resource_id 和目标绑定，通过已有 vhttpd Agent 载体执行固定 SELECT 1 AS relay_probe，验证 MySQL 常量结果。拒绝任意 SQL、URL、Token 和旧绑定。 |
+
+专项探针复用本机主动建立的全双工 WebSocket 连接，不注册第二个 Agent。查询与临时数据库客户端的关闭固定在同一载体代次；已发送的查询不自动重放，不修改配置、不重启。运行时只允许 Admin Token 认证访问 POST /admin/runtime/relay/database/probe，拒绝额外参数；未经认证的实际请求返回 403。原始驱动错误、SQL 和凭据不进入 MCP 结果。
+
+失败以 configuration、carrier、transport、database、response、runtime 分层。database 表示数据库连接、认证或执行失败的安全合并类别，不能仅凭此类别断言密码错误。transport 表示路由、远端导出、载体变化或超时等未完成交付，结果不明时先检查运行事件。固定查询成功证明链路和驱动能够执行常量查询，不代表应用表结构、迁移、其他语句权限或业务数据正确。
+
+已更新 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 与 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，并安装到 DSH。DSH 桌面对话实际调用 skill 工具重新加载两份文案，正确说明固定查询、载体复用、临时客户端关闭、六层诊断及业务验证边界。两份 Skill 格式校验与 DSH 安装包的实际 Skill 加载器均通过，Desktop guidance_get(debug) 也返回新流程。
+
+实际 MCP 验收使用更新后的 Workbench Update QA.app 界面绑定隔离 pipeqa 并签发的连接，DSH 安装包内真实 dsh-mcp-client 经 Streamable HTTP 调用工具。该部分属于连接器执行，模型对话另验收 Skills，不将全部写流程记作模型自主完成。测试配置由受控脚本预置。
+
+- 复用本机既有工作流和 Ubuntu 的 mcp-shared-config-qa，没有新建 VM、远端实例或独立 Hub 进程，没有修改 bodytest。远端临时 Relay 监听 55311，本机主动连接 /vhttpd/relay。数据库使用一次性 MySQL 8 容器，仅绑定 OrbStack 私有网卡，测试用户只有 SELECT 权限。
+- 实际发现 4 个本机 Relay 数据库资源及 2 个远端导出。正常资源返回 ok=true、stage=query；MySQL 自身的语句统计确认 SELECT ? AS relay_probe 共执行 3 次。
+- 错误数据库凭据返回 database；错误路由、未导出的远端资源返回 transport；未知本机资源返回 configuration。停止 Agent 后返回 carrier，重新启动同一环境并注册后查询再次成功。SQL、Token、URL 参数和旧绑定共 4 项拒绝用例通过。
+- 两端原业务监听仍返回 HTTP 200，本机响应包含 pipeline-ok。查询与启停恢复均通过，最后由 DSH 停止两端隔离运行时。
+- 远端旧 0.9.1 测试包缺少专用 Admin 入口，实际返回 runtime_probe_endpoint_unavailable_upgrade_required。测试中还观察到其路由及载体标识异常，未将当时的传输失败误记为数据库认证失败。通过 DSH 的运行包预检、切换和回滚工具，在同一个实例临时切换到当前源码的 Linux Boehm 构建完成全部验收，随后回滚原包。当前源码版本字符串为 0.9.0，隔离包标签为 v0.9.0-dev.g0e984283；这是测试构建，不是新的官方发布。支持与否以专用入口实际响应判断。
+- macOS 四个 relaydb 测试套件通过，MCP HTTP 服务套件因 loopback 沙箱限制重跑后通过。Ubuntu 五个套件、完整运行时类型检查通过；MySQL 启用的 Linux 与 macOS 运行包均验证 Boehm GC。Linux 使用 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev 与 GCC；独立原生依赖副本固定到项目要求的 vjsx 提交，未改变 VM 原有 V/vjsx 工作区。
+
+当前 Desktop 的生产主程序、内置运行时与 Skills 已更新，旧应用备份为 Workbench Before Database Relay.app。最终恢复原 default 环境并在界面确认运行中；远端运行包标记及配置摘要恢复原值，两端临时端口关闭，MySQL 容器、测试 SSH 入口及临时 MCP 凭据已回收。新增 Linux 测试包保留在已安装目录之外。详见 [数据库 Relay 结构化验收证据](release-evidence/desktop-mcp-database-relay-2026-11-05.json)。
+
+### 2026-11-05 普通 Relay 连接库、配置与启停验收
+
+本批新增 12 个本机管理 MCP 工具，已绑定会话当前提供 86 个工具。实现见 [普通 Relay 工具契约](../desktop/devmcp/ordinary_relays.v)、[Host 编排](../desktop/host/mcp_relays.v)、[配置生成](../desktop/host/mcp_relays_config.v) 和 [本机 Worker](../desktop/host/mcp_relays_local.v)。
+
+| 流程 | MCP 工具 |
+| --- | --- |
+| 连接库创建、更新与删除 | `relay_connection_save_prepare/apply`、`relay_connection_delete_prepare/apply` |
+| 临时认证探测 | `relay_connection_probe` |
+| Hub / Agent 配置与恢复 | `relay_config_prepare`、`relay_config_apply`、`relay_config_restore` |
+| Agent 启停 | `relay_agent_control_prepare`、`relay_agent_control_apply` |
+| 运行状态与异步操作 | `relay_runtime_status`、`relay_operation_get` |
+
+连接库支持本机与已连接主机的共享目录。保存凭据只能引用已验证环境中的 Hub 或已有本机连接 ID；工具不接受 Token 明文、任意端点 URL。保存、临时认证探测、配置副本和已注册 Agent 分别验证。目录删除不改变已部署副本。Hub 使用现有环境中的一个 HTTP/WebSocket 监听器，默认只开放载体端点；只有显式指定 verify_path 时才增加 HTTP 业务转发路径。Agent 默认不自动连接，由本机 vhttpd 主动向远端 vhttpd 发起全双工 WebSocket 长连接；载体不使用 SSH 转发。
+
+预检编译整个环境并固定配置 revision、boot identity、目标和授权代次。配置与启停需要 Desktop 确认，先返回 accepted，再查询操作终态。当前运行包没有单 Agent 的 Admin 启停接口，因此工具持久化 autostart 并重启整个既有环境，影响其中全部应用。该批创建和启停工具只编辑带 MCP 归属标记的配置块；已有人工配置现可使用上方新增的独立编辑、预检、应用与恢复流程。配置恢复保留精确原始字节，要求当前完整源 revision 与预期一致；两端均支持托管实例停机后的受保护恢复。首次提交前计划有效五分钟，每个会话最多 64 个计划、128 条操作；重启 Desktop 后需重新对账。
+
+实际验收使用更新后的 Workbench Update QA.app，由界面绑定隔离 pipeqa 应用并签发连接配置。已安装 DSH 的 dsh-mcp-client 通过 Streamable HTTP 执行完整写流程；模型对话另外实际调用 skill 工具重新加载了新版 [vhttpd-deploy](../src/development_guidance/vhttpd-workbench/references/deploy.md) 和 [vhttpd-debug](../src/development_guidance/vhttpd-workbench/references/debug.md)，核对工具组合、主动连接方向、环境重启、凭据引用和恢复要求。本轮写流程证据属于 DSH 客户端连接器层，不将其描述为模型自主执行全部写操作。
+
+- 复用本机既有 0.9.0 运行包和 Ubuntu 既有 mcp-shared-config-qa 0.9.1 实例。未新建 VM、Hub 进程或远端实例，也未改动 bodytest。远端临时增加 55311 单端口，WebSocket 路径 /vhttpd/relay，HTTP 验证路径 /__relay/ordinaryqa。
+- DSH 创建并更新本机连接记录、复制到远端共享连接库；正确凭据探测通过，错误凭据被拒绝。创建 Agent 配置后验证未注册；启动后验证 registered；远端 HTTP 请求经过 WebSocket Relay 到本机 pipeqa，返回 HTTP 200 和 pipeline-ok。活跃连接期间再次探测，没有替换业务载体。
+- 停止 Agent 后，远端请求不再到达本机。先停止本机运行时再恢复 Agent 配置；先停止远端实例再恢复 Hub 配置。两端原业务响应均恢复，目录记录回收，完整源基线恢复。
+- 11 个拒绝用例涵盖错误认证、缺少凭据引用、Token/URL 输入、未知连接、非法标识、端口冲突、未知 Agent/计划、无效恢复和过期绑定。首轮实际 Desktop 探测曾短暂返回网络不可达，后续同地址探测及完整重跑通过；未将其误归因为认证或协议修复。
+- macOS 的 Relay 编排、共享连接库、远端目标和 MCP 服务四个测试套件通过，另补默认不创建 HTTP 转发路径的回归用例；Ubuntu Relay 编排和共享连接库两个套件通过，新增默认不暴露 HTTP 转发路径用例也已在 Ubuntu 复验。两份 Skill 的格式校验和已安装 DSH 加载通过。归属块保护、端口冲突、配置编译及启停后精确恢复均有单测。
+
+当前 Desktop 已更新为此生产构建，原包备份为 Workbench Before Ordinary Relay.app。部署 Skill 同时安装到 DSH 并由其实际加载。验收结束后已关闭临时 MCP，恢复原 default 0.9.0 环境并在界面确认运行中；隔离远端实例与测试 SSH 管理入口已停止，本机临时监听和远端 55311 监听均已关闭。结构化证据见 [普通 Relay 验收](release-evidence/desktop-mcp-ordinary-relay-2026-11-05.json)。该批次结束时数据库 Relay 专项探针尚未完成，其后续验收见上方记录；已有非 MCP 配置的字段编辑与恢复已由上方后续批次验收，模式转换、标量字段删除和分散 include 定义的后续验收见上方结构编辑记录，整体能力目录因其他未覆盖项保持 partial。
+
+### 2026-11-05 运行包下载、安装与选择验收
+
+本批新增 7 个本机管理 MCP 工具，当前绑定会话列出 74 个工具。运行包能力域的 coverage.remaining 已清空，整体能力覆盖仍为 partial。实现见 [运行包操作](../desktop/host/mcp_packages.v) 和 [MCP 工具契约](../desktop/devmcp/packages.v)。
+
+| 工具 | 契约 |
+| --- | --- |
+| `runtime_download_prepare/apply` | 固定官方发布标签与平台，复用官方 GitHub 元数据、资产地址约束和 SHA256 校验；返回异步操作 ID，完成后取得不含路径的 download_id。不接收任意 URL |
+| `runtime_install_prepare/apply` | 以 download_id 安装。本机省略 host_id；远端须连接已保存、平台匹配的主机。复用现有归档、签名或架构、完整性及版本检查，保留当前选择和实例绑定 |
+| `runtime_package_select_prepare/apply` | 选择已知本机 package_id，预检整个绑定配置并固定配置版本和二进制摘要；执行时要求本机运行时停止。更新 Desktop 选择和 MCP 上下文，清除旧变更预览并递增绑定代次 |
+| `runtime_package_operation_get` | 查询下载、安装或选择的异步结果；选择后先重新 context_get，再用新 binding_revision 查询完成状态 |
+
+下载、安装与选择分离，原 Desktop 界面的“下载安装并选择”行为保持原样。MCP 安装调用复用相同安装校验，但不会自动选择。远端实例选择包继续使用已有 runtime_upgrade_prepare/apply/rollback，保留环境级升级与回滚的影响预览。
+
+包计划有效期五分钟，新预检替换旧包计划；相同当前执行计划幂等返回同一操作 ID。成功的本机选择将该计划和操作记录更新到新绑定代次。下载 ID 属于当前开发授权，缓存有效期一小时，每个会话最多四个下载；操作记录最多 128 条。正常退出清理会话下载缓存，已安装运行包保留。工具不公开缓存路径或接受本机归档路径。仅本机管理 MCP 提供这些写入口，公网应用 Relay 不扩展管理权限。
+
+本轮实际发现并修正两项恢复问题：本机 context_get 若排在运行包选择后执行，可读取最新代次，旧公网授权仍受固定代次检查；会话保留先前由 Desktop 授权的运行包引用，避免原内置或外部包在切换后从清单消失而无法恢复。当前 Desktop 的运行包显示也随 MCP 选择更新。
+
+验收使用当前安装、实际运行的 Desktop 界面签发的本机连接，DSH 安装包内真实 MCP 插件经 Streamable HTTP 完成调用，不以测试程序替代 Desktop 服务，也不将连接器流程记为模型会话自动执行全部写操作。DSH 桌面会话另实际调用 skill 工具重新加载 vhttpd-deploy 与 vhttpd-debug，正确说明安装不切换、选择后刷新上下文、本机恢复和远端升级/回滚的区别。两份 Skill 的格式验证及 DSH 实际加载器检查通过。
+
+- 官方发布标签为 v0.1.0-dev.g4aac0fb950d8，实际下载 macos-arm64 Workbench ZIP 与 linux-arm64 TAR.GZ。两个文件均通过发布的 SHA256 校验。重复下载和选择提交返回原操作 ID。
+- 本机隔离测试应用为纯 TOML pipeline，监听 55302，GET /healthz 返回 pipeline-ok。安装后原包仍为当前选择；切换官方包、刷新上下文、启动并验证业务成功，随后停止、恢复原包、再次验证同样响应，最后停止。本机新包版本显示为 0.1.0，恢复后显示 QA 基线 0.9.0。
+- 远端复用 OrbStack Ubuntu 及已有 mcp-shared-config-qa。安装官方 Linux 包后，所有既有实例运行包绑定不变；MCP 在安装前后请求 55172 /shared-before 均得到 HTTP 200。没有新建 VM、Hub 或远端实例，没有改动 bodytest。远端安装按归档摘要命名，同包重复安装保留已有目录。
+- 下载执行期间，本机 runtime_status 实测响应约 17 毫秒，未阻塞于下载 Worker。
+- 9 个拒绝用例通过：任意第三方地址作为标签、不支持的平台、未知下载 ID、平台不匹配、注入归档路径、未知 package_id、未预检计划、未知操作 ID、旧绑定代次。真实归档的额外回归验证安装不改选择、错误 SHA256 不替换选择，以及切换后原包仍可发现。
+- macOS 五项基础检查通过，覆盖包操作、原有安装、官方目录、能力清单与 HTTP MCP 的权限隔离；恢复问题修正后，包恢复与 HTTP MCP 检查重新通过。Ubuntu 使用 /home/guweigang/v/v 0.5.2 d13ccdd、local-dev 分支、GCC 与 gc none 原生验证 Linux 官方包安装保留原选择，并拒绝错误校验值。复用既有 Linux 运行环境，没有替换 VM 编译器或重新构建其运行时。
+
+当前 Desktop 已安装此生产构建，原包保留为 Workbench Before Runtime Packages.app。验收收尾恢复原 default 运行环境，停止隔离测试进程，关闭临时 MCP 和 SSH 入口。结果见 [结构化验收证据](release-evidence/desktop-mcp-runtime-packages-2026-11-05.json)，详细日志位于本机 /private/tmp/vhttpd-package-qa/desktop-dsh-result.log、tests.log、package-recovery-tests-final.log、recovery-tests.log 和 linux-tests.log。
+
+### 2026-11-05 主机登记、环境接入与断开验收
+
+本批补齐 5 个本机管理 MCP 工具，当前绑定会话可列出 67 个工具。实现沿用 [主机登记与身份校验](../desktop/host/mcp_host_registry.v) 和 [MCP 生命周期分发](../desktop/devmcp/lifecycle.v)，公网应用 Relay 不增加这些管理权限。
+
+| 工具 | 操作与边界 |
+| --- | --- |
+| `host_register` | Desktop 确认后保存密钥认证主机记录，不自动连接或授予信任。可使用本机 SSH 配置，或以 credential_host_id 引用已保存主机的密钥；不接受私钥路径或密码。同样的名称、地址、用户、端口和密钥引用重复登记返回同一主机 ID；冲突设置不覆盖原记录 |
+| `environment_discover` | 刷新受管目录及运行进程发现的环境，返回候选 ID、名称、运行包与缓存标记，省略配置路径和凭据。沿用 Desktop 自动缓存行为；cached 不等于已验证真实 Admin 身份 |
+| `environment_adopt_prepare` | 对候选环境验证正在运行、已认证且就绪的 Admin，核对配置路径并固定配置版本和启动身份，生成五分钟计划 |
+| `environment_adopt_apply` | Desktop 确认后复查计划并保存连接目标，返回受理操作 ID，由 host_operation_get 查询完成；相同当前计划幂等返回原操作 ID |
+| `host_disconnect` | Desktop 确认后关闭指定主机的 SSH 管理连接，清除未提交计划；拒绝正在处理的操作、未完成发布或升级，以及断开另一已连接主机。已断开时重复调用安全返回；远端实例不停止 |
+
+“接入”仅验证并登记连接目标，不改写远端配置、不添加所有权标记、不重启，也不将外部管理的进程转换为 Desktop 受管实例。停止状态或不兼容的 Admin 不能跳过身份校验。新主机登记会刷新当前 Desktop 的主机清单。发现结果现已使用本机保存的稳定目标 ID，修复同一物理实例通过另一主机记录发现时，候选 ID 与后续目标查询不一致的问题。
+
+实际验收使用当前安装并运行的 Desktop 界面签发的连接配置，DSH 安装包内的实际 MCP 插件经本机 Streamable HTTP 完成调用；不是以测试程序代替 Desktop 提供服务。本记录不将连接器验证记为模型会话执行全部写操作。复用 OrbStack Ubuntu 和已有 `mcp-shared-config-qa` 实例，没有新建 VM、运行环境或 Relay Hub，没有改动 bodytest。
+
+- 通过 MCP 登记测试主机记录 `MCP Host Registration QA`，重复登记返回相同 ID；随后实际连接新记录并发现已有环境。
+- 接入预检与执行完成，重复提交返回相同操作 ID，业务请求 `GET /shared-before` 返回 HTTP 200。
+- 断开后主机清单显示未连接，环境发现被拒绝；独立 Ubuntu 探针确认业务仍返回 HTTP 200，且进程 PID 与启动时间完全一致。重复断开安全返回。重连后目标 ID 一致，MCP 业务探针再次返回 HTTP 200。
+- 9 项拒绝用例通过：SSH 选项注入、password 参数、私钥路径参数、未知密钥来源、未知候选环境、未预检计划、错误绑定代次、未知主机，以及断开后的发现请求。
+- 四项自动检查通过：主机登记与断开、生命周期、远端目标、官方 HTTP MCP 的权限和撤销集成。DSH 实际 Skill 加载器成功读取已安装 Skill；部署与调试 Skill 的官方格式验证器均通过。
+- DSH 桌面现有验收会话实际调用 skill 工具重新加载新版 vhttpd-deploy 和 vhttpd-debug，正确识别登记与信任的区别、cached 与身份校验接入的区别、接入不转换进程所有权，以及主机断开不停止业务的约束。包内 guidance_get(deploy) 也返回新版流程。
+
+当前 Desktop 已更新，原包保留为 Workbench Before Host Registry.app。收尾恢复原 default 环境，隔离业务实例停止，临时本机 MCP 和测试 SSH 入口关闭。结果见 [结构化验收证据](release-evidence/desktop-mcp-host-registry-2026-11-05.json)；详细日志保留在本机 /private/tmp/vhttpd-host-registry-qa/desktop-dsh-result.log、tests.log 和 skills-result.log。密码认证和首次指纹信任仍须在 Desktop 完成。
+
+### 2026-11-05 主机连接、环境创建与实例启停验收
+
+本批新增 9 个有类型的本机管理 MCP 工具，复用 Desktop 已保存主机、SSH 会话、运行包目录和 ServerWorker，不接收任意命令、私钥或密码。公网应用 Relay 不暴露这些管理写工具。
+
+| 工具 | 契约 |
+| --- | --- |
+| `host_connect` | 连接已保存的密钥认证主机，Desktop 确认后返回受理 ID；首次指纹仍由 Desktop 信任界面处理。密码认证主机须先在 Desktop 登录 |
+| `host_operation_get` | 查询主机连接、环境创建和实例启停的异步结果，仅返回当前绑定代次的操作 |
+| `instance_status` | 经主机会话校验 Desktop 实例标识、运行包和真实进程，Admin 停止时仍可查询；running 仅表示进程存在 |
+| `environment_create_prepare/apply` | 预检保存主机、已安装运行包、模板、未占用名称和端口；创建并登记环境后复用安全启动流程，拒绝接管已有目录 |
+| `instance_start_prepare/apply` | 固定配置版本和进程身份，执行前复查，启动已有受管实例 |
+| `instance_stop_prepare/apply` | 固定相同身份，使用 Linux pidfd 对核对后的确切进程发送 SIGTERM；不升级为强制终止 |
+
+预检计划有效期五分钟，绑定当前开发授权、主机和操作类型；新预检替换旧计划。执行先返回 accepted 和 operation_id，再在 Worker 处理远端任务。同一当前计划重复执行返回同一操作 ID。操作记录最多 128 条，仅保留在该 Desktop 会话，重启后通过主机清单和实时实例状态重新核对。停止超时不宣称已停止，应再次查询状态。
+
+修正了原环境创建脚本在重试时重复启动进程的问题，创建后的启动统一使用已有 start.sh。实际 Desktop 验收还发现预检回复早于 UI 接收主机快照的问题，已将主机快照处理移到 MCP 请求处理之前，复验通过。
+
+验收复用 OrbStack Ubuntu 的隔离主机 Release QA Ubuntu，没有新建 VM 或 Relay Hub，也没有改动 bodytest。新增隔离环境 `mcp-desktop-lifecycle-1105`，目标 ID `3e9196aac428d51981294d5c`，使用已安装的 legacy 运行包、vjsx-http 模板、Admin 55183 和业务 55184。
+
+- 已安装 DSH 的 Streamable HTTP MCP 插件实际连接当前运行 Desktop 界面签发的本机连接，而非以测试程序代替 Desktop 启动服务；列出 62 个工具，调用主机连接、创建预检与执行、操作状态、实例状态、停止及再启动预检与执行。此处是 DSH 安装包内真实连接器验收，不将其记为模型会话自动执行全部写流程。
+- 创建 completed 后验证进程 running 及业务 HTTP 200；停止 completed 后验证 stopped 且业务探针失败；再启动 completed 后有界等待业务恢复 HTTP 200，最后再次停止并确认 stopped。重复提交创建计划返回原操作 ID。
+- 7 个拒绝用例通过：已有名称、目录穿越名称、已占端口、未预检计划、错误绑定代次、未知操作 ID，以及试图传入 password 参数。错误信息不回显凭据。
+- DSH 桌面现有验收会话实际调用 skill 工具重新加载最新安装的 vhttpd-deploy 和 vhttpd-debug，识别新增工具、accepted 后的轮询、进程与业务就绪区别，以及密码和首次指纹留在 Desktop 的约束。包内 guidance_get(deploy) 也读取到了新流程。
+- 四项 V 检查通过：生命周期、远端诊断、远端目标及官方 HTTP MCP 集成。HTTP 集成因沙箱禁止监听本机端口，已在允许网络的环境重跑通过。Python 语法及创建脚本 shell 语法检查通过。
+
+当前 Desktop 已安装包含这些能力的生产构建；原应用包保留为 Workbench Before Lifecycle.app。测试环境文件保留，实例最终停止。验收证据见本机 `/private/tmp/vhttpd-lifecycle-qa/desktop-dsh-final.log`、`tests.log`、`network-tests.log` 和 `skills-result.log`。该批验收时主机登记、发现环境接入和主机断开尚未完成；这三项的后续验收见本次主机登记与环境接入记录。密码认证仍由 Desktop 界面处理。
+
+### 2026-11-05 能力核对与诊断入口验收
+
+本批新增 11 个 MCP 工具。管理工具沿用已登记目标、当前 Desktop 主机连接和绑定代次。已安装的 Desktop 生产构建包含这些入口，旧应用包已保留供回退。
+
+| 入口 | 可执行行为与范围 |
+| --- | --- |
+| `host_inventory_get` | 查询登记主机的连接快照、发现环境和已安装运行包，标明环境是否已经登记 |
+| `runtime_packages_list`、`runtime_releases_list`、`runtime_package_probe` | 查询本机已安装包 ID、官方完整版本及校验文件，再以目标包校验整个绑定环境。预检核对返回协议、版本和配置 revision |
+| `target_applications_list` | 查询远端实时应用、安装身份、版本和业务监听 ID |
+| `target_request` | 对配置中确定的远端业务 HTTP 监听发 GET 或 HEAD 请求，限制响应大小并保留重定向状态。拒绝管理监听和 Admin 路径 |
+| `target_diagnostics_get` | 查询远端 graph、workers、providers、relay 和 websocket 五类状态，投影受限字段 |
+| `target_logs_query` | 按实时应用 ID 查询日志，支持数量、搜索和游标。验证应用归属，脱敏目标配置中的已知凭据，排除存储路径 |
+| `target_events_query` | 查询有数量上限的运行事件，只返回标识、状态和请求关联字段 |
+| `target_history_list` | 查询当前主机已发现的应用发布及运行时升级记录，与 `operation_get` 配合使用 |
+| `relay_connections_list` | 读取本机连接库，或通过现有主机连接刷新远端连接库，返回连接标识、协议与认证是否已配置 |
+
+`capabilities_list` 新增 `coverage_version`、`coverage_status` 和逐域 `coverage`。目录给出该域工具、指引主题和仍缺少的操作，整体状态当前为 `partial`。工具可调用与工作流验收分别记录。测试检查每个注册工具均归属已知能力域，并遍历 `tools/list` 的全部分页与会话可用项比对。
+
+`guidance_get` 新增 `workflow`、`pipeline`、`wechat-cloud-functions`、`codexbot`、`deploy`、`debug`。这些主题来自 Desktop 生产构建，返回 `source: desktop_package`、Desktop 版本、指引版本和目标运行包版本。空工作区也能读取新主题。原有 `develop`、`vjsx` 继续由目标运行包提供版本化 API。三个 DSH Skills 已更新，其中开发 Skill增加三份项目契约，并要求在 Relay 启动受理后查询就绪。
+
+DSH 安装包内的 MCP 客户端使用实际新版 Desktop 界面签发的本机管理配置进行验收，注册全部 53 个会话可用工具，与能力目录完全一致。复用隔离 Ubuntu 环境 `mcp-shared-config-qa` 和应用 `qa`，得到以下结果。
+
+- 六个 Desktop 指引主题均可读取，来源与版本字段可核对。DSH 的 filesystem provider 从实际已安装目录发现三份 Skill，使用 DSH `skill` 工具逐一加载成功。
+- 运行包预检返回兼容，官方版本查询返回两个完整 Linux amd64 版本。主机、已安装运行包和本机及远端 Relay 连接库查询成功，测试连接的 Token 和 URL 未出现在结果中。
+- 业务探针分别返回 HTTP 200 和 404。应用日志返回 14 条同属 `qa` 的记录，游标续读通过；运行事件返回 2 条。五类诊断均返回结构化结果。历史查询读取到 1 条已有操作，并通过 `operation_get` 核对终态。
+- 7 个拒绝用例通过，覆盖任意 Admin topic、管理监听、越界 URL、通配及未知应用日志、未知主机和未知运行包。
+- 三组 V 测试通过，覆盖日志归属、字段投影、能力目录、HTTP 会话、分页、指引、绑定切换和授权隔离。六份 Skill 及项目参考的 OpenKnowledge lint 均为零错误、零警告。
+
+验收后关闭临时 MCP 并清除客户端凭据，停止隔离 Ubuntu 实例和测试管理监听。更新后的 Desktop 已回到原数据目录，原 `default` 实例恢复运行。
+
+仍待完成的范围以本节上方能力清单和 MCP 的 `coverage.remaining` 为准。该批次结束时普通 Relay 写入与数据库链路探针尚未完成，后续验收见上方对应记录。更广的共享标量/数组编辑和持久化配置历史恢复已由上方后续批次补齐；基础 stream/SSE、WebSocket 文本和业务 MCP 探针已由上方 2026-11-06 批次补齐；受保护配置值与来源成员变更、认证及高级协议专项仍待扩展。主机与实例、本机运行包下载、安装及选择的后续验收见上方记录；密码认证和首次指纹确认仍由 Desktop 提供。微信真实账号、数据库及存储与已有项目迁移属于待完成的专项验收。
+
+### 远端共享环境配置
+
+通过本机 Desktop 管理会话对已登记、支持手工重启的远端环境操作。本批支持共享 HTTP pipeline 的单行 `match.paths` 精确路径修改。组件源码仍走应用发布流程。
+
+1. `shared_config_diff` 返回配置相对路径、pipeline、原匹配路径、新匹配路径及计划 ID。预览不会改写配置。
+2. `shared_config_preflight` 使用远端 Admin changeset 校验完整项目。应用前再次核对目标、绑定、配置原文和整项目版本。
+3. `shared_config_apply` 经 Desktop 确认后发布并重启远端实例，等待新实例的磁盘与生效版本一致。
+4. `shared_config_rollback` 在同一管理会话中用计划 ID 恢复原文，再重启并核对版本。若目标配置已被其他操作修改，则拒绝覆盖。
+
+DSH 安装包内的 MCP 客户端在隔离 Ubuntu 实例 `mcp-shared-config-qa` 依次完成 `preview`、`prepared`、`applied` 和 `rolled_back`，计划 ID 为 `4b0979d3fe445cdff824ecf7`。对 `qa.shared` 直接发起业务请求。预检前后，`/shared-before` 与 `/shared-after` 分别返回 HTTP 200、404。应用后为 404、200。回滚后恢复 200、404。部署与调试 Skills 已补上对应流程。
+
+## 后续远端工具
+
+下表中的名字是提案。各工具复用 Desktop 主机、组件安装和接管实现，由 Desktop 保管凭据与执行授权。
+
+| 能力 | 拟补工具 | 行为 |
+| --- | --- | --- |
+| 主机发现与诊断 | `targets_list`、`target_status` | 已实现本机管理 MCP 的只读查询。枚举 Desktop 登记的主机和环境，状态取自匹配目标的当前快照。版本和应用清单仅在已知时返回。2026-11-04 17:57（上海时间）在 DSH 实际列出 bullsoft 及其环境，按 ID 查询 bodytest 的未连接状态，并验证未知 ID 返回 `unknown_target`。后续用 DSH 在同一管理连接下查询已连接的 bodytest，确认主机、运行时及应用清单均可读取，运行版本为 0.9.0，应用为 `paseo`、`public`、`wechat`。 |
+| 应用发布 | `application_release_prepare`、`application_release_apply`、`application_release_rollback` | 已实现，仅本机管理 MCP 提供。使用绑定的独立应用、已登记并连接的环境、安装槽和可选安装 ID 生成预检；Desktop 确认后发布或回滚，`operation_get` 查询终态。已在隔离 Ubuntu 实例通过 DSH 实测。 |
+| 运行时升级 | `runtime_upgrade_prepare`、`runtime_upgrade_apply`、`runtime_upgrade_rollback` | 已实现，仅本机管理 MCP 提供。预检固定目标实例和运行包，列出受影响应用、重启范围和原版本。Desktop 确认后提交，由 `operation_get` 查询终态。已在 DSH 对同一测试实例实测升级和回滚。 |
+| 远端接管 | `takeover_status`、`takeover_prepare`、`takeover_start`、`takeover_release` | 已实现，仅本机管理 MCP 提供。通过已绑定的应用安装和认证账号预检，Desktop 确认后启动，按租约 ID 释放。在 DSH 实测原业务地址的流量切到本机并恢复到远端。 |
+| 长操作 | `operation_get` | 已实现本机管理 MCP 的只读查询。通过 `target_status` 发现已知的操作 ID，再查询阶段、终态和恢复状态。重连原主机后使用远端 Worker 重新发现的记录。DSH 实际查到 bodytest 一条应用发布和一条运行时升级均为 `completed`，未知 ID 返回 `unknown_operation`。 |
+
+远端写操作使用带期限的 `plan_id`，绑定目标、产物或包版本、基线状态和授权范围。执行前重新比对基线，重试通过操作记录返回原执行结果。远端诊断与应用发布优先，运行时升级和流量接管随后开放。远端源码就地编辑独立评估。 [组件安装](../desktop/host/component_installation.v) · [运行时升级](../src/runtime_upgrade/deployment.v) · [接管实现](../desktop/host/takeover.v)
+
+### 应用发布与回滚契约
+
+- 本机管理 MCP 的应用必须来自 Desktop 绑定的独立源码目录，并具备 `app.json`。使用 `context_get` 获取当前 `binding_revision`，用 `targets_list` 选择已连接的 SSH 手工环境。公开 Relay 即使允许编辑，也不提供这三个管理工具。
+- `application_release_prepare` 接受 `target_id` 和 `component`。首次安装省略 `installation_id`，更新沿用首次预检返回的安装 ID。预检返回文件变化、目标版本、计划和操作 ID，计划有效期五分钟。发布前重新验证本机包指纹，远端助手核对目标运行包、启动代次、配置和受影响文件。
+- 用同一计划调用 `application_release_apply`。Desktop 对话框显示目标、安装槽、版本和操作 ID，并明确整个环境短暂重启。按 `operation_get` 跟踪远端状态；`submitted` 只表示已提交，`completed` 表示远端运行已通过生效检查。同一活动计划的重复提交沿用操作 ID。
+- 显式回滚先调用 `application_release_prepare`，将当前已生效的发布操作 ID 传入 `rollback_from`，不传 `installation_id`；再用返回的计划调用 `application_release_rollback` 并在 Desktop 确认。回滚复用发布事务，从远端上一个成功产物生成新操作，保留安装 ID、监听设置和环境数据。首次安装、旧版本未保留产物、当前发布不匹配或历史产物损坏时拒绝回滚。它不撤销数据库迁移或业务数据写入。
+
+### 2026-11-04 DSH 远端发布验收
+
+在 DSH 桌面端通过本机 Streamable HTTP 管理连接 `vhttpd_release_qa`，对 OrbStack Ubuntu 的隔离实例 `release-qa` 实际调用预检、发布、回滚和 `operation_get`。首次发布 1.0.0 返回 `{"release":"A"}`。第一次尝试回滚发现旧助手会删除临时包，修复后重新执行下列流程：
+
+| 步骤 | DSH 操作 ID | 终态与业务响应 |
+| --- | --- | --- |
+| 发布 1.2.0 | `ee74f67fc3fae8a757c9e3bc` | `completed`，HTTP 返回 `{"release":"A2"}` |
+| 发布 1.3.0 | `d0a981d56c5083b4ca654b56` | `completed`，HTTP 返回 `{"release":"B2"}` |
+| 回滚至 1.2.0 | `890293b9b62d95ba9a4504ab` | `completed`，HTTP 恢复为 `{"release":"A2"}` |
+
+三次 Desktop 确认均核对了隔离目标。独立 HTTP 请求证实应用实际生效；安装 ID 和环境数据校验通过，发布助手清理临时包后保留的独立产物仍可用于回滚。未改动 bodytest。macOS Desktop MCP 集成测试验证新工具只在本机管理会话列出；回滚产物测试验证清理后仍可重放，以及拒绝过期操作 ID、错误应用身份和损坏产物。运行时升级的 DSH 验收见下文。
+
+### 运行时升级与回滚契约
+
+- 用 `context_get` 获取绑定代次，再用 `target_status` 查询目标和主机已安装运行包的 ID、版本与发布标签。调用 `runtime_upgrade_prepare` 时传 `target_id` 和 `target_runtime_id`。目标包须支持升级协议并通过整份配置校验。
+- 预检返回原包、目标包、受影响应用和整实例重启范围。计划有效期五分钟。调用 `runtime_upgrade_apply` 时使用同一计划，Desktop 显示目标、版本和影响范围并请求确认。提交前重新核对实例启动代次、生效配置和目标二进制校验值。远端助手执行切换和就绪验证，启动失败时尝试恢复原包。
+- 显式回滚时，`runtime_upgrade_prepare` 改传 `rollback_from`，引用该目标最新且仍对应当前运行包的成功升级操作。预检从该记录取原包，原包须仍在运行包库。使用返回的计划调用 `runtime_upgrade_rollback`，经 Desktop 确认后提交。同一个活动计划沿用操作 ID，使用 `operation_get` 跟踪终态。公网 Relay 不提供这些管理工具。
+
+### 2026-11-04 DSH 运行时升级验收
+
+使用 DSH 桌面端的本机 Streamable HTTP 管理连接 `vhttpd_release_qa`，在 OrbStack Ubuntu 上复用已有 `release-qa` 实例。预检列出受影响应用 `releaseqa`，升级和回滚均经 Desktop 确认。
+
+| 步骤 | DSH 操作 ID | 结果 |
+| --- | --- | --- |
+| `0.9.0` 升级至 `0.9.1` 测试构建 | `d3443262c74a83380828c1e4` | `completed`，管理端报告 `0.9.1` 就绪，业务 HTTP 返回 `{"release":"A2"}` |
+| 从 `0.9.1` 显式回滚至原包 `0.9.0` | `d2e115c7789a01f3817e8d21` | `completed`，管理端报告 `0.9.0` 就绪，业务 HTTP 返回 `{"release":"A2"}` |
+
+独立探针确认实例 ID 一致，两次切换后的配置、应用文件、安装记录和测试数据均通过基线校验。Desktop MCP 集成测试验证本机工具注册和公开 Relay 的隔离。测试目标包是在 Ubuntu 用 GCC 构建的 `0.9.1` 验收包。
+
+### 远端接管契约
+
+- 在 Desktop 绑定本机源码与已登记的远端安装，并启动配置了认证 Relay Agent 和 `debug/http` 的本机接收端。远端导出 `debug/control`，Relay Hub 和目标应用的业务监听须由同一个运行时所有者处理。将 Hub 的 WebSocket 路径挂在业务监听上即可满足这一条件。
+- `takeover_status` 按绑定代次、目标及安装查询租约。`takeover_prepare` 检查应用绑定、接收引擎、配置生效状态、Relay 连通和当前租约，固定认证应用与单个账号。预检计划五分钟内有效。
+- `takeover_start` 通过 Desktop 确认后复查本地配置和绑定，远端核对应用与安装身份。成功返回当前租约，最长 15 分钟。`takeover_release` 校验该会话创建的确切租约，并再次查询远端状态。公网 Relay 不提供这些管理工具。
+- MCP 的 `state` 表示租约状态。端到端验收还需向原业务地址发已认证请求，检查实际执行位置和未接管账号的行为。关闭连接或租约到期时，由现有运行时恢复新请求的远端执行。
+
+### 2026-11-04 DSH 远端接管验收
+
+DSH 通过本机 `vhttpd_release_qa` MCP 对 OrbStack Ubuntu 上已有的 `release-qa` 实例调用了四个接管工具。预检计划为 `d1f3288f94cae8a1f83dcf17`，Desktop 确认后发放租约 `ebd58c4a1de854487539be73a22f6dbf`。在原业务监听的 `POST /functions/probe` 上独立探测：
+
+| 阶段 | DSH 租约状态 | `qa-alice` | `qa-bob` | 未认证 |
+| --- | --- | --- | --- | --- |
+| 接管前 | `remote` | Ubuntu | — | — |
+| 启动后 | `local` | Mac，含 `x-vhttpd-execution: local` | Ubuntu | HTTP 403 |
+| 释放后 | `remote`，租约清空 | Ubuntu | Ubuntu | HTTP 403 |
+
+旧测试包曾出现 Relay 连接标识损坏，验收使用当前源码在 Ubuntu 以 GCC 和 Boehm GC 构建的测试包。初次配置把 Hub 放在独立监听器所有者，租约存在但业务仍在远端。释放诊断租约后，将 Hub 挂回业务监听并重跑才通过。Desktop MCP 集成测试验证本机工具注册和公网 Relay 隔离。
+
+### DSH 应用开发闭环
+
+在 Desktop 绑定隔离的本机 `releaseqa` 应用后，DSH 实际加载 `vhttpd-develop`。开发任务只给出业务要求：增加 `GET /api/hello`，返回 HTTP 200 和 `{"message":"hello"}`，保留原首页。DSH 通过本机 MCP 读取项目指引、版本化 vjsx API、schema、模板和带 revision 的源文件，然后执行 `changes_prepare`、`changes_validate`、`changes_apply` 和 `runtime_start`。变更 `516f6c4465953e89346d07ea` 生效后，`application_request` 验证新路径返回 HTTP 200 和预期 JSON，首页仍返回 HTTP 200 和 `{"release":"B2"}`。开发步骤通过 MCP 执行。随后 DSH 应用临时变更 `04328b2f2eec5147cfd486c1` 注入入口异常。配置校验通过，运行时启动失败，`logs_query` 返回 `qa_startup_failure`。恢复该变更并重启后，`/api/hello` 再次返回 HTTP 200 和预期 JSON。最后恢复初始变更，核对首页基线并停止测试运行时。
+
+`vhttpd-deploy` 和 `vhttpd-debug` 已更新为对应 MCP 工作流，DSH 实际加载两份新版并核对了升级回滚与接管释放工具。Unix、Windows 和 macOS Desktop 的打包配置已纳入三份 Skill。Desktop 负责创建或绑定源码及确认需要授权的远端操作。
+
+## 第一阶段验收
+
+每批新增的 MCP 工具和平台 Skill 都须安装到 DSH 或 WorkBuddy，并从该客户端实际调用或加载。验收记录写明客户端、工具或 Skill 名称、目标、操作结果及未覆盖项。构建检查与服务端测试可作为补充证据。
+
+验收覆盖两条接入路径：本地客户端直连 Desktop MCP，以及支持 HTTPS MCP 和 Bearer 认证的客户端经公网 Relay 调用 Desktop MCP。客户端可使用 ChatGPT 或其他 Agent；本项目按用户选择使用 DSH、WorkBuddy 实际验收。公网路径须使用真实 HTTPS 入口，验证初始化、工具发现、实际工具调用、编辑校验、运行验证、恢复及撤销。保留脱敏后的 Desktop 版本、运行包标识、绑定 ID、工具记录和实际响应。
+
+客户端与 Desktop 可以运行在同一台设备、使用同一网络出口；只要请求实际经过公网 HTTPS 入口及 vhttpd WebSocket Relay，就满足公网链路验收要求。不同设备、不同运营商或独立网络出口属于可选的部署兼容性测试，不是 MCP 功能完成条件，也不列入必做剩余项。不得为补齐此类测试自行修改用户的代理、路由或系统网络配置；网络调整须由用户另行明确要求。
+
+| 用例 | 操作 | 通过标准 |
+| --- | --- | --- |
+| 连接与绑定 | Desktop 从 JSON API 模板创建应用，在专用环境绑定源码目录。通过本地 MCP 或已授权公网 Relay 连接受信任的 Agent 客户端 | `context_get` 显示正确的工作区、目标、版本、代次和影响范围；凭据与绝对路径未出现在模型结果中 |
+| 指引可用 | 只告诉 Agent 业务目标「增加 `GET /api/hello`，返回 `{"message":"hello"}`」，由模型获取指引和源码 | 调用记录显示模型能取得目标版本的 API 参考、项目指引和文件 revision，所用 API 与目标 profile 一致 |
+| 完成修改 | Agent 预览、校验、按状态停机并应用、启动，再发业务请求 | 返回 HTTP 200 和约定 JSON；重复请求通过；保留 diff、启动及业务验证证据 |
+| 启动失败与恢复 | 保存上述可运行基线，再通过 MCP 引入一个能通过配置校验但无法启动的源码错误 | 启动报告失败，日志支持定位；同一 Desktop 会话内恢复后重新启动，业务响应与基线一致 |
+| 边界与冲突 | 尝试越界路径、符号链接、访问另一应用或共享配置；预览后外部修改文件；切换绑定后重用旧代次和预览 | 全部请求被拒绝，原文件与其他应用保持原样；模型能按错误提示重读上下文或重新预览 |
+| 会话撤销 | 关闭 Desktop MCP，再用原连接发起调用 | 原连接无法继续访问；重新开启后可在新会话重新获取绑定 |
+| Relay 公网直连 | 开启 Relay 发布，让客户端通过公开 HTTPS URL 初始化、列出工具并调用 `context_get`；客户端可与 Desktop 同机、同网络出口。在专用测试环境显式开启编辑后执行一次修改及业务验证 | 只读凭据调用写工具被拒绝，编辑授权可跑通同一开发闭环；凭据缺失、失效或属于另一条路由时拒绝访问；会话头和所用响应模式正常传递 |
+| Relay 断开与撤销 | 暂断 Desktop 到 Hub 的连接，重连后重新初始化。随后切换绑定或撤销路由 | 离线时返回明确的不可用状态，恢复后可重新连接。撤销后旧 URL、凭据和会话无法调用，也无法访问新绑定 |
+
+第一阶段交付包括 Desktop 绑定入口、Relay 公网发布与撤销、工具契约增量、版本化开发参考、模板 `AGENTS.md`、`vhttpd-develop` Skill 和上述验收记录。远端发布、运行时升级与接管采用后续阶段各自的验收。
+
+## 首期实施状态
+
+| 交付项 | 状态与证据 |
+| --- | --- |
+| 应用绑定与项目指引 | Desktop 保留已安装应用绑定，另提供无需安装的源码目录入口及四个 source_workspace 工具，覆盖空目录、已有无配置及无效配置项目。源码会话要求 binding_revision，支持 AGENTS.md 与 revision 编辑、运行和恢复；已通过实际 Desktop 与 DSH 验收；WorkBuddy 实际对话另经公网 Relay 完成空目录及已有项目的完整指引、开发、恢复与撤销，见 2026-11-06 两项源码验收记录 |
+| 随运行包发布的开发指引 | `vhttpd --development-guide develop` 和 `vhttpd --development-guide vjsx` 返回运行包版本、来源、profile 和正文。Desktop 的 `guidance_get` 从所选二进制读取，拒绝版本不匹配或缺少指引的包。macOS 生产构建 0.9.0 已验证两个主题及未知主题错误。 |
+| `vhttpd-develop` Skill | 源码与发布包共用同一份 Skill 和 vjsx 参考。Unix 与 Windows 独立运行包放在 `skills/vhttpd-develop`，macOS Desktop 内置运行包放在 `Contents/Resources/runtime/skills/vhttpd-develop`。支持 Skills 的客户端可安装整个目录。已从本地测试归档核对 Markdown 与运行时嵌入内容逐字一致。2026-11-04 17:47（上海时间）在 DSH 安装并用 `skill` 工具加载该目录，随后实际调用公网 MCP `context_get` 和 `guidance_get`，确认 `hello-vjsx` 的 `develop` 指引来源为 `runtime_package`，版本为 0.9.0。 |
+| 已有 Hub 的 Relay 发布和回收 | 本机绑定会话提供 `relay_create_prepare`、`relay_create_apply`、`relay_status` 和 `relay_revoke`。先在 Desktop 选择已有可信 WSS Relay 并填入 HTTPS MCP 地址。计划有效期五分钟，提交时由 Desktop 确认，授权有效期一小时。撤销需提交发布 ID，以防旧请求影响新发布。Bearer 只在 Desktop 展示。 |
+| 远端专用 Hub | 已实现。先绑定本机应用，再切到已连接的远端环境，在 MCP 页面选择该环境作为 Hub 目标。回到本机 MCP 页面填写公网 HTTPS 地址。提交发布计划后，Desktop 使用目标环境的已安装运行包启动独立 Hub，返回两个远端 loopback 端口。网关将公开 MCP 路径代理到 `hub_http_port` 的 `/mcp`，并将 `/vhttpd/relay/desktop-mcp` 的 WebSocket Upgrade 转发到 `hub_carrier_port`。撤销先使本机授权失效，再回收本次 Hub。 |
+| bodytest 单端口部署 | 复用 bodytest 现有 vhttpd 实例。网关把 HTTPS 和 WebSocket Upgrade 都回源到 `127.0.0.1:58595`。`/mcp` 由 `mcp_web` ingress 转发，`/vhttpd/relay/desktop-mcp` 在同一监听器建立 Relay WebSocket。`relays.edge.listener` 指向 `listener:mcp_web`。已移除 `56481` 监听。 |
+| 公网客户端验收 | DSH 已在 bodytest 单端口部署上经公网 HTTPS Streamable HTTP 实际调用 `context_get` 和 `files_list`。还验证了运行时停止时查询 `engines/vjsx` schema，以及在启动耗时超过 30 秒时通过 `runtime_start` 受理、`runtime_status` 确认就绪并验证业务响应。WorkBuddy 桌面端已通过公网 Relay 验证已安装应用，以及无需安装的空目录和已有源码项目；后两者在实际对话中完成指引读取、校验、运行、恢复及撤销后旧工具调用失败，详见下文。公网链路验收已通过；ChatGPT 网页本轮按用户回复跳过，使用 WorkBuddy 替代。 |
+
+### 2026-11-04 本机与 Ubuntu 验收
+
+macOS 和 OrbStack Ubuntu 均通过 Desktop MCP 集成测试。Ubuntu 使用 GCC 构建 Boehm GC 运行包，测试独立启动 Hub、Agent 和 Desktop MCP。
+
+- Desktop MCP 集成测试通过。仅本机绑定会话列出四个 Relay 管理工具，公开授权会话不列出。用例覆盖拒绝授权、目标变更导致计划失效、同一计划重试保留原 Bearer、错误发布 ID 拒绝、重复撤销及凭据撤销。
+- 在 macOS 用真实 vhttpd Hub、WebSocket Agent 与 Desktop MCP 测试 Streamable HTTP。带 Bearer 的初始化、工具调用、GET 响应语义和 DELETE 会话终止通过，无 Bearer 返回 HTTP 401。编辑通过 diff、校验、应用、启动及业务请求，随后停机恢复并确认原始源码。撤销后旧授权无法再次初始化。
+- 停止运行时后，MCP 仍可读取 `engines/vjsx` 随包 schema、开发工作流和 vjsx API 指引。生产二进制报告 0.9.0，两个主题与归档内容一致，未知主题返回错误。
+- 内置 `/mcp` HTTP 路由现在遵循已有的管道优先级。Hub 配置可将 GET、POST 和 DELETE 转给 Relay，未配置覆盖的请求继续使用内置 MCP。
+- 专用 Hub 管理脚本在 Ubuntu 使用真实 vhttpd 启动两个独立 Hub。重复回收其中一个后，另一个的两个端口继续监听。专用进程最多运行一小时。
+- `relay_status` 在后台用当前授权向已配置的 HTTPS 地址发送 Streamable HTTP `initialize`，校验证书且禁止重定向。识别 Desktop MCP 响应后结束探测会话。macOS 集成测试验证初始化、会话清理、工具调用和撤销。工具结果只包含握手状态和 HTTP 状态码等非凭据信息。
+### 2026-11-04 bodytest 单端口公网验收
+
+- 网关配置将整个域名代理到 `http://127.0.0.1:58595`，并传递 WebSocket Upgrade。公网客户端 POST 到 `/mcp`，Mac Relay Agent 则连接 `/vhttpd/relay/desktop-mcp`。bodytest 将 MCP 请求通过该 WebSocket 交给 Mac 上的 `mcp-upstream`，再由本机 Desktop MCP 处理。
+- 远端 `ss` 确认 bodytest 的 `58595` 正在监听并有已建立连接，`56481` 无监听。公网 MCP 初始化此前已返回 HTTP 200。
+- 17:44（上海时间），DSH 用只读凭据发起新一轮公网调用。`context_get` 返回 `binding_revision: 1` 和应用 `hello`，`files_list` 带同一代次调用成功，返回 `main.mts` 和 `vhttpd.toml`。
+### 2026-11-05 Relay 运行时启动 504 修复
+
+- 历史失败中的同一请求在 Mac Agent 侧约 30 秒触发 `mcp_upstream_fetch_failed`，原因是等待 Desktop MCP 响应时读取超时。Hub 的等待预算同为 30 秒，最终返回 HTTP 504 并记录 `relay_returned_frame_not_found`。当时 WebSocket 已完成握手，最后一个业务监听约 40 秒才启动。
+- 经 Relay 的 `runtime_start` 和 `runtime_restart` 在 Desktop 接管启动进程后返回 `accepted: true` 和 `phase: starting`。客户端用相同的 `binding_revision` 轮询 `runtime_status`，确认完整环境就绪且磁盘版本与生效版本一致后，状态返回 `readiness: ready`。接着调用 `application_request` 验证业务响应。启动失败或停止时结束轮询。
+- 公网验收复用 bodytest 的 `58595` 和 Mac 上已有的 vhttpd 运行包。Mac Agent 采用 bodytest 对应的 `edge` Relay 配置，主动连接公网 `/vhttpd/relay/desktop-mcp` 并建立全双工 WebSocket 长连接。DSH 安装包内的 MCP 客户端使用临时编辑 Bearer，从公网 HTTPS `/mcp` 走 Streamable HTTP 调用隔离测试应用。
+- 在隔离应用启动前人为延迟 34 秒。DSH 在 115 毫秒收到受理，29 次查询返回等待状态，38.46 秒后确认 `running` 和 `ready`。`application_request` 请求 `/api/hello` 返回 HTTP 200。随后通过 DSH 停止运行时并确认 `stopped`。临时发布撤销后，公网入口在无已连接 Agent 时返回 HTTP 503。
+
+- macOS 的 `desktop/devmcp/server_test.v` 通过。用本机 vhttpd Hub、Agent 和同样的 34 秒启动延迟验证了编辑、启动受理、就绪、业务响应、停止、源文件恢复和撤销。
+
+- 当前安装的 `Workbench Update QA.app` 已替换为包含修复的生产构建，保留旧应用包供回退。通过实际 Desktop 界面绑定隔离应用 `relayqa`、加载 bodytest 的 `edge` Relay 并发布编辑授权。DSH 安装包内的 MCP 客户端使用界面刚签发的 Bearer，经公网 HTTPS Streamable HTTP 调用 `runtime_start`，170 毫秒收到受理，5 次等待查询后在 6.73 秒确认 `readiness: ready`，`/api/hello` 返回 HTTP 200。本轮使用实际 vhttpd 启动耗时。测试后停止隔离实例、在界面撤销临时发布并清除临时客户端凭据，重新打开更新后的 Desktop，恢复原 `default` 实例运行。
+
+### 2026-11-06 WorkBuddy 源码公网验收（已通过）
+
+实际 Desktop 发布 Relay，WorkBuddy 5.9.3 的真实对话通过公网 HTTPS Streamable HTTP 完成空目录与已有项目两条开发、恢复和撤销验收。对话保留在 WorkBuddy 的「vhttpd MCP 验收 vjsx 项目测试」。客户端没有使用本机文件、终端或 HTTP 脚本替代 MCP 开发操作；独立文件比较与 HTTP 探针仅作为补充检查。[验收记录与对话摘录](release-evidence/desktop-mcp-workbuddy-source-public-acceptance-2026-11-06.json)
+
+本轮先修复并复用 bodytest 原实例：网关仍回源 `127.0.0.1:58595`，本机 vhttpd Agent 主动连接公网 WebSocket Relay，公网客户端使用 `https://mcp.bullsoft.org/mcp`。未创建新 Hub，未使用 SSH 转发。候选 amd64 包确认启用 Boehm GC，真实 HTTP 路由测试和既有 OrbStack Ubuntu Relay 回归通过；升级助手切换现有实例成功、就绪为真，配置及 ingress 文件校验值和配置修订号保持不变，旧包保留供回滚。新包 ID 为 `sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041`，二进制 SHA-256 为 `0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa`，Desktop 登记已对齐。[运行包修复与升级证据](release-evidence/desktop-mcp-bodytest-runtime-repair-2026-11-06.json)
+
+本机保存的 carrier Token 已同步远端 Hub，Relay ID 从 `desktop-mcp` 修正为 `edge`。实际 Desktop 重新发布后，公网 `initialize` 返回 200，发现 21 个工具，`context_get` 正确返回 `source_workspace`、`installed=false` 和当前绑定。初次运行仍选中了旧 schema 测试运行包，缺少 `develop/vjsx` 指引；已在 Desktop 界面切换至 App 内置完整运行包，再重新发布并完整复跑。两类项目均实际读到 `workflow` 的 Desktop 指引版本 2，以及 `develop/vjsx` 的 `source=runtime_package`、运行时版本 0.9.0、`profile=script`。两份隔离目录均未放置 AGENTS.md，project topic 按约定返回空内容。
+
+| 验收项 | 空目录源码项目 | 已有源码项目 |
+| --- | --- | --- |
+| 接入 | 原目录绑定、未安装，初始源码列表为空 | 原目录绑定、未安装，保留普通 app.json 和业务模块 |
+| 编辑与校验 | 新增 vhttpd.toml、main.mjs；prepare → validate → apply | 只替换 main.mjs；使用读取的 revision 完成 prepare → validate → apply |
+| 真实运行 | start 受理后查询 ready；GET / 返回 200、empty_public_ok | 基线、修改后、恢复后均 start → ready → GET / 200 |
+| 业务响应 | `{"source_qa":"empty_public_ok"}` | `existing_base → existing_public_ok → existing_base`，preserved 始终为 original |
+| 恢复与停止 | changes_restore 成功，files_list=[]，phase=stopped、pid=0 | changes_restore 成功；原配置、主文件、业务模块、app.json 与 .git/KEEP 校验值均与基线相同，最终 stopped、pid=0 |
+| 撤销复验 | Desktop 撤销后，WorkBuddy 用原配置实际调用 context_get 失败，无上下文返回 | Desktop 撤销后，WorkBuddy 用原配置实际调用 context_get 失败，无上下文返回 |
+
+空目录完整复验的变更 ID 为 `9be42eabfd89631dae9e8c14`；已有项目为 `d64c103dc5660ed37a6b3ed0`。空目录首次尝试 `81fd0ef9fd7596da51b4cda1` 虽完成开发恢复，但缺少完整运行包指引，单独保留为发现问题的记录，不替代修正后的完整验收。已有项目一次因界面尺寸变化导致新凭据未保存、工具索引不可用的尝试已取消；仅在界面保存成功、配置匹配当前发布后执行的闭环计为通过。
+
+撤销后 WorkBuddy 实际工具返回 Streamable HTTP POST 失败。独立检查进一步确认：旧授权在新发布有效时初始化返回 401，新发布返回 200；最终撤销、Agent 停止后旧授权返回 503。503 证明该通道已不可达，401 补充证明旧 Bearer 不能复用。四个测试端口 63441–63444 均关闭；临时 WorkBuddy 连接器与本机 MCP 已回收，实际 Desktop 保留完整内置运行包选择并返回原 hello-vjsx 停止视图。
+
+MCP 恢复的是项目源码；运行时生成的事件日志、应用日志和锁文件不属于 changes_restore 源码变更集。本轮停止后将这些运行产物另存到私有验收目录，再清理测试目录。最终空目录物理为空，已有目录恰好恢复五个原文件。最初诊断记录继续保留在 [首次未验收证据](release-evidence/desktop-mcp-workbuddy-source-public-2026-11-06.json)。
+
+运行包选择不能只比较版本字符串：旧 schema 包和完整包均显示 0.9.0，应核对实际路径、校验值和指引能力。重新发布后须在客户端保存新 Bearer 并重读 context_get，不能复用旧授权或变更 ID。本次使用 QuickJS script / main.mjs；模板默认的 node / main.mts 应按所选 profile 使用，不能直接混用。
+
+本项验收已通过，覆盖同一台 Mac 上 WorkBuddy 经公网 Relay 开发源码工作区，符合本地直连与公网访问的接入验收口径。ChatGPT 网页按用户要求由 WorkBuddy 替代。独立网络出口仅为可选部署测试，不阻塞此项完成；其他能力域仍按各自清单跟踪。
+
+### WorkBuddy 公网开发验收
+
+按用户选择使用 WorkBuddy 5.9.3。WorkBuddy 桌面端在本机通过公网 HTTPS Streamable HTTP 连接 `mcp.bullsoft.org/mcp`，由 Relay 转发到 Desktop 绑定的隔离应用 `releaseqa`。确认信任自定义连接器后，WorkBuddy 实际调用 `context_get`、`guidance_get`（`develop` 和 `vjsx`）、`files_read`，并用文件 revision 完成变更 `21abaa0ebbc334dba86d1f3b` 的预检、校验、应用和启动。新接口 `GET /api/public-qa` 返回 HTTP 200 和 `{"message":"public-relay-ok"}`，首页仍返回 `{"release":"B2"}`。
+
+WorkBuddy 停止运行时并执行 `changes_restore`，重启后首页和测试路径都返回基线 `{"release":"B2"}`，最后再次停止运行时。独立文件比较确认源码与验收前逐字节一致。启用编辑授权期间，无凭据的初始化返回 HTTP 401。撤销后使用旧凭据重新初始化返回 HTTP 503，临时 WorkBuddy 连接已移除。
+
+此次覆盖 WorkBuddy 桌面客户端的公网 Relay 写入和恢复。ChatGPT 网页按用户回复跳过。WorkBuddy 和 Desktop 运行在同一台 Mac，已实际经过公网入口，满足公网链路验收要求。

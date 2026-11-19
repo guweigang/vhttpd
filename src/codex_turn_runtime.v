@@ -22,34 +22,42 @@ struct CodexPreparedTurn {
 fn (mut app App) codex_prepare_turn(cmd command.NormalizedCommand) CodexPreparedTurn {
 	instance := codex.ProviderRuntime.normalize_instance(cmd.instance)
 	mut state := &app.providers.codex
-	return app.providers.codex_runtime_mutate[CodexPreparedTurn](instance, fn [cmd, instance, mut state] (mut rt codex.ProviderRuntime) CodexPreparedTurn {
-		if !rt.is_connected() {
-			return CodexPreparedTurn{ failure: 'codex provider not connected' }
-		}
-		if !rt.is_initialized() {
-			return CodexPreparedTurn{ failure: 'codex provider not initialized' }
-		}
-		stream_id := cmd.correlation.stream_id
-		if stream_id == '' { return CodexPreparedTurn{ failure: 'codex stream_id is required' } }
-		thread_id := if cmd.correlation.thread_id != '' {
-			cmd.correlation.thread_id
-		} else {
-			rt.current_thread_id()
-		}
-		if thread_id == '' {
-			return CodexPreparedTurn{ failure: 'no active codex thread available for turn' }
-		}
-		if cmd.correlation.thread_id != '' {
-			rt.bind_stream_to_thread(thread_id, stream_id)
-		} else {
-			rt.begin_turn_stream(stream_id)
-		}
-		if cmd.response_message_id != '' {
-			rt.add_stream_target(stream_id, codex.CodexTarget{ platform: 'feishu', message_id: cmd.response_message_id })
-		}
-		registration := state.register_rpc_unlocked(instance, mut rt, codex.PendingRpc{ instance: instance, method: 'turn/start', stream_id: stream_id, message_id: cmd.response_message_id })
-		return CodexPreparedTurn{ config: rt.config_snapshot(), ws_url: rt.ws_url, thread_id: thread_id, id: registration.id, registration: registration, connection: rt.connection() }
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	if !rt.is_connected() {
+		return CodexPreparedTurn{ failure: 'codex provider not connected' }
+	}
+	if !rt.is_initialized() {
+		return CodexPreparedTurn{ failure: 'codex provider not initialized' }
+	}
+	stream_id := cmd.correlation.stream_id
+	if !rt.can_register_rpcs(1) { return CodexPreparedTurn{failure: 'codex_pending_rpc_limit'} }
+	if stream_id == '' { return CodexPreparedTurn{ failure: 'codex stream_id is required' } }
+	thread_id := if cmd.correlation.thread_id != '' {
+		cmd.correlation.thread_id
+	} else {
+		rt.current_thread_id()
+	}
+	if thread_id == '' {
+		return CodexPreparedTurn{ failure: 'no active codex thread available for turn' }
+	}
+	if cmd.correlation.thread_id != '' {
+		rt.bind_stream_to_thread(thread_id, stream_id)
+	} else {
+		rt.begin_turn_stream(stream_id)
+	}
+	if cmd.response_message_id != '' {
+		platform := cmd.metadata['reply_provider'] or { 'feishu' }
+		rt.add_stream_target(stream_id, codex.CodexTarget{ platform: platform, message_id: cmd.response_message_id })
+	}
+	registration := state.register_rpc_unlocked(instance, mut rt, codex.PendingRpc{ instance: instance, method: 'turn/start', stream_id: stream_id, message_id: cmd.response_message_id })
+	return CodexPreparedTurn{ config: rt.config_snapshot(), ws_url: rt.ws_url, thread_id: thread_id, id: registration.id, registration: registration, connection: rt.connection() }
 }
 
 // A prepared turn owns pending-send cleanup and borrows exactly the connection

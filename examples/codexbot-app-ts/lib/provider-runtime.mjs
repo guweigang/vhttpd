@@ -1,19 +1,12 @@
-import * as path from "path";
+import { resolveApplicationPath } from "../config/config.mts";
 
 export function createProviderRuntimeHelpers(deps) {
-  function runtimeConfigValue(runtime, path, fallbackValue) {
-    if (!runtime || typeof runtime.getConfig !== "function") {
-      return fallbackValue;
-    }
-    return runtime.getConfig(path, fallbackValue);
-  }
-
   function resolveConfiguredRuntimePath(value) {
     const text = typeof value === "string" ? value.trim() : "";
     if (!text) {
       return "";
     }
-    return path.isAbsolute(text) ? text : path.resolve(process.cwd(), text);
+    return resolveApplicationPath(text);
   }
 
   function configuredCodexInstance(instance) {
@@ -63,6 +56,7 @@ export function createProviderRuntimeHelpers(deps) {
     const configured = configuredCodexInstance(fallbackCodexInstance(instance, defaults)) || {};
     const configuredCwd = resolveConfiguredRuntimePath(configured.cwd || "");
     return {
+      application_messages: true,
       url: configured.url || defaults.codexUrl,
       model: source.model || state?.model || configured.model || defaults.model,
       effort: configured.effort || defaults.effort,
@@ -77,6 +71,7 @@ export function createProviderRuntimeHelpers(deps) {
   function buildFeishuInstanceSpec(defaults = deps.botDefaults(), instance = "") {
     const configured = configuredFeishuInstance(fallbackFeishuInstance(instance, defaults)) || {};
     return {
+      application_messages: true,
       app_id: configured.app_id || "",
       app_secret: configured.app_secret || "",
       verification_token: configured.verification_token || "",
@@ -115,8 +110,7 @@ export function createProviderRuntimeHelpers(deps) {
   async function buildAppStartupCommands(runtime = undefined) {
     const defaults = deps.botDefaults();
     const commands = [];
-    const runtimeFeishuEnabled = runtimeConfigValue(runtime, "feishu.enabled", true) !== false;
-    const runtimeFeishuBridgeEnabled = runtimeConfigValue(runtime, "feishu.bridge.enabled", false) === true;
+    const runtimeFeishuEnabled = defaults.feishuEnabled;
     const startedCodexInstances = new Set();
     for (const instance of configuredCodexStartupInstances()) {
       const resolvedInstance = fallbackCodexInstance(instance, defaults);
@@ -125,7 +119,7 @@ export function createProviderRuntimeHelpers(deps) {
       startedCodexInstances.add(resolvedInstance);
     }
     const codexInstance = fallbackCodexInstance("", defaults);
-    if (!startedCodexInstances.has(codexInstance)) {
+    if (!startedCodexInstances.has(codexInstance) && configuredCodexInstance(codexInstance)?.startup !== false) {
       const codexSpec = buildCodexInstanceSpec(undefined, undefined, defaults, codexInstance);
       commands.push(...await buildProviderInstanceCommands("codex", codexInstance, codexSpec, "connected"));
     }
@@ -134,10 +128,6 @@ export function createProviderRuntimeHelpers(deps) {
       if (runtime && typeof runtime.log === "function") {
         runtime.log("codexbot-app-ts app_startup", deps.buildTag, "skip feishu startup: feishu.enabled=false");
       }
-    } else if (runtimeFeishuBridgeEnabled) {
-      if (runtime && typeof runtime.log === "function") {
-        runtime.log("codexbot-app-ts app_startup", deps.buildTag, "skip feishu startup: feishu.bridge.enabled=true");
-      }
     } else {
       for (const instance of configuredFeishuStartupInstances()) {
         const resolvedInstance = fallbackFeishuInstance(instance, defaults);
@@ -145,7 +135,7 @@ export function createProviderRuntimeHelpers(deps) {
         if (hasFeishuConnectionCredentials(feishuSpec)) {
           commands.push(...await buildProviderInstanceCommands("feishu", resolvedInstance, feishuSpec, "connected"));
         } else if (runtime && typeof runtime.log === "function") {
-          runtime.log("codexbot-app-ts app_startup", deps.buildTag, `skip feishu startup for ${resolvedInstance}: missing FEISHU_APP_ID or FEISHU_APP_SECRET`);
+          runtime.log("codexbot-app-ts app_startup", deps.buildTag, `skip feishu startup for ${resolvedInstance}: missing app_id or app_secret in application config`);
         }
       }
     }

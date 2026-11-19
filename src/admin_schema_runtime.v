@@ -1,5 +1,7 @@
 module main
 
+import json2 as json
+
 struct AdminSchemaCatalog {
 pub:
 	version int = 1
@@ -67,6 +69,11 @@ fn admin_schema_kind(domain_id string, kind_id string) ?AdminSchemaKind {
 		}
 	}
 	return none
+}
+
+// Use the same catalog as Admin HTTP so an offline lookup describes this binary.
+fn packaged_schema_json() string {
+	return '{"source":"runtime_package","runtime_version":${json.encode(vhttpd_version)},"schema":${json.encode(admin_schema_catalog())}}'
 }
 
 fn admin_schema_listeners() AdminSchemaDomain {

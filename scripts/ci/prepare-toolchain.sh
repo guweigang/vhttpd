@@ -25,27 +25,53 @@ checkout_pinned "$VJSX_REPO" "$VJSX_COMMIT" "$toolchain/vjsx"
 checkout_pinned "$VC_REPO" "$VC_COMMIT" "$toolchain/v/vc"
 case "$(uname -s):$(uname -m)" in
   Linux:x86_64) selected_tcc="$TCC_LINUX_AMD64_COMMIT" ;;
+  Linux:aarch64|Linux:arm64) selected_tcc=system-cc ;;
   Darwin:x86_64) selected_tcc="$TCC_MACOS_AMD64_COMMIT" ;;
   Darwin:arm64) selected_tcc="$TCC_MACOS_ARM64_COMMIT" ;;
   *) echo 'No pinned TCC bundle for this platform' >&2; exit 1 ;;
 esac
-checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
-file "$toolchain/v/thirdparty/tcc/tcc.exe"
-checkout_pinned "$QUICKJS_REPO" "$QUICKJS_COMMIT" "$toolchain/quickjs"
-make -C "$toolchain/v" local=1 CC=cc VFLAGS="-prod -cc cc"
+if [[ "$selected_tcc" != system-cc ]]; then
+  checkout_pinned "$TCC_REPO" "$selected_tcc" "$toolchain/v/thirdparty/tcc"
+  file "$toolchain/v/thirdparty/tcc/tcc.exe"
+fi
+quickjs_path="$(VJS_QUICKJS_WORK_ROOT="$toolchain" \
+  "$toolchain/vjsx/scripts/ensure-quickjs.sh")"
+quickjs_commit="$(git -C "$quickjs_path" rev-parse HEAD)"
+quickjs_expected="$(tr -d '[:space:]' < "$toolchain/vjsx/.quickjs-version")"
+[[ "$quickjs_commit" == "$quickjs_expected" ]]
+make -C "$toolchain/v" local=1 CC=cc VFLAGS="-cc cc -gc boehm -d use_bundled_libgc"
 "$toolchain/v/v" version
+# Linux arm64 deliberately uses the system C compiler without a TCC bundle.
+# Non-production V builds otherwise look for libgc.a inside that absent bundle.
+# Keep Boehm enabled and compile the collector from the pinned V source instead.
+if [[ "$selected_tcc" == system-cc ]]; then
+  export VFLAGS="${VFLAGS:+$VFLAGS }-d use_bundled_libgc"
+  echo "VFLAGS=$VFLAGS" >> "$GITHUB_ENV"
+fi
+cat > "$toolchain/gc-smoke.v" <<'GC_SMOKE'
+import os
+fn main() {
+  mut values := []string{}
+  for i in 0 .. os.args.len + 32 { values << i.str() }
+  assert values.len >= 33
+  println('Boehm GC ready: ' + values.join(','))
+}
+GC_SMOKE
+"$toolchain/v/v" -cc cc -gc boehm -o "$toolchain/gc-smoke" "$toolchain/gc-smoke.v"
+"$toolchain/gc-smoke"
 mkdir -p "$toolchain/modules"
 ln -s "$toolchain/vjsx" "$toolchain/modules/vjsx"
 echo "$toolchain/v" >> "$GITHUB_PATH"
 {
   echo "VMODULES=$toolchain/modules"
   echo "VJSX_DIR=$toolchain/vjsx"
-  echo "VJS_QUICKJS_PATH=$toolchain/quickjs"
+  echo "VJS_QUICKJS_PATH=$quickjs_path"
 } >> "$GITHUB_ENV"
 mkdir -p "$root/ci-results"
 {
   cat "$root/scripts/ci/toolchain.env"
   echo "TCC_SELECTED_COMMIT=$selected_tcc"
+  echo "QUICKJS_COMMIT=$quickjs_commit"
   git -C "$root" rev-parse HEAD
   "$toolchain/v/v" version
   cc --version

@@ -1,5 +1,5 @@
 import { open } from "sqlite";
-import { botDefaults } from "../config/config.mts";
+import { botDefaults, ensureDataDirectory } from "../config/config.mts";
 import { normalizeMainInstanceAlias } from "./instance-alias.mjs";
 
 let dbPromise;
@@ -228,6 +228,7 @@ async function db() {
   if (dbPromise) {
     return dbPromise;
   }
+  ensureDataDirectory();
   const filePath = dbPath();
   dbPromise = open({ path: filePath, busyTimeout: 5000 }).then(async (database) => {
     await database.exec("pragma journal_mode = wal");
@@ -257,6 +258,9 @@ async function db() {
     await database.exec("create index if not exists idx_item_render_state_updated_at on item_render_state(updated_at desc)");
     await database.exec("create index if not exists idx_inbound_event_state_seen_at on inbound_event_state(seen_at desc)");
     await database.exec("create index if not exists idx_approval_request_state_parent_stream_id on approval_request_state(parent_stream_id)");
+    await database.exec("create index if not exists idx_protocol_stream_thread on stream_state(thread_id, codex_instance, turn_id, created_at)");
+    await database.exec("create index if not exists idx_protocol_item_stream on item_render_state(item_stream_id)");
+    await database.exec("create index if not exists idx_protocol_approval_stream on approval_request_state(approval_stream_id)");
     await database.exec("create index if not exists idx_approval_request_state_rpc_request_id on approval_request_state(thread_id, rpc_request_id)");
     await database.exec("create index if not exists idx_approval_request_state_status on approval_request_state(status)");
     await database.exec("create index if not exists idx_approval_request_state_updated_at on approval_request_state(updated_at desc)");
@@ -958,7 +962,7 @@ export async function getInstanceSpec(provider, instance) {
   return {
     provider: row.provider,
     instance: normalizeMainInstanceAlias(row.instance),
-    config: JSON.parse(row.config_json || "{}"),
+    config: Object.fromEntries(Object.entries(JSON.parse(row.config_json || "{}")).map(([key, value]) => [key, /secret|token|encrypt_key/i.test(key) ? "[redacted]" : value])),
     desiredState: row.desired_state || "connected",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -997,7 +1001,7 @@ export async function listInstanceSpecs(provider = "") {
     const next = {
       provider: row.provider,
       instance: normalizedInstance,
-      config: JSON.parse(row.config_json || "{}"),
+      config: Object.fromEntries(Object.entries(JSON.parse(row.config_json || "{}")).map(([key, value]) => [key, /secret|token|encrypt_key/i.test(key) ? "[redacted]" : value])),
       desiredState: row.desired_state || "connected",
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -1194,7 +1198,7 @@ export async function runtimeSnapshot() {
     instances: instances.map((row) => ({
       provider: row.provider,
       instance: normalizeMainInstanceAlias(row.instance),
-      config: JSON.parse(row.config_json || "{}"),
+      config: Object.fromEntries(Object.entries(JSON.parse(row.config_json || "{}")).map(([key, value]) => [key, /secret|token|encrypt_key/i.test(key) ? "[redacted]" : value])),
       desiredState: row.desired_state || "connected",
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -1221,4 +1225,24 @@ export function createReplyContext(instance = "main") {
   const streamId = `feishu:reply:${nextStreamId()}`;
   const creation = issueStreamCreation(streamId, instance);
   return Object.freeze({ streamId, streamInstance: instance || "main", streamGeneration: creation.generation, streamCreationToken: creation.token });
+}
+
+// Application-owned routing: isolate providers and exclude derived rendering streams.
+export async function resolveProtocolStream(instance, threadId, turnId = "") {
+  if (!threadId) return "";
+  const database = await db();
+  const rows = await database.query(`select s.stream_id, s.turn_id, s.status from stream_state s
+    where s.thread_id = ? and (case when s.codex_instance in ('', 'default') then 'main' else s.codex_instance end) = ?
+    and not exists (select 1 from item_render_state i where i.item_stream_id = s.stream_id)
+    and not exists (select 1 from approval_request_state a where a.approval_stream_id = s.stream_id)
+    order by s.created_at desc, s.stream_id desc`, [threadId, normalizeMainInstanceAlias(instance, "main")]);
+  if (turnId) {
+    const exact = rows.filter((row) => row.turn_id === turnId);
+    if (exact.length === 1) return exact[0].stream_id;
+    if (exact.length > 1) return "";
+  }
+  const active = rows.filter((row) => !["completed", "error", "failed", "cancelled", "interrupted"].includes(row.status));
+  // A new turn may precede its turn/start response. Never bind a different known turn.
+  const candidates = active.filter((row) => !turnId || !row.turn_id || row.turn_id === turnId);
+  return candidates.length === 1 ? candidates[0].stream_id : "";
 }

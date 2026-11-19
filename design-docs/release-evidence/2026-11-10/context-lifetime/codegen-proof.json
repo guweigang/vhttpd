@@ -1,0 +1,13 @@
+{
+  "source_sha256": "27bfe3413538b51fc8a2652f607cb7181850e2a5d182f6b60523d485398c1a8a",
+  "generated_state_c_sha256": "4b5476271130b2c639d525f78aac4f519b865051e979f8a87d3956bfffebd96c",
+  "generated_connection_c_sha256": "ce74bd3313090d8fbbe4f4dab223a5a87316e7e77f56fdbb0f7ad42b1417964c",
+  "properties": [
+    "Real run_new config wires make_state factory",
+    "Reusable path skips Context memdup, app Context stays separate heap copy",
+    "Fallback retains original &Context constructor and ownership shape",
+    "Controller factory disabled; legacy render wrapper passes nil",
+    "Cleanup compares voidptr identity, not structural equality",
+    "All append returns/unwind clear storage bytes and busy flag"
+  ]
+}

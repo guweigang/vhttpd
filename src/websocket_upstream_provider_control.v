@@ -1,5 +1,6 @@
 module main
 
+import memidle
 import log
 import net.websocket
 
@@ -51,6 +52,8 @@ fn (mut app App) websocket_upstream_provider_reconnect_delay_ms(provider string,
 }
 
 fn (mut app App) websocket_upstream_provider_handle_message(provider string, instance string, mut ws_client websocket.Client, msg &websocket.Message) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	if provider == websocket_upstream_provider_codex {
 		mut payload_preview := ''
 		if msg.opcode == .text_frame || msg.opcode == .binary_frame || msg.opcode == .continuation {
@@ -65,6 +68,10 @@ fn (mut app App) websocket_upstream_provider_handle_message(provider string, ins
 		}
 		websocket_upstream_provider_codex {
 			if msg.opcode == .text_frame {
+				if app.providers.codex.accept_handshake_response(instance, voidptr(&ws_client), msg.payload.bytestr()) {
+					app.codex_note_frame_received(instance)
+					return
+				}
 				app.codex_provider_handle_text_message(instance, msg.payload.bytestr())
 			} else {
 				log.warn('[codex][ws] ignored non-text opcode=${msg.opcode} payload_len=${msg.payload.len} instance=${instance}')

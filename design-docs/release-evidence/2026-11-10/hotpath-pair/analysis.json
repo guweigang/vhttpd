@@ -1,0 +1,341 @@
+{
+  "scope": "Serial ABBA short comparison; same frozen scanner/SDK/compiler/collector and environment. Synthetic representative topology, not business replay. Last 30 seconds median, peak over entire phase. GC API cumulative allocated bytes are churn, not live or retained bytes. No forced GC/debugger. Short phase slopes do not establish 24-hour stability.",
+  "runs": [
+    {
+      "run": "01-before",
+      "variant": "before",
+      "sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+      "counts": {
+        "http_ok": 14358,
+        "http_errors": 0,
+        "paseo_ok": 87,
+        "paseo_errors": 0
+      },
+      "phases": {
+        "baseline": {
+          "samples": 6,
+          "rss_tail_mib": 87.54296875,
+          "anon_tail_mib": 66.1953125,
+          "anon_peak_mib": 66.2890625,
+          "anon_early_mib": 66.21875,
+          "gc_heap_tail_mib": 41.21484375,
+          "gc_free_tail_mib": 30.830078125,
+          "gc_allocated_mib_per_second": 0.07932873286740563,
+          "gc_epoch_increase": 0,
+          "min_host_available_mib": 794.578125
+        },
+        "http": {
+          "samples": 12,
+          "rss_tail_mib": 88.0078125,
+          "anon_tail_mib": 66.66015625,
+          "anon_peak_mib": 66.66015625,
+          "anon_early_mib": 66.65625,
+          "gc_heap_tail_mib": 41.21484375,
+          "gc_free_tail_mib": 20.4140625,
+          "gc_allocated_mib_per_second": 9.842278941462839,
+          "gc_epoch_increase": 19,
+          "min_host_available_mib": 782.5703125
+        },
+        "paseo": {
+          "samples": 12,
+          "rss_tail_mib": 79.21875,
+          "anon_tail_mib": 57.87109375,
+          "anon_peak_mib": 57.87890625,
+          "anon_early_mib": 57.8515625,
+          "gc_heap_tail_mib": 32.328125,
+          "gc_free_tail_mib": 17.177734375,
+          "gc_allocated_mib_per_second": 1.722412053903623,
+          "gc_epoch_increase": 6,
+          "min_host_available_mib": 781.58203125
+        },
+        "mixed": {
+          "samples": 24,
+          "rss_tail_mib": 76.904296875,
+          "anon_tail_mib": 55.556640625,
+          "anon_peak_mib": 57.86328125,
+          "anon_early_mib": 56.23046875,
+          "gc_heap_tail_mib": 30.087890625,
+          "gc_free_tail_mib": 12.494140625,
+          "gc_allocated_mib_per_second": 11.403019512251685,
+          "gc_epoch_increase": 53,
+          "min_host_available_mib": 777.6015625
+        },
+        "cooldown": {
+          "samples": 36,
+          "rss_tail_mib": 58.427734375,
+          "anon_tail_mib": 37.080078125,
+          "anon_peak_mib": 55.46875,
+          "anon_early_mib": 55.4375,
+          "gc_heap_tail_mib": 11.759765625,
+          "gc_free_tail_mib": 0.0,
+          "gc_allocated_mib_per_second": 0.07876359908828728,
+          "gc_epoch_increase": 4,
+          "min_host_available_mib": 795.90234375
+        }
+      },
+      "pressure_idle_attempt_increase": 0,
+      "natural_recovery_mib": 18.4765625,
+      "cooldown_above_baseline_mib": -29.115234375,
+      "natural_status_kib": {
+        "VmRSS": 60332,
+        "RssAnon": 38472,
+        "RssFile": 21860,
+        "RssShmem": 0,
+        "VmSwap": 0
+      },
+      "oom_free": true
+    },
+    {
+      "run": "02-after",
+      "variant": "after",
+      "sha256": "60da360c10cc76bc5f37c609b95dc275bec98f88c256f31cf7c491c31ef43faf",
+      "counts": {
+        "http_ok": 14374,
+        "http_errors": 0,
+        "paseo_ok": 88,
+        "paseo_errors": 0
+      },
+      "phases": {
+        "baseline": {
+          "samples": 6,
+          "rss_tail_mib": 92.609375,
+          "anon_tail_mib": 65.48828125,
+          "anon_peak_mib": 65.50390625,
+          "anon_early_mib": 65.48828125,
+          "gc_heap_tail_mib": 42.140625,
+          "gc_free_tail_mib": 35.123046875,
+          "gc_allocated_mib_per_second": 0.08040790849883293,
+          "gc_epoch_increase": 1,
+          "min_host_available_mib": 792.31640625
+        },
+        "http": {
+          "samples": 12,
+          "rss_tail_mib": 75.16796875,
+          "anon_tail_mib": 48.046875,
+          "anon_peak_mib": 67.3828125,
+          "anon_early_mib": 67.375,
+          "gc_heap_tail_mib": 24.421875,
+          "gc_free_tail_mib": 8.0078125,
+          "gc_allocated_mib_per_second": 9.209631920259483,
+          "gc_epoch_increase": 30,
+          "min_host_available_mib": 794.078125
+        },
+        "paseo": {
+          "samples": 12,
+          "rss_tail_mib": 73.650390625,
+          "anon_tail_mib": 46.529296875,
+          "anon_peak_mib": 46.54296875,
+          "anon_early_mib": 46.46875,
+          "gc_heap_tail_mib": 24.421875,
+          "gc_free_tail_mib": 9.234375,
+          "gc_allocated_mib_per_second": 0.8024266554863435,
+          "gc_epoch_increase": 3,
+          "min_host_available_mib": 794.01171875
+        },
+        "mixed": {
+          "samples": 24,
+          "rss_tail_mib": 73.369140625,
+          "anon_tail_mib": 46.248046875,
+          "anon_peak_mib": 46.95703125,
+          "anon_early_mib": 46.546875,
+          "gc_heap_tail_mib": 20.96484375,
+          "gc_free_tail_mib": 7.404296875,
+          "gc_allocated_mib_per_second": 9.938499674032117,
+          "gc_epoch_increase": 75,
+          "min_host_available_mib": 765.16015625
+        },
+        "cooldown": {
+          "samples": 36,
+          "rss_tail_mib": 62.955078125,
+          "anon_tail_mib": 35.833984375,
+          "anon_peak_mib": 47.08203125,
+          "anon_early_mib": 47.05859375,
+          "gc_heap_tail_mib": 10.671875,
+          "gc_free_tail_mib": 0.001953125,
+          "gc_allocated_mib_per_second": 0.07863585253912386,
+          "gc_epoch_increase": 5,
+          "min_host_available_mib": 800.5234375
+        }
+      },
+      "pressure_idle_attempt_increase": 0,
+      "natural_recovery_mib": 10.4140625,
+      "cooldown_above_baseline_mib": -29.654296875,
+      "natural_status_kib": {
+        "VmRSS": 64968,
+        "RssAnon": 37196,
+        "RssFile": 27772,
+        "RssShmem": 0,
+        "VmSwap": 0
+      },
+      "oom_free": true
+    },
+    {
+      "run": "03-after",
+      "variant": "after",
+      "sha256": "60da360c10cc76bc5f37c609b95dc275bec98f88c256f31cf7c491c31ef43faf",
+      "counts": {
+        "http_ok": 14361,
+        "http_errors": 0,
+        "paseo_ok": 88,
+        "paseo_errors": 0
+      },
+      "phases": {
+        "baseline": {
+          "samples": 6,
+          "rss_tail_mib": 80.5859375,
+          "anon_tail_mib": 53.296875,
+          "anon_peak_mib": 53.3203125,
+          "anon_early_mib": 53.28125,
+          "gc_heap_tail_mib": 42.390625,
+          "gc_free_tail_mib": 10.048828125,
+          "gc_allocated_mib_per_second": 0.07979049912454662,
+          "gc_epoch_increase": 0,
+          "min_host_available_mib": 808.76953125
+        },
+        "http": {
+          "samples": 12,
+          "rss_tail_mib": 67.75390625,
+          "anon_tail_mib": 40.46484375,
+          "anon_peak_mib": 59.00390625,
+          "anon_early_mib": 59.00390625,
+          "gc_heap_tail_mib": 23.9140625,
+          "gc_free_tail_mib": 8.658203125,
+          "gc_allocated_mib_per_second": 9.209384024874451,
+          "gc_epoch_increase": 27,
+          "min_host_available_mib": 795.77734375
+        },
+        "paseo": {
+          "samples": 12,
+          "rss_tail_mib": 67.79296875,
+          "anon_tail_mib": 40.50390625,
+          "anon_peak_mib": 40.51171875,
+          "anon_early_mib": 40.4921875,
+          "gc_heap_tail_mib": 23.9140625,
+          "gc_free_tail_mib": 9.724609375,
+          "gc_allocated_mib_per_second": 0.8006372463049848,
+          "gc_epoch_increase": 3,
+          "min_host_available_mib": 800.95703125
+        },
+        "mixed": {
+          "samples": 24,
+          "rss_tail_mib": 66.23828125,
+          "anon_tail_mib": 38.94921875,
+          "anon_peak_mib": 40.53125,
+          "anon_early_mib": 39.375,
+          "gc_heap_tail_mib": 22.412109375,
+          "gc_free_tail_mib": 6.484375,
+          "gc_allocated_mib_per_second": 9.903842143472415,
+          "gc_epoch_increase": 70,
+          "min_host_available_mib": 805.83984375
+        },
+        "cooldown": {
+          "samples": 36,
+          "rss_tail_mib": 54.697265625,
+          "anon_tail_mib": 27.408203125,
+          "anon_peak_mib": 38.73828125,
+          "anon_early_mib": 38.6796875,
+          "gc_heap_tail_mib": 10.96484375,
+          "gc_free_tail_mib": 0.0,
+          "gc_allocated_mib_per_second": 0.0786147469276941,
+          "gc_epoch_increase": 4,
+          "min_host_available_mib": 805.09375
+        }
+      },
+      "pressure_idle_attempt_increase": 0,
+      "natural_recovery_mib": 11.541015625,
+      "cooldown_above_baseline_mib": -25.888671875,
+      "natural_status_kib": {
+        "VmRSS": 56492,
+        "RssAnon": 28548,
+        "RssFile": 27944,
+        "RssShmem": 0,
+        "VmSwap": 0
+      },
+      "oom_free": true
+    },
+    {
+      "run": "04-before",
+      "variant": "before",
+      "sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+      "counts": {
+        "http_ok": 14359,
+        "http_errors": 0,
+        "paseo_ok": 87,
+        "paseo_errors": 0
+      },
+      "phases": {
+        "baseline": {
+          "samples": 6,
+          "rss_tail_mib": 89.44140625,
+          "anon_tail_mib": 62.31640625,
+          "anon_peak_mib": 62.44921875,
+          "anon_early_mib": 62.34375,
+          "gc_heap_tail_mib": 45.9609375,
+          "gc_free_tail_mib": 34.619140625,
+          "gc_allocated_mib_per_second": 0.07845758591343115,
+          "gc_epoch_increase": 0,
+          "min_host_available_mib": 780.44140625
+        },
+        "http": {
+          "samples": 12,
+          "rss_tail_mib": 80.43359375,
+          "anon_tail_mib": 53.30859375,
+          "anon_peak_mib": 62.56640625,
+          "anon_early_mib": 62.56640625,
+          "gc_heap_tail_mib": 36.703125,
+          "gc_free_tail_mib": 17.322265625,
+          "gc_allocated_mib_per_second": 9.842038481784607,
+          "gc_epoch_increase": 22,
+          "min_host_available_mib": 788.58984375
+        },
+        "paseo": {
+          "samples": 12,
+          "rss_tail_mib": 78.029296875,
+          "anon_tail_mib": 50.904296875,
+          "anon_peak_mib": 53.390625,
+          "anon_early_mib": 53.3515625,
+          "gc_heap_tail_mib": 34.21875,
+          "gc_free_tail_mib": 20.603515625,
+          "gc_allocated_mib_per_second": 1.7325100977776458,
+          "gc_epoch_increase": 6,
+          "min_host_available_mib": 784.25
+        },
+        "mixed": {
+          "samples": 24,
+          "rss_tail_mib": 70.744140625,
+          "anon_tail_mib": 43.619140625,
+          "anon_peak_mib": 49.3984375,
+          "anon_early_mib": 42.76953125,
+          "gc_heap_tail_mib": 26.98828125,
+          "gc_free_tail_mib": 7.69921875,
+          "gc_allocated_mib_per_second": 11.388606014508799,
+          "gc_epoch_increase": 62,
+          "min_host_available_mib": 792.37890625
+        },
+        "cooldown": {
+          "samples": 36,
+          "rss_tail_mib": 55.013671875,
+          "anon_tail_mib": 27.888671875,
+          "anon_peak_mib": 43.5,
+          "anon_early_mib": 43.48828125,
+          "gc_heap_tail_mib": 11.3984375,
+          "gc_free_tail_mib": 0.001953125,
+          "gc_allocated_mib_per_second": 0.07917611162985282,
+          "gc_epoch_increase": 4,
+          "min_host_available_mib": 796.5234375
+        }
+      },
+      "pressure_idle_attempt_increase": 0,
+      "natural_recovery_mib": 15.73046875,
+      "cooldown_above_baseline_mib": -34.427734375,
+      "natural_status_kib": {
+        "VmRSS": 56812,
+        "RssAnon": 29036,
+        "RssFile": 27776,
+        "RssShmem": 0,
+        "VmSwap": 0
+      },
+      "oom_free": true
+    }
+  ]
+}

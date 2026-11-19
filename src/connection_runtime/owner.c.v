@@ -1,13 +1,12 @@
 module connection_runtime
 
 import net
+import socket_runtime
 import net.websocket
 import sync
 import time
 
-#include <fcntl.h>
 
-fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
 
 // A session owns an interrupt descriptor for one connected socket. Atomic
 // CLOEXEC duplication excludes executed worker children and prevents a late
@@ -54,8 +53,7 @@ pub fn (mut session Session) duplicate_interrupt() !int {
 	session.mu.@lock()
 	defer { session.mu.unlock() }
 	fd := session.interrupt or { return error('websocket_session_released') }
-	owned := C.fcntl(fd, C.F_DUPFD_CLOEXEC, 0)
-	if owned < 0 { return error('websocket_interrupt_dup_failed') }
+	owned := socket_runtime.duplicate(fd) or { return error('websocket_interrupt_dup_failed') }
 	return owned
 }
 

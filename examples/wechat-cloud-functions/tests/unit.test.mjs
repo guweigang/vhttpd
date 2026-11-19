@@ -1,5 +1,4 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import test, {assert} from './support.mjs';
 import {createApplication, readConfig, invokeFunction, hash} from "../lib/application.mjs";
 import clientModule from "../client/vhttpd.js";
 
@@ -295,4 +294,25 @@ test("concurrent calls keep callbacks and Promise results isolated and settle on
   // Cross-call microtask ordering is not part of the contract; each call's is.
   assert.deepEqual(order.filter(value => value.startsWith("bob")), ["bob failed", "bob complete"]);
   assert.deepEqual(order.filter(value => value.startsWith("alice")), ["alice", "alice complete"]);
+});
+
+test('takeover selection uses authenticated identity and unknown results never execute remotely', async () => {
+  const db = {query:async()=>({rows:[{user_id:'id',open_id:'alice',union_id:''}]})};
+  let invoked=0,selected;
+  const app=createApplication({probe:()=>{}},config,{invoke:async()=>{invoked++;return 'remote';}});
+  const ctx=context('/functions/probe',{openid:'forged',APPID:'forged'},'a'.repeat(64),db);
+  ctx.runtime.takeover=input=>{selected=input;return {handled:true,status:200,body:'local',headers:{'content-type':'application/json'}};};
+  ctx.text=(body,status)=>({body,status});
+  const result=await app(ctx);
+  assert.equal(result.body,'local');assert.equal(invoked,0);
+  assert.equal(selected.account,'alice');assert.equal(selected.app_id,'test-app');
+  ctx.runtime.takeover=()=>{throw Error('transport disconnected');};
+  const unknown=await app(ctx);
+  assert.equal(unknown.status,502);assert.equal(unknown.body.error.code,'DEBUG_RESULT_UNKNOWN');assert.equal(invoked,0);
+  ctx.runtime.takeover=()=>({handled:false});
+  assert.equal((await app(ctx)).body.result,'remote');assert.equal(invoked,1);
+  let unauthorizedSelection=false;
+  const unauthorized=context('/functions/probe',{openid:'alice'},undefined,db);
+  unauthorized.runtime.takeover=()=>{unauthorizedSelection=true;};
+  assert.equal((await app(unauthorized)).status,401);assert.equal(unauthorizedSelection,false);
 });

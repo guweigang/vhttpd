@@ -10,29 +10,30 @@ import connection_runtime
 // ── Initialize handshake ────────────────────────────────────────────────
 // Must be called right after WebSocket connect, before any other RPC.
 
-fn (mut app App) codex_send_initialize(instance string, mut conn net_ws.Client) ! {
+fn (mut app App) codex_send_initialize(instance string, mut conn net_ws.Client) !&codex.Handshake {
 	log.info('[codex] 🤝 sending initialize instance=${codex.ProviderRuntime.normalize_instance(instance)} ...')
-	id := app.codex_next_rpc_id(instance)
-	params := '{"clientInfo":{"name":"codex_vhttpd","title":"vhttpd Codex Integration","version":"0.1.0"},"capabilities":{"experimentalApi":true}}'
+	owner := app.providers.codex.begin_handshake(instance, voidptr(&conn))
+	id := owner.id
+	params := '{"clientInfo":{"name":"codex_vhttpd","title":"vhttpd Codex Integration","version":"${vhttpd_version}"},"capabilities":{"experimentalApi":true}}'
 	msg := codex.RpcFrame.request('initialize', id, params)
 	log.info('[codex]    → ${msg}')
 	codex.RpcDebug.log('rpc.send.params.initialize', params)
-	conn.write_string(msg)!
+	conn.write_string(msg) or {
+		app.providers.codex.fail_handshake(instance, owner, 'initialize_send_failed', 'transport_error')
+		return err
+	}
 	app.emit('codex.rpc.sent', {
 		'method':   'initialize'
 		'id':       '${id}'
 		'instance': codex.ProviderRuntime.normalize_instance(instance)
 	})
+	return owner
 }
 
 fn (mut app App) codex_send_initialized(instance string, mut conn net_ws.Client) ! {
 	log.info('[codex] 🤝 sending initialized notification instance=${codex.ProviderRuntime.normalize_instance(instance)} ...')
 	msg := codex.RpcFrame.notification('initialized', '{}')
 	conn.write_string(msg)!
-	app.providers.codex_runtime_mutate[bool](instance, fn (mut rt codex.ProviderRuntime) bool {
-		rt.mark_initialized()
-		return true
-	})
 	app.emit('codex.rpc.sent', {
 		'method':   'initialized'
 		'instance': codex.ProviderRuntime.normalize_instance(instance)
@@ -59,10 +60,10 @@ fn (mut app App) codex_send_thread_start(instance string, mut conn net_ws.Client
 }
 
 // Called from run_websocket_upstream_provider after connect + on_connected.
-// Sends initialize request, waits briefly for response, then sends initialized.
+// Correlates initialize with its response before publishing a ready connection.
 fn (mut app App) codex_post_connect_handshake(instance string, mut session connection_runtime.Session, mut conn net_ws.Client) {
 	if session.stopped() { return }
-	app.codex_send_initialize(instance, mut conn) or {
+	mut owner := app.codex_send_initialize(instance, mut conn) or {
 		session.note_reason('handshake:initialize:${err}')
 		session.request_stop()
 		app.emit('codex.handshake.failed', {
@@ -72,9 +73,27 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut session conne
 		})
 		return
 	}
-	// Small delay to allow the initialize response to arrive via the message callback
-	if !session.wait(200 * time.millisecond) { return }
+	deadline := time.now().add(5 * time.second)
+	for !session.stopped() {
+		outcome := owner.outcome()
+		if outcome.accepted { break }
+		if outcome.failure != '' {
+			session.note_reason('handshake:initialize:${outcome.failure}')
+			session.request_stop()
+			return
+		}
+		if time.now() >= deadline {
+			app.providers.codex.fail_handshake(instance, owner, 'initialize_timeout', 'transport_error')
+			session.note_reason('handshake:initialize:timeout')
+			session.request_stop()
+			app.emit('codex.handshake.failed', { 'phase': 'initialize', 'instance': instance, 'error': 'initialize_timeout' })
+			return
+		}
+		if !session.wait(10 * time.millisecond) { return }
+	}
+	if session.stopped() { return }
 	app.codex_send_initialized(instance, mut conn) or {
+		app.providers.codex.fail_handshake(instance, owner, 'initialized_send_failed', 'transport_error')
 		session.note_reason('handshake:initialized:${err}')
 		session.request_stop()
 		app.emit('codex.handshake.failed', {
@@ -85,24 +104,15 @@ fn (mut app App) codex_post_connect_handshake(instance string, mut session conne
 		return
 	}
 
-	// Wait a bit and send thread/start to have an active thread
-	if !session.wait(200 * time.millisecond) { return }
-	app.codex_send_thread_start(instance, mut conn) or {
-		session.note_reason('handshake:thread/start:${err}')
-		session.request_stop()
-		app.emit('codex.handshake.failed', {
-			'phase':    'thread/start'
-			'instance': codex.ProviderRuntime.normalize_instance(instance)
-			'error':    '${err}'
-		})
-		return
+	if session.stopped() || !app.providers.codex.finish_handshake(instance, owner, &conn) { return }
+	// Legacy callers retain eager thread creation; application mode owns sessions.
+	if !app.providers.codex.snapshot(instance).application_messages {
+		app.codex_send_thread_start(instance, mut conn) or {
+			session.note_reason('handshake:thread/start:send_failed')
+			session.request_stop()
+			return
+		}
 	}
-
-	client := &conn
-	app.providers.codex_runtime_mutate[bool](instance, fn [client] (mut rt codex.ProviderRuntime) bool {
-		rt.attach_connection(client)
-		return true
-	})
 
 	app.emit('codex.handshake.completed', {
 		'phase':    'initialized'

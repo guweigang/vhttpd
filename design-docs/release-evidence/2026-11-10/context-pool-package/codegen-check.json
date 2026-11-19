@@ -1,0 +1,9 @@
+{
+  "veb__response_writer_state_enabled_T_App": "bool veb__response_writer_state_enabled_T_App(void) {\n\tif (!veb__response_body_can_share_gc_buffer()) {\n\t\treturn false;\n\t}\n\treturn true;\n}",
+  "veb__response_writer_state_enabled_T_AdminApp": "bool veb__response_writer_state_enabled_T_AdminApp(void) {\n\tif (!veb__response_body_can_share_gc_buffer()) {\n\t\treturn false;\n\t}\n\treturn true;\n}",
+  "hooks": [
+    "\t__v_result_fasthttp__Serverptr __or_opt_5 = fasthttp__new_server((fasthttp__ServerConfig){.family = params.family, .host = params.host, .port = params.port, .append_handler = veb__parallel_append_handler_T_AdminApp_Context, .make_state = veb__make_response_writer_state_T_AdminApp, .max_request_buffer_size = params.max_request_buffer_size, .max_request_body_size = params.max_request_body_size, .timeout_in_seconds = params.timeout_in_seconds, .user_data = (void*)(request_params), .handler = NULL});",
+    "\t__v_result_fasthttp__Serverptr __or_opt_5 = fasthttp__new_server((fasthttp__ServerConfig){.family = params.family, .host = params.host, .port = params.port, .append_handler = veb__parallel_append_handler_T_App_Context, .make_state = veb__make_response_writer_state_T_App, .max_request_buffer_size = params.max_request_buffer_size, .max_request_body_size = params.max_request_body_size, .timeout_in_seconds = params.timeout_in_seconds, .user_data = (void*)(request_params), .handler = NULL});"
+  ],
+  "generated_c_sha256": "eb54169517298ab535a483e5169c9b5592af43d4e1c27b5fa060e83cd854003e"
+}

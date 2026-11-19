@@ -151,8 +151,8 @@ fn (mut app App) build_admin_context() admin.RuntimeContext {
 		provider_runtime_gateway_count:         fn [provider_ctx] () int {
 			return provider_ctx.gateway_count()
 		}
-		relay_runtime_snapshot:                 fn [mut relay_runtime] () executor.AdminRelayRuntimeSummary {
-			return relay_admin_snapshot(mut relay_runtime)
+		relay_runtime_snapshot:                 fn [mut relay_runtime, mut control] () executor.AdminRelayRuntimeSummary {
+			return executor.AdminRelayRuntimeSummary{...relay_admin_snapshot(mut relay_runtime), diagnostics: control.relay_diagnostics_snapshot()}
 		}
 	}
 }
@@ -232,5 +232,5 @@ fn (app &App) admin_pipeline_runtime_snapshot() executor.AdminPipelineRuntimeSum
 }
 
 fn (mut app App) admin_relay_runtime_snapshot() executor.AdminRelayRuntimeSummary {
-	return relay_admin_snapshot(mut app.relay)
+	return executor.AdminRelayRuntimeSummary{...relay_admin_snapshot(mut app.relay), diagnostics: app.control_plane.relay_diagnostics_snapshot()}
 }

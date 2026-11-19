@@ -1,0 +1,61 @@
+Account-scoped remote HTTP takeover (first version)
+
+The caller keeps using the remote domain. The remote cloud application verifies
+its ordinary opaque session token against the remote DB, then calls
+ctx.runtime.takeover({app_id, account, method, path, body, headers}). Client event
+identity and x-wx-* headers never select the execution location.
+
+The remote SDK hook is in the shared createApplication entry, not individual
+cloud functions. Only authenticated POST /functions/<name> is eligible. Login,
+public storage HTTP endpoints and payment callbacks remain remote. This version
+relays MySQL persistence; it does not export disk storage operations performed
+inside a function as a remote storage resource.
+
+Control: local header-token-authenticated POST /admin/runtime/takeover, over the
+existing authenticated agent Relay to pipeline debug/control on the hub.
+Actions: start, status, stop. Start requires app_id and accounts, TTL 1s..15min.
+Stop requires the lease_id returned by start/status and the same attachment.
+The Desktop UI supports one OPENID per start, requires an explicit status check,
+and checks status every 5s after first use. Accounts and leases are memory-only.
+A lost/uncertain start response must be followed by status, never a blind retry.
+
+Remote config: adapters.<id>.kind=debug-control, options.route=debug/http;
+pipeline debug/control ingress=relay:<authenticated-hub>, egress=adapter:<id>.
+Local config: adapters.local_debug.kind=debug-http, engine=engine:<existing-vjsx>;
+pipeline debug/http ingress=relay:<authenticated-agent>, egress=adapter:local_debug.
+Desktop can generate the local receiver draft for review/publication/restart.
+Both runtime binaries and shared cloud application library must be updated.
+
+Request payloads travel as Relay message bodies, not an HTTP protocol in Relay.
+The local receiver dispatches directly into the existing vjsx engine, passing
+only the original Authorization header and a JSON body. The local application
+reauthenticates using the same remote session DB. No arbitrary URLs, local ports,
+admin paths, filesystem paths or client-selected engine can be called.
+
+A lease belongs to one opaque live carrier attachment. Reconnect, even with
+identical public IDs, never reactivates a lease. End/expiry/disconnect affects
+new requests. A request already admitted has exactly one send attempt; failure,
+loss, overload or deadline never falls back to executing the function remotely.
+An unknown outcome returns HTTP 502 DEBUG_RESULT_UNKNOWN. A committed operation
+may have succeeded despite that error. Users must inspect business state before
+retrying an operation. SQL is not replayed. New requests after disconnect run on
+the remote engine. Re-enable explicitly after reconnect.
+
+Each side bounds admitted function executions to 8, request and response bodies
+to 2 MiB, account list to 16 (Desktop: one), and each forwarded request to 60s.
+Oversize selected requests return 413; inactive and non-selected traffic keep
+the application body limit. Completed finite resource requests retire only their
+original channel registration, so status polling and SQL cannot exhaust the
+channel table or delete a replacement with reused IDs.
+Only ordinary finite responses are supported; streaming is rejected. Responses
+forward content-type/cache-control, and add x-vhttpd-execution: local. No account,
+Authorization token, request body or Relay secret is placed in control events.
+
+Validation (no Node runtime):
+VHTTPD_BIN=/path/to/vhttpd bash tests/relay-takeover/run.sh
+Uses two vhttpd/vjsx processes and a disposable MySQL 8 container. The fixture
+checks authenticated selection, spoofed identity, local execution with remote
+persistence, explicit end, expiry, committed-but-lost response without replay,
+remote fallback for new requests, and explicit re-enable without process restart.
+The same Python supervisor supports RELAY_DB_REMOTE_COMMAND / REMOTE_BINARY /
+REMOTE_HOST and DATABASE_HOST settings from tests/relay-db/e2e.py for Linux VM.

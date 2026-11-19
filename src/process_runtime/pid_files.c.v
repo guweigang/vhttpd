@@ -1,5 +1,6 @@
 module process_runtime
 
+$if !windows {
 import os
 import sync
 
@@ -8,7 +9,7 @@ import sync
 #include <sys/stat.h>
 
 fn C.open(&char, int, ...int) int
-fn C.write(int, voidptr, usize) isize
+fn C.write(int, voidptr, uint) int
 fn C.close(int) int
 fn C.fstat(int, &C.stat) int
 
@@ -61,7 +62,7 @@ fn create_pid_file(path string) !PidFile {
 		return error('PID file replaced during creation: ${path}')
 	}
 	text := '${os.getpid()}'
-	if C.write(fd, text.str, usize(text.len)) != text.len {
+	if C.write(fd, text.str, uint(text.len)) != text.len {
 		file.dispose(false)
 		return error('cannot write PID file ${path}')
 	}
@@ -116,4 +117,5 @@ pub fn acquire_pid_files(paths []string) ! {
 
 pub fn close_pid_files() {
 	unsafe { g_pid_files.close() }
+}
 }

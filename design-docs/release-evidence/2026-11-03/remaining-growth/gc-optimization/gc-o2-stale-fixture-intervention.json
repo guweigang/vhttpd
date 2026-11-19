@@ -1,0 +1,8 @@
+{
+  "utc": "2026-11-03T06:45:09.864077+00:00",
+  "pids": [
+    18665
+  ],
+  "scope": "Local isolated validation container only; remote soak untouched",
+  "reason": "Cached image carried old shared fixture with channel reads inside assertions; production mode removes receives. Updated source to already-validated strict fixture and stopped only hung old local executable. Resume targeted regressions separately."
+}

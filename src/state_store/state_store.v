@@ -31,6 +31,17 @@ pub struct MemoryStateStore[T] {
 mut:
 	mu   sync.Mutex
 	data map[string]StoredValue[T]
+	next_prune_ms i64
+}
+
+fn (mut store MemoryStateStore[T]) prune_on_write_unlocked(now_ms i64) {
+	if now_ms < store.next_prune_ms { return }
+	store.next_prune_ms = now_ms + 1000
+	for key, record in store.data {
+		if state_store_is_expired(record.expires_at_ms, now_ms) {
+			store.data.delete(key)
+		}
+	}
 }
 
 pub fn MemoryStateStore.new[T]() MemoryStateStore[T] {
@@ -80,6 +91,7 @@ pub fn (mut store MemoryStateStore[T]) set_with_ttl(key string, val T, ttl time.
 	defer {
 		store.mu.unlock()
 	}
+	store.prune_on_write_unlocked(now_ms)
 	if existing := store.data[key] {
 		store.data[key] = StoredValue[T]{
 			value:         val
@@ -215,6 +227,7 @@ pub fn (mut store MemoryStateStore[string]) compare_and_swap_set_with_ttl(key st
 	defer {
 		store.mu.unlock()
 	}
+	store.prune_on_write_unlocked(now_ms)
 	if mut existing := store.data[key] {
 		if state_store_is_expired(existing.expires_at_ms, now_ms) {
 			store.data.delete(key)

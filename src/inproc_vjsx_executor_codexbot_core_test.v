@@ -1,6 +1,8 @@
 module main
 
 import upstream.transport
+import executor as exec
+import net.http
 import os
 import time
 
@@ -145,29 +147,31 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_active_status_keeps_running_wi
 }
 
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_ignores_feishu_message_read_events() {
-	mut executor := codexbot_ts_new_executor(false)
-	defer {
-		executor.close()
-	}
-	mut app := InProcTestApp{}
-	resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
-		mode:        'websocket_upstream'
-		event:       'event'
-		id:          'codexbot_ts_feishu_read'
-		provider:    'feishu'
-		instance:    'main'
-		trace_id:    'trace_codexbot_ts_feishu_read'
-		event_type:  'im.message.message_read_v1'
-		message_id:  ''
-		target:      ''
-		target_type: ''
-		payload:     '{"schema":"2.0","header":{"event_type":"im.message.message_read_v1"}}'
-		metadata:    {
-			'event_id': 'evt_message_read_001'
+	codexbot_ts_with_temp_db('codexbot_ts_message_read.sqlite', fn (_ string) {
+		mut executor := codexbot_ts_new_executor(false)
+		defer {
+			executor.close()
 		}
-	}) or { panic(err) }
-	assert !resp.handled
-	assert resp.commands.len == 0
+		mut app := InProcTestApp{}
+		resp := executor.dispatch_websocket_upstream(mut app, transport.WorkerWebSocketUpstreamDispatchRequest{
+			mode:        'websocket_upstream'
+			event:       'event'
+			id:          'codexbot_ts_feishu_read'
+			provider:    'feishu'
+			instance:    'main'
+			trace_id:    'trace_codexbot_ts_feishu_read'
+			event_type:  'im.message.message_read_v1'
+			message_id:  ''
+			target:      ''
+			target_type: ''
+			payload:     '{"schema":"2.0","header":{"event_type":"im.message.message_read_v1"}}'
+			metadata:    {
+				'event_id': 'evt_message_read_001'
+			}
+		}) or { panic(err) }
+		assert !resp.handled
+		assert resp.commands.len == 0
+	})
 }
 
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_message_read_after_codex_notification_stays_safe() {
@@ -369,15 +373,6 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_scopes_sessions_by_feishu_thre
 }
 
 fn test_inproc_vjsx_executor_repo_codexbot_app_ts_stale_busy_stream_does_not_block_next_prompt() {
-	prev_stale := os.getenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS')
-	os.setenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS', '1', true)
-	defer {
-		if prev_stale == '' {
-			os.unsetenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS')
-		} else {
-			os.setenv('CODEXBOT_TS_ACTIVE_STREAM_STALE_MS', prev_stale, true)
-		}
-	}
 	codexbot_ts_with_harness('codexbot_ts_stale_busy.sqlite', true, fn (mut harness CodexbotTsTestHarness) {
 		first_resp := harness.dispatch_feishu_message('codexbot_ts_stale_busy_first',
 			'trace_codexbot_ts_stale_busy_first', 'chat_codexbot_ts_stale_busy',
@@ -422,5 +417,25 @@ fn test_inproc_vjsx_executor_repo_codexbot_app_ts_busy_guard_stays_within_same_f
 		assert second_resp.commands[0].target_type == 'message_id'
 		assert second_resp.commands[0].target == 'om_codexbot_thread_busy_second'
 		assert second_resp.commands[0].text.contains('Still working on the previous request in this thread.')
+	})
+}
+
+fn test_codexbot_application_state_requires_token_and_redacts_credentials() {
+	codexbot_ts_with_temp_db('codexbot_ts_private_state.sqlite', fn (_ string) {
+		config_path := os.join_path(codexbot_ts_fixture_root(), 'config', 'bot.local.json')
+		text := os.read_file(config_path) or { panic(err) }
+		os.write_file(config_path, text.replace('"app_id": ""', '"app_id": "test-id"').replace('"app_secret": ""', '"app_secret": "private-test-secret"')) or { panic(err) }
+		mut harness := CodexbotTsTestHarness{ executor: codexbot_ts_new_executor(false), app: InProcTestApp{} }
+		defer { harness.executor.close() }
+		denied := harness.executor.dispatch_http(mut harness.app, exec.HttpLogicDispatchRequest{
+			method: 'GET'
+			path: '/admin/state'
+			req: http.Request{ method: .get, url: '/admin/state' }
+		}) or { panic(err) }
+		assert denied.response.status == 401
+		allowed := harness.admin_state('state-auth', 'state-auth') or { panic(err) }
+		assert allowed.response.status == 200
+		assert allowed.response.body.contains('[redacted]')
+		assert !allowed.response.body.contains('private-test-secret')
 	})
 }

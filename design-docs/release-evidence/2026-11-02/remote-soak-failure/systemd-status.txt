@@ -1,0 +1,5 @@
+Result=oom-kill
+ExecMainStatus=1
+MemoryPeak=132329472
+ActiveState=failed
+SubState=failed

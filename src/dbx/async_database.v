@@ -21,6 +21,7 @@ pub struct AsyncDatabase {
 mut:
 	mu           sync.Mutex
 	closed       bool
+	sweeper_started bool
 	next_id      u64
 	transactions map[string]&AsyncDatabaseTransaction
 }
@@ -36,6 +37,29 @@ mut:
 
 pub fn AsyncDatabase.new(access AsyncDatabaseAccess) &AsyncDatabase {
 	return &AsyncDatabase{ access: access }
+}
+
+pub fn (mut database AsyncDatabase) start_transaction_sweeper() {
+	$if enable_db ? {
+		database.mu.@lock()
+		if database.closed || database.sweeper_started {
+			database.mu.unlock()
+			return
+		}
+		database.sweeper_started = true
+		database.mu.unlock()
+		spawn database.sweep_transactions()
+	}
+}
+
+$if enable_db ? {
+	fn (mut database AsyncDatabase) sweep_transactions() {
+		for !database.is_closed() {
+			time.sleep(100 * time.millisecond)
+			if database.is_closed() { return }
+			database.expire_transactions()
+		}
+	}
 }
 
 pub fn (mut database AsyncDatabase) run_json(request string, cancelled fn () bool) !string {
@@ -61,6 +85,24 @@ pub fn (mut database AsyncDatabase) close() {
 			tx.mu.@lock()
 			tx.finish(false) or {}
 			tx.mu.unlock()
+		}
+	}
+}
+
+// Network-backed users may disappear after BEGIN without sending rollback.
+// Do not wait on executing native SQL; its owning lease remains exclusive.
+pub fn (mut database AsyncDatabase) expire_transactions() {
+	$if enable_db ? {
+		database.mu.@lock()
+		mut entries := database.transactions.clone()
+		database.mu.unlock()
+		for id, mut tx in entries {
+			if !tx.mu.try_lock() { continue }
+			if !tx.closed && tx.deadline > 0 && time.sys_mono_now() >= tx.deadline {
+				tx.finish(false) or {}
+				tx.mu.unlock()
+				database.forget(id)
+			} else { tx.mu.unlock() }
 		}
 	}
 }

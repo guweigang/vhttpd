@@ -1,0 +1,10 @@
+{
+  "01-before/controller.log": "01-before/controller.txt",
+  "01-before/runtime.log": "01-before/runtime.txt",
+  "02-after/controller.log": "02-after/controller.txt",
+  "02-after/runtime.log": "02-after/runtime.txt",
+  "03-after/controller.log": "03-after/controller.txt",
+  "03-after/runtime.log": "03-after/runtime.txt",
+  "04-before/controller.log": "04-before/controller.txt",
+  "04-before/runtime.log": "04-before/runtime.txt"
+}

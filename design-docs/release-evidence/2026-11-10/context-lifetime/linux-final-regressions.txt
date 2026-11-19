@@ -1,0 +1,12 @@
+patching file vlib/veb/veb_fasthttp.v
+Hunk #1 succeeded at 358 (offset -4 lines).
+Hunk #2 succeeded at 368 (offset -4 lines).
+---- Testing... ----------------------------------------------------------------
+OK    [1/6] C: 26253.602 ms, R:    13.299 ms vlib/veb/controller_static_regression_test.v
+OK    [2/6] C: 16945.513 ms, R:     5.284 ms vlib/veb/middleware_response_lifetime_test.v
+OK    [3/6] C: 10086.851 ms, R:     4.477 ms vlib/veb/panic_recovery_test.v
+OK    [4/6] C: 10415.569 ms, R:     5.389 ms vlib/veb/response_writer_append_test.v
+OK    [5/6] C: 10240.207 ms, R:     9.166 ms vlib/veb/response_writer_state_test.v
+OK    [6/6] C: 10994.621 ms, R:  6165.993 ms vlib/veb/tests/persistent_connection_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 6 passed, 6 total. Elapsed time: 91154 ms, on 1 job. Comptime: 84936 ms. Runtime: 6203 ms.

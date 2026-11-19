@@ -1,0 +1,4 @@
+---- Testing... ----------------------------------------------------------------
+OK    3372.390 ms vlib/builtin/gc_uncollectable_reclaim_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 29595 ms, on 1 job. Comptime: 26188 ms. Runtime: 3372 ms.

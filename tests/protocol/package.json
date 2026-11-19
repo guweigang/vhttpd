@@ -1,0 +1,11 @@
+{
+  "name": "vhttpd-protocol-contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test *.test.mjs",
+    "check:codex": "node check-codex-schema.mjs",
+    "check:feishu": "node check-feishu-codec.mjs"
+  },
+  "devDependencies": { "@larksuiteoapi/node-sdk": "1.76.0" }
+}

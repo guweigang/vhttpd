@@ -4,6 +4,7 @@ import config
 import json2 as json
 import codex
 import feishu
+import conversation_binding
 
 // ── Codex Provider Runtime ──────────────────────────────────────────────
 
@@ -26,6 +27,8 @@ fn (mut hub ProviderRuntimeHub) codex_runtime_ensure_instance(instance string) c
 
 // Synchronous, state-only transitions. No network, App callback or nested
 // acquisition of codex.mu may run inside change; publish before unlocking.
+// Production callers use static callbacks here. Per-event captured closures
+// retain their native callback contexts beyond the completed transition.
 fn (mut hub ProviderRuntimeHub) codex_runtime_mutate[T](instance string, change fn (mut codex.ProviderRuntime) T) T {
 	resolved := codex.ProviderRuntime.normalize_instance(instance)
 	hub.codex.mu.@lock()
@@ -39,14 +42,24 @@ fn (mut hub ProviderRuntimeHub) codex_runtime_mutate[T](instance string, change 
 
 fn (mut hub ProviderRuntimeHub) codex_register_rpc(instance string, pending codex.PendingRpc) codex.RpcRegistration {
 	mut state := &hub.codex
-	return hub.codex_runtime_mutate[codex.RpcRegistration](instance, fn [mut state, instance, pending] (mut rt codex.ProviderRuntime) codex.RpcRegistration {
-		return state.register_rpc_unlocked(instance, mut rt, pending)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	hub.codex.mu.@lock()
+	mut rt := hub.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		hub.codex_runtime_store_unlocked(resolved_instance, rt)
+		hub.codex.mu.unlock()
+	}
+	return state.register_rpc_unlocked(instance, mut rt, pending)
 }
 
-struct CodexPendingRpcResult {
-	pending codex.PendingRpc
-	found   bool
+// Publish a state-only transition before releasing codex.mu.
+fn (mut hub ProviderRuntimeHub) codex_runtime_store_unlocked(instance string, rt codex.ProviderRuntime) {
+	if instance == 'main' {
+		hub.codex.runtime = rt
+	} else {
+		hub.codex.instances[instance] = rt
+	}
 }
 
 // Caller holds codex.mu; instance lookup uses the registry's own mutex.
@@ -121,37 +134,62 @@ fn (mut app App) codex_note_frame_received(instance string) i64 {
 }
 
 fn (mut app App) codex_take_pending_rpc(instance string, id int) (codex.PendingRpc, bool) {
-	result := app.providers.codex_runtime_mutate[CodexPendingRpcResult](instance, fn [id] (mut rt codex.ProviderRuntime) CodexPendingRpcResult {
-		pending, found := rt.take_pending_rpc(id)
-		return CodexPendingRpcResult{ pending: pending, found: found }
-	})
-	return result.pending, result.found
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	pending, found := rt.take_pending_rpc(id)
+	return pending, found
 }
 
 fn (mut app App) codex_remember_pending_rpc(instance string, id int, pending codex.PendingRpc) {
-	app.providers.codex_runtime_mutate[bool](instance, fn [id, pending] (mut rt codex.ProviderRuntime) bool {
-		rt.remember_pending_rpc(id, pending)
-		return true
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	rt.remember_pending_rpc(id, pending)
 }
 
 fn (mut app App) codex_bind_stream_to_thread(instance string, thread_id string, stream_id string) string {
-	return app.providers.codex_runtime_mutate[string](instance, fn [thread_id, stream_id] (mut rt codex.ProviderRuntime) string {
-		return rt.bind_stream_to_thread(thread_id, stream_id)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.bind_stream_to_thread(thread_id, stream_id)
 }
 
 fn (mut app App) codex_bind_stream_to_current_thread(instance string, stream_id string) string {
-	return app.providers.codex_runtime_mutate[string](instance, fn [stream_id] (mut rt codex.ProviderRuntime) string {
-		return rt.bind_stream_to_current_thread(stream_id)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.bind_stream_to_current_thread(stream_id)
 }
 
 fn (mut app App) codex_add_stream_target(instance string, stream_id string, target codex.CodexTarget) {
-	app.providers.codex_runtime_mutate[bool](instance, fn [stream_id, target] (mut rt codex.ProviderRuntime) bool {
-		rt.add_stream_target(stream_id, target)
-		return true
-	})
+	resolved := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	defer { app.providers.codex.mu.unlock() }
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved)
+	if rt.instance == '' { rt.instance = resolved }
+	rt.add_stream_target(stream_id, target)
+	if resolved == 'main' { app.providers.codex.runtime = rt } else { app.providers.codex.instances[resolved] = rt }
 }
 
 fn (mut app App) codex_stream_targets(instance string, stream_id string) []codex.CodexTarget {
@@ -166,19 +204,19 @@ fn (mut app App) codex_rebind_stream_target(instance string, stream_id string, t
 	resolved := codex.ProviderRuntime.normalize_instance(instance)
 	app.providers.codex.mu.@lock()
 	defer { app.providers.codex.mu.unlock() }
-	for stream in app.providers.codex.runtime.stream_map.keys() {
+	for stream in app.providers.codex.runtime.reply_sessions.streams() {
 		app.providers.codex.runtime.remove_stream_target(stream, target.platform, target.message_id)
 	}
 	for name in app.providers.codex.instances.keys() {
 		mut rt := app.providers.codex.instances[name] or { continue }
-		for stream in rt.stream_map.keys() {
+		for stream in rt.reply_sessions.streams() {
 			rt.remove_stream_target(stream, target.platform, target.message_id)
 		}
 		app.providers.codex.instances[name] = rt
 	}
 	mut next := app.providers.codex_runtime_instance_unlocked(resolved)
 	if next.instance == '' { next.instance = resolved }
-	next.add_stream_target(stream_id, target)
+	next.reply_sessions.rebind(stream_id, target)
 	if resolved == 'main' {
 		app.providers.codex.runtime = next
 	} else {
@@ -221,27 +259,51 @@ fn (mut app App) codex_clear_stream_targets_any(stream_id string) bool {
 }
 
 fn (mut app App) codex_clear_thread_binding(instance string, thread_id string) bool {
-	return app.providers.codex_runtime_mutate[bool](instance, fn [thread_id] (mut rt codex.ProviderRuntime) bool {
-		return rt.clear_thread_binding(thread_id)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.clear_thread_binding(thread_id)
 }
 
 fn (mut app App) codex_capture_thread_id(instance string, thread_id string) bool {
-	return app.providers.codex_runtime_mutate[bool](instance, fn [thread_id] (mut rt codex.ProviderRuntime) bool {
-		return rt.capture_thread_id(thread_id)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.capture_thread_id(thread_id)
 }
 
 fn (mut app App) codex_ensure_thread_id(instance string, thread_id string) bool {
-	return app.providers.codex_runtime_mutate[bool](instance, fn [thread_id] (mut rt codex.ProviderRuntime) bool {
-		return rt.ensure_thread_id(thread_id)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.ensure_thread_id(thread_id)
 }
 
 fn (mut app App) codex_repair_thread_stream_binding(instance string, thread_id string) string {
-	return app.providers.codex_runtime_mutate[string](instance, fn [thread_id] (mut rt codex.ProviderRuntime) string {
-		return rt.repair_thread_stream_binding(thread_id)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.repair_thread_stream_binding(thread_id)
 }
 
 fn (mut app App) codex_pending_stream_id(instance string) string {
@@ -258,16 +320,27 @@ fn (mut app App) codex_schedule_read_fallback(instance string, stream_id string,
 	if stream_id.trim_space() == '' || thread_id.trim_space() == '' {
 		return codex.ReadFallback{}, false
 	}
-	fallback := app.providers.codex_runtime_mutate[codex.ReadFallback](instance, fn [stream_id, thread_id] (mut rt codex.ProviderRuntime) codex.ReadFallback {
-		return rt.schedule_read_fallback(stream_id, thread_id)
-	})
-	return fallback, true
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.schedule_read_fallback(stream_id, thread_id), true
 }
 
 fn (mut app App) codex_clear_read_fallback(instance string, stream_id string) bool {
-	return app.providers.codex_runtime_mutate[bool](instance, fn [stream_id] (mut rt codex.ProviderRuntime) bool {
-		return rt.clear_read_fallback(stream_id)
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	app.providers.codex.mu.@lock()
+	mut rt := app.providers.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		app.providers.codex_runtime_store_unlocked(resolved_instance, rt)
+		app.providers.codex.mu.unlock()
+	}
+	return rt.clear_read_fallback(stream_id)
 }
 
 fn (mut app App) codex_read_fallback(instance string, stream_id string) (codex.ReadFallback, bool) {
@@ -281,7 +354,7 @@ fn (mut app App) codex_resolve_instance_for_stream(stream_id string) string {
 	}
 	for instance in app.providers.codex_runtime_known_instances() {
 		rt := app.providers.codex.snapshot(instance)
-		if stream_id in rt.stream_map {
+		if rt.reply_sessions.contains(stream_id) {
 			return instance
 		}
 		if rt.active_stream_id == stream_id {
@@ -339,6 +412,10 @@ fn (mut app App) codex_release_feishu_targets(released feishu.WireStreamRelease)
 }
 
 fn codex_release_feishu_targets_in_state(mut state codex.CodexState, released feishu.WireStreamRelease) {
+	codex_release_reply_targets_in_state(mut state, released.binding_release())
+}
+
+fn codex_release_reply_targets_in_state(mut state codex.CodexState, released conversation_binding.Release) {
 	stream_id := released.stream_id
 	retire_route := released.retire_route
 	if stream_id == '' { return }
@@ -356,20 +433,7 @@ fn codex_release_feishu_targets_in_state(mut state codex.CodexState, released fe
 		} else {
 			state.instances[name] or { continue }
 		}
-		mut keep := []codex.CodexTarget{}
-		for target in rt.stream_targets(stream_id) {
-			owned := if target.stream_generation == '' {
-				target.message_id in released.message_ids
-			} else {
-				target.stream_generation == released.generation && (target.buffer_message_id in released.message_ids || target.message_id in released.message_ids)
-			}
-			if target.platform != 'feishu' || !owned { keep << target }
-		}
-		if keep.len == 0 {
-			rt.stream_map.delete(stream_id)
-		} else {
-			rt.stream_map[stream_id] = keep
-		}
+		rt.reply_sessions.release_targets(released)
 		owner := codex.ProviderRuntime.normalize_instance(name)
 		if rt.stream_targets(stream_id).len > 0 {
 			retained[owner] = true

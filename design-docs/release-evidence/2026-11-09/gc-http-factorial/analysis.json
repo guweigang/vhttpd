@@ -1,0 +1,1839 @@
+{
+  "01-g0h0": {
+    "phases": {
+      "baseline": {
+        "RssAnon": 57.23438,
+        "VmRSS": 84.32812,
+        "gc_heap_bytes": 42.14062,
+        "gc_free_bytes": 29.99023,
+        "gc_unmapped_bytes": 0.0,
+        "duration_sampled": 55.016,
+        "last_anon_mib": 57.25,
+        "epoch_start": 17,
+        "epoch_end": 17,
+        "allocation_mib_s": 0.07727216526712116,
+        "last_trigger": {
+          "cached_threshold_bytes": 12960004,
+          "adjusted_allocated_bytes": 7675584,
+          "bytes_since_gc": 7753248,
+          "explicit_freed_bytes": 79312,
+          "non_gc_bytes_raw": 18446744073709551440,
+          "non_gc_at_gc_raw": 1472,
+          "composite_accounting_bytes": 3734064,
+          "atomic_accounting_bytes": 994928,
+          "root_bytes": 4524136,
+          "stack_scanned_bytes": 359504,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 3,
+        "idle_attempts": [
+          0
+        ]
+      },
+      "load": {
+        "RssAnon": 39.25586,
+        "VmRSS": 66.34961,
+        "gc_heap_bytes": 24.07422,
+        "gc_free_bytes": 5.9668,
+        "gc_unmapped_bytes": 18.06641,
+        "duration_sampled": 235.136,
+        "last_anon_mib": 39.21484375,
+        "epoch_start": 17,
+        "epoch_end": 209,
+        "allocation_mib_s": 13.87184400823237,
+        "last_trigger": {
+          "cached_threshold_bytes": 14624348,
+          "adjusted_allocated_bytes": 14192064,
+          "bytes_since_gc": 16365488,
+          "explicit_freed_bytes": 2175040,
+          "non_gc_bytes_raw": 18446744073709472976,
+          "non_gc_at_gc_raw": 18446744073709474592,
+          "composite_accounting_bytes": 4402032,
+          "atomic_accounting_bytes": 1596368,
+          "root_bytes": 4524136,
+          "stack_scanned_bytes": 448528,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 1,
+        "idle_attempts": [
+          0
+        ]
+      },
+      "cooldown": {
+        "RssAnon": 38.97656,
+        "VmRSS": 66.07031,
+        "gc_heap_bytes": 23.85547,
+        "gc_free_bytes": 7.13672,
+        "gc_unmapped_bytes": 18.28516,
+        "duration_sampled": 295.112,
+        "last_anon_mib": 38.9765625,
+        "epoch_start": 213,
+        "epoch_end": 215,
+        "allocation_mib_s": 0.0784527357410068,
+        "last_trigger": {
+          "cached_threshold_bytes": 13751092,
+          "adjusted_allocated_bytes": 10282624,
+          "bytes_since_gc": 10282624,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709471728,
+          "non_gc_at_gc_raw": 18446744073709471728,
+          "composite_accounting_bytes": 4227248,
+          "atomic_accounting_bytes": 1555504,
+          "root_bytes": 4524136,
+          "stack_scanned_bytes": 191792,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 11,
+        "idle_attempts": [
+          0
+        ]
+      }
+    },
+    "interventions": {
+      "00-before-forced": {
+        "smaps_total_anonymous_kib": 39.1875,
+        "gc_section_resident_anonymous_kib": 23.63281,
+        "anonymous_outside_gc_sections_kib": 15.55469,
+        "marked_bytes": 5.51486,
+        "heap_bytes": 23.85547,
+        "free_bytes": 4.625,
+        "malloc_in_use_bytes": 8.58797,
+        "malloc_free_bytes": 57.27531,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 4849664,
+            "resident_bytes": 4648960,
+            "count": 97
+          },
+          {
+            "type": 1,
+            "bytes": 14103376,
+            "resident_bytes": 0,
+            "count": 4127
+          },
+          {
+            "type": 2,
+            "bytes": 6061232,
+            "resident_bytes": 20131840,
+            "count": 4133
+          },
+          {
+            "type": 3,
+            "bytes": 19173376,
+            "resident_bytes": 0,
+            "count": 4
+          },
+          {
+            "type": 4,
+            "bytes": 8548352,
+            "resident_bytes": 0,
+            "count": 2087
+          },
+          {
+            "type": 5,
+            "bytes": 44187648,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 4.625,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "01-full-gc": {
+        "smaps_total_anonymous_kib": 39.1875,
+        "gc_section_resident_anonymous_kib": 23.63281,
+        "anonymous_outside_gc_sections_kib": 15.55469,
+        "marked_bytes": 5.5148,
+        "heap_bytes": 23.85547,
+        "free_bytes": 13.77344,
+        "malloc_in_use_bytes": 8.58797,
+        "malloc_free_bytes": 57.27531,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 14442496,
+            "resident_bytes": 14241792,
+            "count": 799
+          },
+          {
+            "type": 1,
+            "bytes": 6734064,
+            "resident_bytes": 0,
+            "count": 1786
+          },
+          {
+            "type": 2,
+            "bytes": 3837712,
+            "resident_bytes": 10539008,
+            "count": 1792
+          },
+          {
+            "type": 3,
+            "bytes": 19173376,
+            "resident_bytes": 0,
+            "count": 4
+          },
+          {
+            "type": 4,
+            "bytes": 8552448,
+            "resident_bytes": 4096,
+            "count": 2088
+          },
+          {
+            "type": 5,
+            "bytes": 44187648,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 13.77344,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "02-unmap-once": {
+        "smaps_total_anonymous_kib": 25.63672,
+        "gc_section_resident_anonymous_kib": 10.08203,
+        "anonymous_outside_gc_sections_kib": 15.55469,
+        "marked_bytes": 5.51047,
+        "heap_bytes": 10.11328,
+        "free_bytes": 0.04688,
+        "malloc_in_use_bytes": 8.58797,
+        "malloc_free_bytes": 57.27531,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 49152,
+            "resident_bytes": 49152,
+            "count": 4
+          },
+          {
+            "type": 1,
+            "bytes": 6721744,
+            "resident_bytes": 0,
+            "count": 1782
+          },
+          {
+            "type": 2,
+            "bytes": 3833648,
+            "resident_bytes": 10522624,
+            "count": 1788
+          },
+          {
+            "type": 3,
+            "bytes": 33583104,
+            "resident_bytes": 0,
+            "count": 798
+          },
+          {
+            "type": 4,
+            "bytes": 8552448,
+            "resident_bytes": 0,
+            "count": 2088
+          },
+          {
+            "type": 5,
+            "bytes": 44187648,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.04688,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "03-unmap-twice": {
+        "smaps_total_anonymous_kib": 25.58984,
+        "gc_section_resident_anonymous_kib": 10.03516,
+        "anonymous_outside_gc_sections_kib": 15.55469,
+        "marked_bytes": 5.50096,
+        "heap_bytes": 10.06641,
+        "free_bytes": 0.01172,
+        "malloc_in_use_bytes": 8.58797,
+        "malloc_free_bytes": 57.27531,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 12288,
+            "resident_bytes": 12288,
+            "count": 3
+          },
+          {
+            "type": 1,
+            "bytes": 6709712,
+            "resident_bytes": 0,
+            "count": 1779
+          },
+          {
+            "type": 2,
+            "bytes": 3833392,
+            "resident_bytes": 10510336,
+            "count": 1785
+          },
+          {
+            "type": 3,
+            "bytes": 33632256,
+            "resident_bytes": 0,
+            "count": 802
+          },
+          {
+            "type": 4,
+            "bytes": 8552448,
+            "resident_bytes": 0,
+            "count": 2088
+          },
+          {
+            "type": 5,
+            "bytes": 44187648,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.01172,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "04-libc-trim": {
+        "smaps_total_anonymous_kib": 25.58984,
+        "gc_section_resident_anonymous_kib": 10.03516,
+        "anonymous_outside_gc_sections_kib": 15.55469,
+        "marked_bytes": 5.50096,
+        "heap_bytes": 10.06641,
+        "free_bytes": 0.01172,
+        "malloc_in_use_bytes": 8.58797,
+        "malloc_free_bytes": 57.27531,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 12288,
+            "resident_bytes": 12288,
+            "count": 3
+          },
+          {
+            "type": 1,
+            "bytes": 6709712,
+            "resident_bytes": 0,
+            "count": 1779
+          },
+          {
+            "type": 2,
+            "bytes": 3833392,
+            "resident_bytes": 10510336,
+            "count": 1785
+          },
+          {
+            "type": 3,
+            "bytes": 33632256,
+            "resident_bytes": 0,
+            "count": 802
+          },
+          {
+            "type": 4,
+            "bytes": 8552448,
+            "resident_bytes": 0,
+            "count": 2088
+          },
+          {
+            "type": 5,
+            "bytes": 44187648,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.01172,
+        "unlocked_free_scalar_drift_bytes": 0
+      }
+    },
+    "natural_mapping_mib": {
+      "smaps_total_anonymous_kib": 38.97656,
+      "gc_section_resident_anonymous_kib": 23.63281,
+      "anonymous_outside_gc_sections_kib": 15.34375
+    },
+    "result": {
+      "status": "completed",
+      "http_ok": 19149,
+      "http_errors": 0,
+      "paseo_ok": 115,
+      "paseo_errors": 0,
+      "binary_sha256": "afc18af7680bb2dffe6140fc419c636decedc9a803990c468e0e84f937c0870e",
+      "intervention": {
+        "status": "completed",
+        "scope": "Post-natural-cooldown intervention only. Debugger/helper can perturb roots and native allocations; marked is conservative reachability, not exact liveness."
+      }
+    },
+    "host_available_min_mib": 774.6171875,
+    "oom_events_zero": true
+  },
+  "02-g1h1": {
+    "phases": {
+      "baseline": {
+        "RssAnon": 22.82227,
+        "VmRSS": 49.85352,
+        "gc_heap_bytes": 7.66406,
+        "gc_free_bytes": 0.00586,
+        "gc_unmapped_bytes": 38.29688,
+        "duration_sampled": 55.024,
+        "last_anon_mib": 23.3359375,
+        "epoch_start": 15,
+        "epoch_end": 17,
+        "allocation_mib_s": 0.07730003150613823,
+        "last_trigger": {
+          "cached_threshold_bytes": 12257836,
+          "adjusted_allocated_bytes": 1999792,
+          "bytes_since_gc": 1999792,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709551472,
+          "non_gc_at_gc_raw": 18446744073709551472,
+          "composite_accounting_bytes": 3557024,
+          "atomic_accounting_bytes": 963728,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 189264,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 2,
+        "idle_attempts": [
+          0,
+          1
+        ]
+      },
+      "load": {
+        "RssAnon": 58.75,
+        "VmRSS": 85.78125,
+        "gc_heap_bytes": 43.07031,
+        "gc_free_bytes": 19.02734,
+        "gc_unmapped_bytes": 2.89062,
+        "duration_sampled": 235.099,
+        "last_anon_mib": 58.7265625,
+        "epoch_start": 17,
+        "epoch_end": 87,
+        "allocation_mib_s": 11.385681994274222,
+        "last_trigger": {
+          "cached_threshold_bytes": 13872028,
+          "adjusted_allocated_bytes": 26505808,
+          "bytes_since_gc": 29860448,
+          "explicit_freed_bytes": 3355232,
+          "non_gc_bytes_raw": 18446744073709512528,
+          "non_gc_at_gc_raw": 18446744073709513120,
+          "composite_accounting_bytes": 4152720,
+          "atomic_accounting_bytes": 1550928,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 327264,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 1,
+        "idle_attempts": [
+          1
+        ]
+      },
+      "cooldown": {
+        "RssAnon": 33.27344,
+        "VmRSS": 60.30469,
+        "gc_heap_bytes": 17.73828,
+        "gc_free_bytes": 0.00391,
+        "gc_unmapped_bytes": 28.22266,
+        "duration_sampled": 295.12999999999994,
+        "last_anon_mib": 28.2734375,
+        "epoch_start": 89,
+        "epoch_end": 95,
+        "allocation_mib_s": 0.07837861862185204,
+        "last_trigger": {
+          "cached_threshold_bytes": 13540560,
+          "adjusted_allocated_bytes": 1582192,
+          "bytes_since_gc": 1582192,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709511904,
+          "non_gc_at_gc_raw": 18446744073709511904,
+          "composite_accounting_bytes": 4126096,
+          "atomic_accounting_bytes": 1545120,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 188880,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 10,
+        "idle_attempts": [
+          1,
+          2,
+          3,
+          4
+        ]
+      }
+    },
+    "interventions": {
+      "00-before-forced": {
+        "smaps_total_anonymous_kib": 28.89062,
+        "gc_section_resident_anonymous_kib": 13.01172,
+        "anonymous_outside_gc_sections_kib": 15.87891,
+        "marked_bytes": 5.40849,
+        "heap_bytes": 13.13672,
+        "free_bytes": 0.00391,
+        "malloc_in_use_bytes": 8.58946,
+        "malloc_free_bytes": 57.26991,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 1,
+            "bytes": 9522704,
+            "resident_bytes": 0,
+            "count": 2566
+          },
+          {
+            "type": 2,
+            "bytes": 4248048,
+            "resident_bytes": 13643776,
+            "count": 2570
+          },
+          {
+            "type": 3,
+            "bytes": 34418688,
+            "resident_bytes": 0,
+            "count": 927
+          },
+          {
+            "type": 4,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.00391,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "01-full-gc": {
+        "smaps_total_anonymous_kib": 28.89062,
+        "gc_section_resident_anonymous_kib": 13.01172,
+        "anonymous_outside_gc_sections_kib": 15.87891,
+        "marked_bytes": 5.41254,
+        "heap_bytes": 13.13672,
+        "free_bytes": 1.47656,
+        "malloc_in_use_bytes": 8.58946,
+        "malloc_free_bytes": 57.26991,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 1548288,
+            "resident_bytes": 1544192,
+            "count": 304
+          },
+          {
+            "type": 1,
+            "bytes": 8363248,
+            "resident_bytes": 0,
+            "count": 2189
+          },
+          {
+            "type": 2,
+            "bytes": 3863312,
+            "resident_bytes": 12099584,
+            "count": 2193
+          },
+          {
+            "type": 3,
+            "bytes": 34418688,
+            "resident_bytes": 0,
+            "count": 927
+          },
+          {
+            "type": 4,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 1.47656,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "02-unmap-once": {
+        "smaps_total_anonymous_kib": 27.43359,
+        "gc_section_resident_anonymous_kib": 11.55469,
+        "anonymous_outside_gc_sections_kib": 15.87891,
+        "marked_bytes": 5.40094,
+        "heap_bytes": 11.67578,
+        "free_bytes": 0.03125,
+        "malloc_in_use_bytes": 8.58946,
+        "malloc_free_bytes": 57.26991,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 32768,
+            "resident_bytes": 32768,
+            "count": 4
+          },
+          {
+            "type": 1,
+            "bytes": 8347296,
+            "resident_bytes": 0,
+            "count": 2185
+          },
+          {
+            "type": 2,
+            "bytes": 3862880,
+            "resident_bytes": 12083200,
+            "count": 2189
+          },
+          {
+            "type": 3,
+            "bytes": 35950592,
+            "resident_bytes": 0,
+            "count": 1227
+          },
+          {
+            "type": 4,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.03125,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "03-unmap-twice": {
+        "smaps_total_anonymous_kib": 27.40234,
+        "gc_section_resident_anonymous_kib": 11.52344,
+        "anonymous_outside_gc_sections_kib": 15.87891,
+        "marked_bytes": 5.40352,
+        "heap_bytes": 11.64453,
+        "free_bytes": 0.01172,
+        "malloc_in_use_bytes": 8.58946,
+        "malloc_free_bytes": 57.26991,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 12288,
+            "resident_bytes": 12288,
+            "count": 3
+          },
+          {
+            "type": 1,
+            "bytes": 8337792,
+            "resident_bytes": 0,
+            "count": 2182
+          },
+          {
+            "type": 2,
+            "bytes": 3860096,
+            "resident_bytes": 12070912,
+            "count": 2186
+          },
+          {
+            "type": 3,
+            "bytes": 35983360,
+            "resident_bytes": 0,
+            "count": 1231
+          },
+          {
+            "type": 4,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.01172,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "04-libc-trim": {
+        "smaps_total_anonymous_kib": 27.40234,
+        "gc_section_resident_anonymous_kib": 11.52344,
+        "anonymous_outside_gc_sections_kib": 15.87891,
+        "marked_bytes": 5.40352,
+        "heap_bytes": 11.64453,
+        "free_bytes": 0.01172,
+        "malloc_in_use_bytes": 8.58946,
+        "malloc_free_bytes": 57.26991,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 12288,
+            "resident_bytes": 12288,
+            "count": 3
+          },
+          {
+            "type": 1,
+            "bytes": 8337792,
+            "resident_bytes": 0,
+            "count": 2182
+          },
+          {
+            "type": 2,
+            "bytes": 3860096,
+            "resident_bytes": 12070912,
+            "count": 2186
+          },
+          {
+            "type": 3,
+            "bytes": 35983360,
+            "resident_bytes": 0,
+            "count": 1231
+          },
+          {
+            "type": 4,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.01172,
+        "unlocked_free_scalar_drift_bytes": 0
+      }
+    },
+    "natural_mapping_mib": {
+      "smaps_total_anonymous_kib": 28.60547,
+      "gc_section_resident_anonymous_kib": 12.9375,
+      "anonymous_outside_gc_sections_kib": 15.66797
+    },
+    "result": {
+      "status": "completed",
+      "http_ok": 19102,
+      "http_errors": 0,
+      "paseo_ok": 115,
+      "paseo_errors": 0,
+      "binary_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+      "intervention": {
+        "status": "completed",
+        "scope": "Post-natural-cooldown intervention only. Debugger/helper can perturb roots and native allocations; marked is conservative reachability, not exact liveness."
+      }
+    },
+    "host_available_min_mib": 791.2109375,
+    "oom_events_zero": true
+  },
+  "03-g0h1": {
+    "phases": {
+      "baseline": {
+        "RssAnon": 40.49219,
+        "VmRSS": 67.28516,
+        "gc_heap_bytes": 28.57812,
+        "gc_free_bytes": 2.95898,
+        "gc_unmapped_bytes": 12.63672,
+        "duration_sampled": 55.017,
+        "last_anon_mib": 41.5,
+        "epoch_start": 15,
+        "epoch_end": 15,
+        "allocation_mib_s": 0.07783294272253348,
+        "last_trigger": {
+          "cached_threshold_bytes": 11395740,
+          "adjusted_allocated_bytes": 23146352,
+          "bytes_since_gc": 27212336,
+          "explicit_freed_bytes": 4066384,
+          "non_gc_bytes_raw": 18446744073709551472,
+          "non_gc_at_gc_raw": 256,
+          "composite_accounting_bytes": 3182368,
+          "atomic_accounting_bytes": 618704,
+          "root_bytes": 4524136,
+          "stack_scanned_bytes": 176096,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 3,
+        "idle_attempts": [
+          0
+        ]
+      },
+      "load": {
+        "RssAnon": 50.28516,
+        "VmRSS": 77.07812,
+        "gc_heap_bytes": 34.87109,
+        "gc_free_bytes": 15.35547,
+        "gc_unmapped_bytes": 6.34375,
+        "duration_sampled": 235.197,
+        "last_anon_mib": 50.375,
+        "epoch_start": 15,
+        "epoch_end": 105,
+        "allocation_mib_s": 11.274997928826519,
+        "last_trigger": {
+          "cached_threshold_bytes": 14050176,
+          "adjusted_allocated_bytes": 21167296,
+          "bytes_since_gc": 23952848,
+          "explicit_freed_bytes": 2786144,
+          "non_gc_bytes_raw": 18446744073709503392,
+          "non_gc_at_gc_raw": 18446744073709503984,
+          "composite_accounting_bytes": 4203216,
+          "atomic_accounting_bytes": 1593696,
+          "root_bytes": 4524136,
+          "stack_scanned_bytes": 360592,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 1,
+        "idle_attempts": [
+          0
+        ]
+      },
+      "cooldown": {
+        "RssAnon": 50.23047,
+        "VmRSS": 77.02344,
+        "gc_heap_bytes": 34.79688,
+        "gc_free_bytes": 22.1543,
+        "gc_unmapped_bytes": 6.41797,
+        "duration_sampled": 295.08500000000004,
+        "last_anon_mib": 50.23046875,
+        "epoch_start": 107,
+        "epoch_end": 109,
+        "allocation_mib_s": 0.07856116189906086,
+        "last_trigger": {
+          "cached_threshold_bytes": 13632948,
+          "adjusted_allocated_bytes": 4086160,
+          "bytes_since_gc": 4086160,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709502192,
+          "non_gc_at_gc_raw": 18446744073709502192,
+          "composite_accounting_bytes": 4171760,
+          "atomic_accounting_bytes": 1547440,
+          "root_bytes": 4524136,
+          "stack_scanned_bytes": 189216,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 11,
+        "idle_attempts": [
+          0
+        ]
+      }
+    },
+    "interventions": {
+      "00-before-forced": {
+        "smaps_total_anonymous_kib": 50.44141,
+        "gc_section_resident_anonymous_kib": 34.71094,
+        "anonymous_outside_gc_sections_kib": 15.73047,
+        "marked_bytes": 5.45425,
+        "heap_bytes": 34.79688,
+        "free_bytes": 20.10938,
+        "malloc_in_use_bytes": 8.6066,
+        "malloc_free_bytes": 57.25668,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 21102592,
+            "resident_bytes": 21102592,
+            "count": 559
+          },
+          {
+            "type": 1,
+            "bytes": 10607472,
+            "resident_bytes": 0,
+            "count": 2957
+          },
+          {
+            "type": 2,
+            "bytes": 4777104,
+            "resident_bytes": 15294464,
+            "count": 2962
+          },
+          {
+            "type": 3,
+            "bytes": 6729728,
+            "resident_bytes": 0,
+            "count": 2
+          },
+          {
+            "type": 4,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 20.125,
+        "unlocked_free_scalar_drift_bytes": -16384
+      },
+      "01-full-gc": {
+        "smaps_total_anonymous_kib": 50.44141,
+        "gc_section_resident_anonymous_kib": 34.71094,
+        "anonymous_outside_gc_sections_kib": 15.73047,
+        "marked_bytes": 5.43271,
+        "heap_bytes": 34.79688,
+        "free_bytes": 23.80469,
+        "malloc_in_use_bytes": 8.6066,
+        "malloc_free_bytes": 57.25668,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 24961024,
+            "resident_bytes": 24961024,
+            "count": 1028
+          },
+          {
+            "type": 1,
+            "bytes": 7677456,
+            "resident_bytes": 0,
+            "count": 2016
+          },
+          {
+            "type": 2,
+            "bytes": 3848688,
+            "resident_bytes": 11436032,
+            "count": 2021
+          },
+          {
+            "type": 3,
+            "bytes": 6729728,
+            "resident_bytes": 0,
+            "count": 2
+          },
+          {
+            "type": 4,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 23.80469,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "02-unmap-once": {
+        "smaps_total_anonymous_kib": 26.64453,
+        "gc_section_resident_anonymous_kib": 10.91406,
+        "anonymous_outside_gc_sections_kib": 15.73047,
+        "marked_bytes": 5.42638,
+        "heap_bytes": 11.0,
+        "free_bytes": 0.01172,
+        "malloc_in_use_bytes": 8.6066,
+        "malloc_free_bytes": 57.25668,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 12288,
+            "resident_bytes": 12288,
+            "count": 1
+          },
+          {
+            "type": 1,
+            "bytes": 7673472,
+            "resident_bytes": 0,
+            "count": 2015
+          },
+          {
+            "type": 2,
+            "bytes": 3848576,
+            "resident_bytes": 11431936,
+            "count": 2020
+          },
+          {
+            "type": 3,
+            "bytes": 31682560,
+            "resident_bytes": 0,
+            "count": 1028
+          },
+          {
+            "type": 4,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.01172,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "03-unmap-twice": {
+        "smaps_total_anonymous_kib": 26.64453,
+        "gc_section_resident_anonymous_kib": 10.91406,
+        "anonymous_outside_gc_sections_kib": 15.73047,
+        "marked_bytes": 5.4231,
+        "heap_bytes": 11.0,
+        "free_bytes": 0.03125,
+        "malloc_in_use_bytes": 8.6066,
+        "malloc_free_bytes": 57.25668,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 32768,
+            "resident_bytes": 32768,
+            "count": 5
+          },
+          {
+            "type": 1,
+            "bytes": 7656256,
+            "resident_bytes": 0,
+            "count": 2010
+          },
+          {
+            "type": 2,
+            "bytes": 3845312,
+            "resident_bytes": 11411456,
+            "count": 2015
+          },
+          {
+            "type": 3,
+            "bytes": 31682560,
+            "resident_bytes": 0,
+            "count": 1028
+          },
+          {
+            "type": 4,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.03125,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "04-libc-trim": {
+        "smaps_total_anonymous_kib": 26.64453,
+        "gc_section_resident_anonymous_kib": 10.91406,
+        "anonymous_outside_gc_sections_kib": 15.73047,
+        "marked_bytes": 5.4231,
+        "heap_bytes": 11.0,
+        "free_bytes": 0.03125,
+        "malloc_in_use_bytes": 8.6066,
+        "malloc_free_bytes": 57.25668,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 32768,
+            "resident_bytes": 32768,
+            "count": 5
+          },
+          {
+            "type": 1,
+            "bytes": 7656256,
+            "resident_bytes": 0,
+            "count": 2010
+          },
+          {
+            "type": 2,
+            "bytes": 3845312,
+            "resident_bytes": 11411456,
+            "count": 2015
+          },
+          {
+            "type": 3,
+            "bytes": 31682560,
+            "resident_bytes": 0,
+            "count": 1028
+          },
+          {
+            "type": 4,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.03125,
+        "unlocked_free_scalar_drift_bytes": 0
+      }
+    },
+    "natural_mapping_mib": {
+      "smaps_total_anonymous_kib": 50.23047,
+      "gc_section_resident_anonymous_kib": 34.71094,
+      "anonymous_outside_gc_sections_kib": 15.51953
+    },
+    "result": {
+      "status": "completed",
+      "http_ok": 19135,
+      "http_errors": 0,
+      "paseo_ok": 116,
+      "paseo_errors": 0,
+      "binary_sha256": "36ab7d06a363b89d8d456b16fb0b9c1c94f63c6a3bca9be9d3d1c7566c2770d1",
+      "intervention": {
+        "status": "completed",
+        "scope": "Post-natural-cooldown intervention only. Debugger/helper can perturb roots and native allocations; marked is conservative reachability, not exact liveness."
+      }
+    },
+    "host_available_min_mib": 769.578125,
+    "oom_events_zero": true
+  },
+  "04-g1h0": {
+    "phases": {
+      "baseline": {
+        "RssAnon": 22.62109,
+        "VmRSS": 48.87891,
+        "gc_heap_bytes": 7.5957,
+        "gc_free_bytes": 0.00195,
+        "gc_unmapped_bytes": 33.61914,
+        "duration_sampled": 55.014,
+        "last_anon_mib": 23.10546875,
+        "epoch_start": 15,
+        "epoch_end": 18,
+        "allocation_mib_s": 0.07699345209287635,
+        "last_trigger": {
+          "cached_threshold_bytes": 12315180,
+          "adjusted_allocated_bytes": 2009568,
+          "bytes_since_gc": 2009568,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709551472,
+          "non_gc_at_gc_raw": 18446744073709551472,
+          "composite_accounting_bytes": 3592096,
+          "atomic_accounting_bytes": 908432,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 189776,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 2,
+        "idle_attempts": [
+          0,
+          1
+        ]
+      },
+      "load": {
+        "RssAnon": 53.67773,
+        "VmRSS": 79.93555,
+        "gc_heap_bytes": 38.10938,
+        "gc_free_bytes": 11.01172,
+        "gc_unmapped_bytes": 3.10547,
+        "duration_sampled": 235.269,
+        "last_anon_mib": 53.9296875,
+        "epoch_start": 18,
+        "epoch_end": 118,
+        "allocation_mib_s": 14.02081049181419,
+        "last_trigger": {
+          "cached_threshold_bytes": 13682500,
+          "adjusted_allocated_bytes": 2545520,
+          "bytes_since_gc": 3038608,
+          "explicit_freed_bytes": 492080,
+          "non_gc_bytes_raw": 18446744073709499184,
+          "non_gc_at_gc_raw": 18446744073709498176,
+          "composite_accounting_bytes": 4287248,
+          "atomic_accounting_bytes": 1646880,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 566336,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 1,
+        "idle_attempts": [
+          1
+        ]
+      },
+      "cooldown": {
+        "RssAnon": 32.33789,
+        "VmRSS": 58.5957,
+        "gc_heap_bytes": 16.75,
+        "gc_free_bytes": 0.00195,
+        "gc_unmapped_bytes": 24.46484,
+        "duration_sampled": 295.086,
+        "last_anon_mib": 27.34765625,
+        "epoch_start": 120,
+        "epoch_end": 126,
+        "allocation_mib_s": 0.07848410686114068,
+        "last_trigger": {
+          "cached_threshold_bytes": 13669616,
+          "adjusted_allocated_bytes": 1531424,
+          "bytes_since_gc": 1531424,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709496896,
+          "non_gc_at_gc_raw": 18446744073709496896,
+          "composite_accounting_bytes": 4189504,
+          "atomic_accounting_bytes": 1549984,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 189392,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 10,
+        "idle_attempts": [
+          1,
+          2,
+          3,
+          4
+        ]
+      }
+    },
+    "interventions": {
+      "00-before-forced": {
+        "smaps_total_anonymous_kib": 27.99609,
+        "gc_section_resident_anonymous_kib": 12.06641,
+        "anonymous_outside_gc_sections_kib": 15.92969,
+        "marked_bytes": 5.4736,
+        "heap_bytes": 12.1875,
+        "free_bytes": 0.00391,
+        "malloc_in_use_bytes": 8.56195,
+        "malloc_free_bytes": 57.50446,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 1,
+            "bytes": 8562432,
+            "resident_bytes": 0,
+            "count": 2323
+          },
+          {
+            "type": 2,
+            "bytes": 4212992,
+            "resident_bytes": 12652544,
+            "count": 2329
+          },
+          {
+            "type": 3,
+            "bytes": 30437376,
+            "resident_bytes": 0,
+            "count": 784
+          },
+          {
+            "type": 4,
+            "bytes": 24576,
+            "resident_bytes": 0,
+            "count": 6
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.00391,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "01-full-gc": {
+        "smaps_total_anonymous_kib": 27.99609,
+        "gc_section_resident_anonymous_kib": 12.06641,
+        "anonymous_outside_gc_sections_kib": 15.92969,
+        "marked_bytes": 5.4498,
+        "heap_bytes": 12.1875,
+        "free_bytes": 1.45312,
+        "malloc_in_use_bytes": 8.56204,
+        "malloc_free_bytes": 57.50436,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 1523712,
+            "resident_bytes": 1519616,
+            "count": 283
+          },
+          {
+            "type": 1,
+            "bytes": 7438224,
+            "resident_bytes": 0,
+            "count": 1953
+          },
+          {
+            "type": 2,
+            "bytes": 3817584,
+            "resident_bytes": 11132928,
+            "count": 1959
+          },
+          {
+            "type": 3,
+            "bytes": 30437376,
+            "resident_bytes": 0,
+            "count": 784
+          },
+          {
+            "type": 4,
+            "bytes": 24576,
+            "resident_bytes": 0,
+            "count": 6
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 1.45312,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "02-unmap-once": {
+        "smaps_total_anonymous_kib": 26.55078,
+        "gc_section_resident_anonymous_kib": 10.62109,
+        "anonymous_outside_gc_sections_kib": 15.92969,
+        "marked_bytes": 5.4503,
+        "heap_bytes": 10.73828,
+        "free_bytes": 0.00781,
+        "malloc_in_use_bytes": 8.56213,
+        "malloc_free_bytes": 57.50427,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 8192,
+            "resident_bytes": 8192,
+            "count": 1
+          },
+          {
+            "type": 1,
+            "bytes": 7435472,
+            "resident_bytes": 0,
+            "count": 1952
+          },
+          {
+            "type": 2,
+            "bytes": 3816240,
+            "resident_bytes": 11128832,
+            "count": 1958
+          },
+          {
+            "type": 3,
+            "bytes": 31956992,
+            "resident_bytes": 0,
+            "count": 1066
+          },
+          {
+            "type": 4,
+            "bytes": 24576,
+            "resident_bytes": 0,
+            "count": 6
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.00781,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "03-unmap-twice": {
+        "smaps_total_anonymous_kib": 26.54297,
+        "gc_section_resident_anonymous_kib": 10.61328,
+        "anonymous_outside_gc_sections_kib": 15.92969,
+        "marked_bytes": 5.45026,
+        "heap_bytes": 10.73047,
+        "free_bytes": 0.0,
+        "malloc_in_use_bytes": 8.56606,
+        "malloc_free_bytes": 57.50035,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 1,
+            "bytes": 7435472,
+            "resident_bytes": 0,
+            "count": 1952
+          },
+          {
+            "type": 2,
+            "bytes": 3816240,
+            "resident_bytes": 11128832,
+            "count": 1958
+          },
+          {
+            "type": 3,
+            "bytes": 31965184,
+            "resident_bytes": 0,
+            "count": 1067
+          },
+          {
+            "type": 4,
+            "bytes": 24576,
+            "resident_bytes": 0,
+            "count": 6
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.0,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "04-libc-trim": {
+        "smaps_total_anonymous_kib": 26.54297,
+        "gc_section_resident_anonymous_kib": 10.61328,
+        "anonymous_outside_gc_sections_kib": 15.92969,
+        "marked_bytes": 5.45026,
+        "heap_bytes": 10.73047,
+        "free_bytes": 0.0,
+        "malloc_in_use_bytes": 8.57007,
+        "malloc_free_bytes": 57.49634,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 1,
+            "bytes": 7435472,
+            "resident_bytes": 0,
+            "count": 1952
+          },
+          {
+            "type": 2,
+            "bytes": 3816240,
+            "resident_bytes": 11128832,
+            "count": 1958
+          },
+          {
+            "type": 3,
+            "bytes": 31965184,
+            "resident_bytes": 0,
+            "count": 1067
+          },
+          {
+            "type": 4,
+            "bytes": 24576,
+            "resident_bytes": 0,
+            "count": 6
+          },
+          {
+            "type": 5,
+            "bytes": 43216896,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.0,
+        "unlocked_free_scalar_drift_bytes": 0
+      }
+    },
+    "natural_mapping_mib": {
+      "smaps_total_anonymous_kib": 27.6875,
+      "gc_section_resident_anonymous_kib": 11.97266,
+      "anonymous_outside_gc_sections_kib": 15.71484
+    },
+    "result": {
+      "status": "completed",
+      "http_ok": 19156,
+      "http_errors": 0,
+      "paseo_ok": 116,
+      "paseo_errors": 0,
+      "binary_sha256": "2ef2baadf9b432aa3e9a0769a6ec6c133d7cf413b0eb5de1413868cba38cc501",
+      "intervention": {
+        "status": "completed",
+        "scope": "Post-natural-cooldown intervention only. Debugger/helper can perturb roots and native allocations; marked is conservative reachability, not exact liveness."
+      }
+    },
+    "host_available_min_mib": 733.45703125,
+    "oom_events_zero": true
+  },
+  "05-g1h1-repeat": {
+    "phases": {
+      "baseline": {
+        "RssAnon": 23.68555,
+        "VmRSS": 50.87695,
+        "gc_heap_bytes": 7.38672,
+        "gc_free_bytes": 0.00977,
+        "gc_unmapped_bytes": 38.57422,
+        "duration_sampled": 55.015,
+        "last_anon_mib": 24.23828125,
+        "epoch_start": 16,
+        "epoch_end": 18,
+        "allocation_mib_s": 0.0794297422613435,
+        "last_trigger": {
+          "cached_threshold_bytes": 12271892,
+          "adjusted_allocated_bytes": 2040704,
+          "bytes_since_gc": 2040704,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709551520,
+          "non_gc_at_gc_raw": 18446744073709551520,
+          "composite_accounting_bytes": 3567856,
+          "atomic_accounting_bytes": 918960,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 191056,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 2,
+        "idle_attempts": [
+          0,
+          1
+        ]
+      },
+      "load": {
+        "RssAnon": 50.54883,
+        "VmRSS": 77.74023,
+        "gc_heap_bytes": 45.96094,
+        "gc_free_bytes": 26.88867,
+        "gc_unmapped_bytes": 0.0,
+        "duration_sampled": 235.083,
+        "last_anon_mib": 50.55078125,
+        "epoch_start": 18,
+        "epoch_end": 112,
+        "allocation_mib_s": 11.413050540261311,
+        "last_trigger": {
+          "cached_threshold_bytes": 13639300,
+          "adjusted_allocated_bytes": 12510224,
+          "bytes_since_gc": 14194128,
+          "explicit_freed_bytes": 1684448,
+          "non_gc_bytes_raw": 18446744073709501312,
+          "non_gc_at_gc_raw": 18446744073709501856,
+          "composite_accounting_bytes": 4152944,
+          "atomic_accounting_bytes": 1533552,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 212848,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 1,
+        "idle_attempts": [
+          1
+        ]
+      },
+      "cooldown": {
+        "RssAnon": 33.36328,
+        "VmRSS": 60.55469,
+        "gc_heap_bytes": 16.70703,
+        "gc_free_bytes": 0.00195,
+        "gc_unmapped_bytes": 29.25391,
+        "duration_sampled": 295.10400000000004,
+        "last_anon_mib": 28.78515625,
+        "epoch_start": 114,
+        "epoch_end": 120,
+        "allocation_mib_s": 0.0802560060460147,
+        "last_trigger": {
+          "cached_threshold_bytes": 13572724,
+          "adjusted_allocated_bytes": 1914528,
+          "bytes_since_gc": 1914528,
+          "explicit_freed_bytes": 0,
+          "non_gc_bytes_raw": 18446744073709500624,
+          "non_gc_at_gc_raw": 18446744073709500624,
+          "composite_accounting_bytes": 4142304,
+          "atomic_accounting_bytes": 1527216,
+          "root_bytes": 4524328,
+          "stack_scanned_bytes": 190992,
+          "free_space_divisor": 1,
+          "epoch_changed_during_read": false
+        },
+        "legacy_trim_attempts": 10,
+        "idle_attempts": [
+          1,
+          2,
+          3,
+          4
+        ]
+      }
+    },
+    "interventions": {
+      "00-before-forced": {
+        "smaps_total_anonymous_kib": 29.48047,
+        "gc_section_resident_anonymous_kib": 12.49219,
+        "anonymous_outside_gc_sections_kib": 16.98828,
+        "marked_bytes": 5.40688,
+        "heap_bytes": 12.61328,
+        "free_bytes": 0.00391,
+        "malloc_in_use_bytes": 8.59488,
+        "malloc_free_bytes": 114.06918,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 4096,
+            "resident_bytes": 0,
+            "count": 1
+          },
+          {
+            "type": 1,
+            "bytes": 8935104,
+            "resident_bytes": 0,
+            "count": 2437
+          },
+          {
+            "type": 2,
+            "bytes": 4286784,
+            "resident_bytes": 13099008,
+            "count": 2441
+          },
+          {
+            "type": 3,
+            "bytes": 34967552,
+            "resident_bytes": 0,
+            "count": 717
+          },
+          {
+            "type": 4,
+            "bytes": 8388608,
+            "resident_bytes": 0,
+            "count": 2048
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.00391,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "01-full-gc": {
+        "smaps_total_anonymous_kib": 29.48047,
+        "gc_section_resident_anonymous_kib": 12.49219,
+        "anonymous_outside_gc_sections_kib": 16.98828,
+        "marked_bytes": 5.40959,
+        "heap_bytes": 12.61328,
+        "free_bytes": 1.80859,
+        "malloc_in_use_bytes": 8.59488,
+        "malloc_free_bytes": 114.06918,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 1896448,
+            "resident_bytes": 1892352,
+            "count": 348
+          },
+          {
+            "type": 1,
+            "bytes": 7505520,
+            "resident_bytes": 0,
+            "count": 1976
+          },
+          {
+            "type": 2,
+            "bytes": 3824016,
+            "resident_bytes": 11206656,
+            "count": 1980
+          },
+          {
+            "type": 3,
+            "bytes": 34967552,
+            "resident_bytes": 0,
+            "count": 717
+          },
+          {
+            "type": 4,
+            "bytes": 8388608,
+            "resident_bytes": 0,
+            "count": 2048
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 1.80859,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "02-unmap-once": {
+        "smaps_total_anonymous_kib": 27.67578,
+        "gc_section_resident_anonymous_kib": 10.6875,
+        "anonymous_outside_gc_sections_kib": 16.98828,
+        "marked_bytes": 5.40828,
+        "heap_bytes": 10.80469,
+        "free_bytes": 0.0,
+        "malloc_in_use_bytes": 8.59488,
+        "malloc_free_bytes": 114.06918,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 0,
+            "resident_bytes": 0,
+            "count": 0
+          },
+          {
+            "type": 1,
+            "bytes": 7505520,
+            "resident_bytes": 0,
+            "count": 1976
+          },
+          {
+            "type": 2,
+            "bytes": 3824016,
+            "resident_bytes": 11206656,
+            "count": 1980
+          },
+          {
+            "type": 3,
+            "bytes": 36864000,
+            "resident_bytes": 0,
+            "count": 1065
+          },
+          {
+            "type": 4,
+            "bytes": 8388608,
+            "resident_bytes": 0,
+            "count": 2048
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.0,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "03-unmap-twice": {
+        "smaps_total_anonymous_kib": 27.67578,
+        "gc_section_resident_anonymous_kib": 10.6875,
+        "anonymous_outside_gc_sections_kib": 16.98828,
+        "marked_bytes": 5.39919,
+        "heap_bytes": 10.80469,
+        "free_bytes": 0.01953,
+        "malloc_in_use_bytes": 8.59488,
+        "malloc_free_bytes": 114.06918,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 20480,
+            "resident_bytes": 20480,
+            "count": 5
+          },
+          {
+            "type": 1,
+            "bytes": 7488112,
+            "resident_bytes": 0,
+            "count": 1971
+          },
+          {
+            "type": 2,
+            "bytes": 3820944,
+            "resident_bytes": 11186176,
+            "count": 1975
+          },
+          {
+            "type": 3,
+            "bytes": 36864000,
+            "resident_bytes": 0,
+            "count": 1065
+          },
+          {
+            "type": 4,
+            "bytes": 8388608,
+            "resident_bytes": 0,
+            "count": 2048
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.01953,
+        "unlocked_free_scalar_drift_bytes": 0
+      },
+      "04-libc-trim": {
+        "smaps_total_anonymous_kib": 27.67578,
+        "gc_section_resident_anonymous_kib": 10.6875,
+        "anonymous_outside_gc_sections_kib": 16.98828,
+        "marked_bytes": 5.39919,
+        "heap_bytes": 10.80469,
+        "free_bytes": 0.01953,
+        "malloc_in_use_bytes": 8.59563,
+        "malloc_free_bytes": 114.06844,
+        "regions": [
+          {
+            "type": 0,
+            "bytes": 20480,
+            "resident_bytes": 20480,
+            "count": 5
+          },
+          {
+            "type": 1,
+            "bytes": 7488112,
+            "resident_bytes": 0,
+            "count": 1971
+          },
+          {
+            "type": 2,
+            "bytes": 3820944,
+            "resident_bytes": 11186176,
+            "count": 1975
+          },
+          {
+            "type": 3,
+            "bytes": 36864000,
+            "resident_bytes": 0,
+            "count": 1065
+          },
+          {
+            "type": 4,
+            "bytes": 8388608,
+            "resident_bytes": 0,
+            "count": 2048
+          },
+          {
+            "type": 5,
+            "bytes": 48193536,
+            "resident_bytes": 0,
+            "count": 8
+          }
+        ],
+        "locked_free_mib": 0.01953,
+        "unlocked_free_scalar_drift_bytes": 0
+      }
+    },
+    "natural_mapping_mib": {
+      "smaps_total_anonymous_kib": 29.16016,
+      "gc_section_resident_anonymous_kib": 12.36719,
+      "anonymous_outside_gc_sections_kib": 16.79297
+    },
+    "result": {
+      "status": "completed",
+      "http_ok": 19143,
+      "http_errors": 0,
+      "paseo_ok": 115,
+      "paseo_errors": 0,
+      "binary_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+      "intervention": {
+        "status": "completed",
+        "scope": "Post-natural-cooldown intervention only. Debugger/helper can perturb roots and native allocations; marked is conservative reachability, not exact liveness."
+      }
+    },
+    "host_available_min_mib": 763.296875,
+    "oom_events_zero": true
+  }
+}

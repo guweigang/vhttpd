@@ -68,6 +68,7 @@ pub fn (mut s FeishuState) note_disconnected(name string, reason string) {
 	defer { s.mu.unlock() }
 	mut runtime := s.ensure_unlocked(name)
 	runtime.note_disconnected(reason)
+	s.fragments.clear(name)
 	s.runtime[name] = runtime
 }
 
@@ -193,6 +194,7 @@ pub fn (mut s FeishuState) register_stream_buffer(message_id string, stream_id s
 // Caller holds FeishuState.mu across paired buffer/target publication. This
 // state-only transition invalidates captured asynchronous completion claims.
 pub fn (mut s FeishuState) register_stream_buffer_unlocked(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string, initial_content string) {
+	if !s.buffer_capacity_unlocked(message_id, initial_content) { return }
 	if message_id == '' { return }
 	if old := s.buffers[message_id] {
 		s.revoke_creations_unlocked(old.stream_id)
@@ -205,6 +207,7 @@ pub fn (mut s FeishuState) register_stream_buffer_unlocked(message_id string, st
 
 // Initial-send commit already owns admission and must not revoke current peers.
 fn (mut s FeishuState) register_stream_buffer_content_unlocked(message_id string, stream_id string, app_name string, receive_id string, receive_id_type string, initial_content string) {
+	if !s.buffer_capacity_unlocked(message_id, initial_content) { return }
 	if message_id == '' {
 		return
 	}
@@ -268,6 +271,7 @@ fn (mut s FeishuState) register_stream_buffer_content_unlocked(message_id string
 	buf.bridge_stream = ''
 	buf.bridge_app = ''
 	buf.generation = rand.uuid_v4()
+	buf.last_delta = now
 	s.buffers[message_id] = buf
 }
 
@@ -324,6 +328,7 @@ pub fn (mut s FeishuState) buffer_snapshot_is_current(captured StreamBuffer) boo
 }
 
 pub fn (mut s FeishuState) commit_buffer_preview(captured StreamBuffer, rendered string, now i64) bool {
+	if rendered.len > buffer_content_limit { return false }
 	s.mu.@lock()
 	defer { s.mu.unlock() }
 	mut active := s.buffers[captured.message_id] or { return false }
@@ -347,6 +352,7 @@ pub fn (mut s FeishuState) commit_buffer_finish(captured StreamBuffer, rendered 
 }
 
 fn (mut s FeishuState) commit_buffer_finish_unlocked(captured StreamBuffer, rendered string, segment_index int, now i64) bool {
+	if rendered.len > buffer_content_limit { return false }
 	mut active := s.buffers[captured.message_id] or { return false }
 	if active.bridge_replica || !captured.same_identity(active) || active.failure != none || active.sealed != captured.sealed || active.content != captured.content {
 		return false
@@ -574,4 +580,29 @@ pub fn (mut s FeishuState) mark_bridge_replica_unlocked(message string) {
 	if buf.bridge_owner == none { return }
 	buf.bridge_replica = true
 	s.buffers[message] = buf
+}
+
+// Only base protocol metadata is retained; event contents remain application-owned.
+pub fn (mut s FeishuState) note_protocol_failure(name string, code string) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut rt := s.ensure_unlocked(name)
+	rt.protocol.failed('decode', code, 'protocol_error')
+	s.runtime[name] = rt
+}
+
+pub fn (mut s FeishuState) note_protocol_passed(name string) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut rt := s.ensure_unlocked(name)
+	rt.protocol.passed('frame')
+	s.runtime[name] = rt
+}
+
+pub fn (mut s FeishuState) note_protocol_unknown(name string, frame_type string) {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	mut rt := s.ensure_unlocked(name)
+	rt.protocol.unknown(frame_type)
+	s.runtime[name] = rt
 }

@@ -1,0 +1,338 @@
+{
+  "01-g0h0": {
+    "status": "passed",
+    "census": [
+      {
+        "stage": "00-before-forced-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8548352,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "01-full-gc-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8552448,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "02-unmap-once-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8552448,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "03-unmap-twice-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8552448,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "04-libc-trim-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8552448,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      }
+    ],
+    "load_idle_attempts": [
+      0
+    ],
+    "http_ok": 19149,
+    "paseo_ok": 115,
+    "host_available_min_mib": 774.6171875,
+    "probe_source_matches_final": true
+  },
+  "02-g1h1": {
+    "status": "passed",
+    "census": [
+      {
+        "stage": "00-before-forced-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 4096,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "01-full-gc-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 4096,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "02-unmap-once-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 4096,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "03-unmap-twice-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 4096,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "04-libc-trim-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 4096,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      }
+    ],
+    "load_idle_attempts": [
+      1
+    ],
+    "http_ok": 19102,
+    "paseo_ok": 115,
+    "host_available_min_mib": 791.2109375,
+    "probe_source_matches_final": true
+  },
+  "03-g0h1": {
+    "status": "passed",
+    "census": [
+      {
+        "stage": "00-before-forced-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 0,
+        "free_scalar_after_unlock_minus_locked_region_bytes": -16384
+      },
+      {
+        "stage": "01-full-gc-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 0,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "02-unmap-once-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 0,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "03-unmap-twice-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 0,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "04-libc-trim-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 0,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      }
+    ],
+    "load_idle_attempts": [
+      0
+    ],
+    "http_ok": 19135,
+    "paseo_ok": 116,
+    "host_available_min_mib": 769.578125,
+    "probe_source_matches_final": true
+  },
+  "04-g1h0": {
+    "status": "passed",
+    "census": [
+      {
+        "stage": "00-before-forced-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 24576,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "01-full-gc-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 24576,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "02-unmap-once-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 24576,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "03-unmap-twice-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 24576,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "04-libc-trim-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 24576,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      }
+    ],
+    "load_idle_attempts": [
+      1
+    ],
+    "http_ok": 19156,
+    "paseo_ok": 116,
+    "host_available_min_mib": 733.45703125,
+    "probe_source_matches_final": true
+  },
+  "05-g1h1-repeat": {
+    "status": "passed",
+    "census": [
+      {
+        "stage": "00-before-forced-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8388608,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "01-full-gc-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8388608,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "02-unmap-once-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8388608,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "03-unmap-twice-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8388608,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      },
+      {
+        "stage": "04-libc-trim-census.json",
+        "checks": {
+          "whole_matches_gc_total": true,
+          "unmapped_matches_gc_counter": true,
+          "nonforward_ranges_reconcile": true,
+          "gc_epoch_unchanged": true
+        },
+        "forwarding_callback_bytes_not_additive": 8388608,
+        "free_scalar_after_unlock_minus_locked_region_bytes": 0
+      }
+    ],
+    "load_idle_attempts": [
+      1
+    ],
+    "http_ok": 19143,
+    "paseo_ok": 115,
+    "host_available_min_mib": 763.296875,
+    "probe_source_matches_final": true
+  },
+  "_caveat": "Forwarding callbacks are not additive allocated bytes; overlapping ranges observed. External unique GC-section pagemap counts determine physical residence. Minimal keeper calibration did not exercise forwarding. Region enumeration/marked histogram is under GC lock; scalar free counter is read after unlocking and may drift. Use locked FREE region bytes for reclamation capacity; retain scalar drift without treating it as an application failure. No post-intervention observation is natural-phase acceptance evidence."
+}

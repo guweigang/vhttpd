@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import codex
 import command
 import executor
@@ -8,9 +10,9 @@ import upstream.transport
 fn test_codex_targetless_active_stream_release_is_independent_and_idempotent() {
 	mut rt := codex.ProviderRuntime{
 		active_stream_id: 'targetless'
-		stream_map:       {
+		reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 			'other': [codex.CodexTarget{ platform: 'feishu', message_id: 'keep' }]
-		}
+		}}
 	}
 	assert !rt.clear_stream_targets('')
 	assert !rt.clear_stream_targets('missing')
@@ -29,7 +31,7 @@ fn test_codex_release_after_last_target_removed_keeps_unrelated_active_stream() 
 		mut rt := codex.ProviderRuntime{ active_stream_id: active }
 		rt.add_stream_target('retired', codex.CodexTarget{ platform: 'feishu', message_id: 'last' })
 		assert rt.remove_stream_target('retired', 'feishu', 'last')
-		assert 'retired' !in rt.stream_map
+		assert 'retired' !in rt.reply_sessions.stream_map
 		assert rt.clear_stream_targets('retired') == (active == 'retired')
 		assert rt.current_stream_id() == if active == 'retired' { '' } else { 'other' }
 	}

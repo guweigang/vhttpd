@@ -1,0 +1,366 @@
+--- a/vlib/veb/context.v
++++ b/vlib/veb/context.v
+@@ -39,6 +39,8 @@
+ 	content_type string
+ 	// done is set to true when a response can be sent over `conn`
+ 	done bool
++	// Set only on the writer snapshot; shared GC bodies must not be freed manually.
++	shared_response_body bool
+ 	// If the `Connection: close` header is present the connection should always be closed
+ 	client_wants_to_close bool
+ 	// Configuration for static file compression (set by serve_if_static)
+@@ -51,6 +53,8 @@
+ 	// takes over response writing.
+ 	takeover_mode         ContextTakeoverMode
+ 	return_file           string
++	// Keep the clone alive until handoff, so address reuse cannot fake ownership.
++	owned_response_body &u8 = unsafe { nil }
+ 	custom_mime_types_ref &map[string]string = unsafe { nil }
+ 	// raw client file descriptor, used by the fasthttp backend to create a TcpConn
+ 	// on demand when takeover_conn() is called
+@@ -115,16 +119,61 @@
+ 	return cloned
+ }
+ 
+-fn (mut ctx Context) preserve_for_response_writer(user_context Context) {
+-	unsafe {
+-		*ctx = user_context
+-	}
++fn (mut ctx Context) preserve_for_response_writer(mut user_context Context) {
++	if !response_body_can_share_gc_buffer() {
++		ctx.copy_for_response_writer(user_context)
++		return
++	}
++	// The retained owner keeps this exact GC buffer alive during the handler.
++	// A direct body replacement therefore cannot match a recycled allocation.
++	share_body := user_context.owned_response_body != unsafe { nil }
++		&& user_context.owned_response_body == user_context.res.body.str
++	unsafe { *ctx = user_context }
++	if share_body {
++		ctx.shared_response_body = true
++	} else {
++		ctx.res.body = user_context.res.body.clone()
++		ctx.shared_response_body = false
++	}
++	// Only the response string and application aliases keep the body after handoff.
++	ctx.owned_response_body = unsafe { nil }
++	user_context.owned_response_body = unsafe { nil }
++	ctx.res.header = clone_response_writer_header(user_context.res.header)
++	ctx.res.status_msg = user_context.res.status_msg.clone()
++	ctx.res.http_version = user_context.res.http_version.clone()
++	ctx.req.header = clone_response_writer_header(user_context.req.header)
++	ctx.return_file = user_context.return_file.clone()
++}
++
++// Preserve the original copying contract outside ordinary Boehm GC builds.
++fn (mut ctx Context) copy_for_response_writer(user_context Context) {
++	unsafe { *ctx = user_context }
+ 	ctx.res.body = user_context.res.body.clone()
+ 	ctx.res.header = clone_response_writer_header(user_context.res.header)
+ 	ctx.res.status_msg = user_context.res.status_msg.clone()
+ 	ctx.res.http_version = user_context.res.http_version.clone()
+ 	ctx.req.header = clone_response_writer_header(user_context.req.header)
+ 	ctx.return_file = user_context.return_file.clone()
++	ctx.owned_response_body = unsafe { nil }
++	ctx.shared_response_body = false
++}
++
++fn response_body_can_share_gc_buffer() bool {
++	$if gcboehm ? {
++		$if prealloc { return false }
++		$if autofree ? { return false }
++		$if ownership ? { return false }
++		return true
++	} $else { return false }
++}
++
++fn (mut ctx Context) release_response_body() {
++	ctx.owned_response_body = unsafe { nil }
++	if ctx.res.body.len > 0 && !ctx.shared_response_body {
++		unsafe { ctx.res.body.free() }
++	}
++	ctx.res.body = ''
++	ctx.shared_response_body = false
+ }
+ 
+ // returns the request header data from the key
+@@ -157,10 +206,7 @@
+ 	// ctx.done is only set in this function, so in order to sent a response over the connection
+ 	// this value has to be set to true. Assuming the user doesn't use `ctx.conn` directly.
+ 	ctx.done = true
+-	if ctx.res.body.len > 0 {
+-		unsafe { ctx.res.body.free() }
+-		ctx.res.body = ''
+-	}
++	ctx.release_response_body()
+ 	$if veb_livereload ? {
+ 		if mimetype == 'text/html' {
+ 			ctx.res.body = response.replace('</html>',
+@@ -171,6 +217,7 @@
+ 	} $else {
+ 		ctx.res.body = response.clone()
+ 	}
++	if response_body_can_share_gc_buffer() { ctx.owned_response_body = ctx.res.body.str }
+ 	// Prefer explicit overrides from Context state or a pre-set response header.
+ 	mut custom_mimetype := ctx.content_type
+ 	if custom_mimetype.len == 0 {
+@@ -196,8 +243,7 @@
+ 	}
+ 	if ctx.takeover_mode != .none && ctx.conn != unsafe { nil } {
+ 		fast_send_resp(mut ctx.conn, ctx.res) or {}
+-		unsafe { ctx.res.body.free() }
+-		ctx.res.body = ''
++		ctx.release_response_body()
+ 	}
+ 	// result is send in `veb.v`, `handle_route`
+ 	return Result{}
+--- a/vlib/veb/veb.v
++++ b/vlib/veb/veb.v
+@@ -375,7 +375,7 @@
+ 			user_context, url, host)
+ 		{
+ 			// Preserve the handled context on the heap before the stack-local user context goes away.
+-			ctx.preserve_for_response_writer(user_context.Context)
++			ctx.preserve_for_response_writer(mut user_context.Context)
+ 			return ctx
+ 		}
+ 	}
+@@ -386,7 +386,7 @@
+ 	}
+ 	handle_route[A, X](mut global_app, mut user_context, url, host, params.routes)
+ 	// Preserve the handled context on the heap before the stack-local user context goes away.
+-	ctx.preserve_for_response_writer(user_context.Context)
++	ctx.preserve_for_response_writer(mut user_context.Context)
+ 	return ctx
+ }
+ 
+--- a/vlib/veb/veb_fasthttp.v
++++ b/vlib/veb/veb_fasthttp.v
+@@ -272,8 +272,7 @@
+ 	// strings.Builder is a `[]u8`, so the reused write buffer can be the builder
+ 	// target directly — write_to appends into `out` with no intermediate buffer.
+ 	completed_context.res.write_to(mut out)
+-	unsafe { completed_context.res.body.free() }
+-	completed_context.res.body = ''
++	completed_context.release_response_body()
+ 	unsafe { free(completed_context) }
+ 	va_scope_free_after(arena)
+ 	return .done
+@@ -340,7 +339,7 @@
+ 			url, host)
+ 		{
+ 			// Preserve the handled context on the heap before the stack-local user context goes away.
+-			ctx.preserve_for_response_writer(user_context.Context)
++			ctx.preserve_for_response_writer(mut user_context.Context)
+ 			return ctx
+ 		}
+ 	}
+@@ -359,7 +358,7 @@
+ 		unsafe { prealloc_scope_checkpoint(c'veb route returned') }
+ 	}
+ 	// Preserve the handled context on the heap before the stack-local user context goes away.
+-	ctx.preserve_for_response_writer(user_context.Context)
++	ctx.preserve_for_response_writer(mut user_context.Context)
+ 	return ctx
+ }
+ 
+--- a/vlib/veb/controller.v
++++ b/vlib/veb/controller.v
+@@ -64,7 +64,7 @@
+ 			handle_route[A, X](mut global_app, mut user_context, url, host, &routes)
+ 			// Preserve the handled context on the heap before the stack-local user context goes away.
+ 			mut ctx_mut := unsafe { &Context(ctx) }
+-			ctx_mut.preserve_for_response_writer(user_context.Context)
++			ctx_mut.preserve_for_response_writer(mut user_context.Context)
+ 			return ctx
+ 		}
+ 	}
+--- /dev/null
++++ b/vlib/veb/response_writer_transfer_test.v
+@@ -0,0 +1,130 @@
++module veb
++
++import net.http
++
++fn test_response_writer_moves_owned_body_and_keeps_input_copy() {
++	payload := 'a\x00b' + 'x'.repeat(8192)
++	mut source := Context{}
++	source.text(payload)
++	owned := source.res.body.str
++	assert owned != payload.str
++	mut writer := Context{}
++	writer.preserve_for_response_writer(mut source)
++	if response_body_can_share_gc_buffer() { assert writer.res.body.str == owned }
++	assert writer.res.body == payload
++	assert source.res.body == payload
++	assert source.owned_response_body == unsafe { nil }
++	assert writer.owned_response_body == unsafe { nil }
++	gc_collect()
++	assert writer.res.bytestr().ends_with(payload)
++	writer.release_response_body()
++	assert source.res.body == payload
++}
++
++fn test_response_writer_keeps_independent_headers_and_file_path() {
++	mut source := Context{}
++	source.req.header = http.new_header_from_map({http.CommonHeader.connection: 'keep-alive'})
++	source.res.header.add(.set_cookie, 'a=1')
++	source.res.header.add(.set_cookie, 'b=2')
++	source.res.set_status(.created)
++	source.return_file = '/tmp/owned-response-file'.clone()
++	source.text('owned')
++	mut writer := Context{}
++	writer.preserve_for_response_writer(mut source)
++	source.res.header.set(.set_cookie, 'changed')
++	source.req.header.set(.connection, 'close')
++	source.return_file = ''
++	assert writer.res.status_code == 201
++	assert writer.res.header.values(.set_cookie) == ['a=1', 'b=2']
++	assert writer.req.header.get(.connection) or { '' } == 'keep-alive'
++	assert writer.return_file == '/tmp/owned-response-file'
++	writer.release_response_body()
++}
++
++fn test_response_writer_empty_and_large_bodies() {
++	for size in [0, 1, 1024 * 1024] {
++		payload := 'z'.repeat(size)
++		mut source := Context{}
++		source.text(payload)
++		owned := source.res.body.str
++		mut writer := Context{}
++		writer.preserve_for_response_writer(mut source)
++		assert writer.res.body.len == size
++		assert writer.res.body == payload
++		if size > 0 { if response_body_can_share_gc_buffer() { assert writer.res.body.str == owned } }
++		assert source.res.body == payload
++		writer.release_response_body()
++	}
++}
++
++fn test_response_writer_self_handoff_keeps_body() {
++	mut ctx := Context{}
++	ctx.text('same-owner')
++	owned := ctx.res.body.str
++	ctx.preserve_for_response_writer(mut ctx)
++	assert ctx.res.body == 'same-owner'
++	if response_body_can_share_gc_buffer() { assert ctx.res.body.str == owned }
++	else { assert ctx.res.body.str != owned }
++	ctx.release_response_body()
++}
++
++fn test_response_writer_clones_untracked_and_replaced_buffers() {
++	for replaced in [false, true] {
++		mut source := Context{}
++		if replaced { source.text('previous owned response') }
++		borrowed := 'borrowed'.repeat(32)
++		source.res.body = borrowed
++		mut writer := Context{}
++		writer.preserve_for_response_writer(mut source)
++		assert writer.res.body == borrowed
++		assert writer.res.body.str != borrowed.str
++		assert source.res.body == borrowed
++		writer.release_response_body()
++	}
++}
++
++fn test_response_writer_clones_a_slice_replacing_owned_body() {
++	mut source := Context{}
++	source.text('prefix:payload')
++	source.res.body = source.res.body[7..]
++	mut writer := Context{}
++	writer.preserve_for_response_writer(mut source)
++	assert writer.res.body == 'payload'
++	assert writer.res.body.str != source.res.body.str
++	writer.release_response_body()
++	// The original allocation remains a managed source reference here.
++}
++
++fn test_response_writer_preserves_other_body_alias_after_write() {
++	payload := 'retained:'.repeat(1024)
++	mut source := Context{}
++	source.text(payload)
++	retained := source.res.body
++	mut writer := Context{}
++	writer.preserve_for_response_writer(mut source)
++	assert writer.shared_response_body == response_body_can_share_gc_buffer()
++	writer.release_response_body()
++	mut churn := []string{}
++	for _ in 0 .. 1000 { churn << 'overwrite'.repeat(1024) }
++	gc_collect()
++	assert retained == payload
++	assert source.res.body == '' || source.res.body == payload
++}
++
++fn test_response_writer_releases_retained_owner_after_body_replacement() {
++	mut source := Context{}
++	source.text('old-owned-body'.repeat(1024))
++	if response_body_can_share_gc_buffer() {
++		assert source.owned_response_body == source.res.body.str
++	}
++	source.res.body = 'replacement'
++	gc_collect()
++	mut writer := Context{}
++	writer.preserve_for_response_writer(mut source)
++	assert writer.res.body == 'replacement'
++	assert source.res.body == 'replacement'
++	assert !writer.shared_response_body
++	assert source.owned_response_body == unsafe { nil }
++	assert writer.owned_response_body == unsafe { nil }
++	writer.release_response_body()
++}
+--- /dev/null
++++ b/vlib/veb/response_writer_append_test.v
+@@ -0,0 +1,53 @@
++module veb
++
++import fasthttp
++
++struct ResponseWriterWireContext {
++	Context
++}
++
++@[heap]
++struct ResponseWriterWireApp {
++mut:
++	retained string
++}
++
++fn response_writer_wire_payload() string { return 'wire\x00payload'.repeat(2048) }
++
++fn (mut app ResponseWriterWireApp) index(mut ctx ResponseWriterWireContext) Result {
++	ctx.res.header.add(.set_cookie, 'first=1')
++	ctx.res.header.add(.set_cookie, 'second=2')
++	result := ctx.text(response_writer_wire_payload())
++	app.retained = ctx.res.body
++	return result
++}
++
++fn test_append_writer_serializes_then_releases_context_without_invalidating_alias() {
++	mut app := &ResponseWriterWireApp{}
++	routes := generate_routes[ResponseWriterWireApp, ResponseWriterWireContext](app) or { panic(err) }
++	controllers := check_duplicate_routes_in_controllers[ResponseWriterWireApp](app, routes) or { panic(err) }
++	params := RequestParams{global_app: unsafe { voidptr(app) }, routes: &routes, controllers_sorted: controllers}
++	mut out := []u8{cap: 65536}
++	for close in [false, true] {
++		connection := if close { 'close' } else { 'keep-alive' }
++		raw := 'GET / HTTP/1.1\r\nHost: localhost\r\nConnection: ${connection}\r\n\r\n'
++		mut control := fasthttp.ResponseControl{}
++		out.clear()
++		step := parallel_append_handler[ResponseWriterWireApp, ResponseWriterWireContext](fasthttp.HttpRequest{
++			buffer: raw.bytes()
++			client_conn_fd: -1
++			user_data: unsafe { voidptr(&params) }
++		}, mut out, unsafe { nil }, mut control)
++		assert step == .done
++		assert control.should_close == close
++		assert control.takeover_mode == .none
++		wire := out.bytestr()
++		assert wire.starts_with('HTTP/1.1 200 OK\r\n')
++		assert wire.count('Set-Cookie:') == 2
++		assert wire.ends_with(response_writer_wire_payload())
++		mut churn := []string{}
++		for _ in 0 .. 256 { churn << 'reuse'.repeat(4096) }
++		gc_collect()
++		assert app.retained == response_writer_wire_payload()
++	}
++}

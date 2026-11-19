@@ -1,0 +1,16 @@
+{
+  "pid": 2287326,
+  "start_ticks": "19729241",
+  "binary_sha256": "789c29cffdee25c1950b8505710a1575c36e5490fbe98679ec8e0c5afa4aba18",
+  "package_sha256": "e5f95722d61b191c54aa2d702ba6b62ec863b2feeb6bae0627a9849156461f7c",
+  "runtime_id": "sha256-e5f95722d61b191c54aa2d702ba6b62ec863b2feeb6bae0627a9849156461f7c",
+  "previous_id": "sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159",
+  "upgrade_id": "0d7ba7f5c8a77428f8754057",
+  "listeners": [
+    "127.0.0.1:19887",
+    "127.0.0.1:19901",
+    "127.0.0.1:19987"
+  ],
+  "revision": "64bdceea498b3bb0d4060768fcef3c2a5e5efffd16483c0839d12c6805f4737e",
+  "utc": "2026-11-04T06:39:49.913996+00:00"
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "run": 1,
+    "exit": 0,
+    "stdout": "BENCH size=1024 before=759184 after=397104 iterations=256\nBENCH size=8192 before=2491616 after=402704 iterations=256\nBENCH size=65536 before=17142688 after=420400 iterations=256\nLAYOUT before=7976 after=7984\n",
+    "stderr": ""
+  },
+  {
+    "run": 2,
+    "exit": 0,
+    "stdout": "BENCH size=1024 before=756528 after=400640 iterations=256\nBENCH size=8192 before=2505024 after=395744 iterations=256\nBENCH size=65536 before=17137760 after=414144 iterations=256\nLAYOUT before=7976 after=7984\n",
+    "stderr": ""
+  },
+  {
+    "run": 3,
+    "exit": 0,
+    "stdout": "BENCH size=1024 before=767888 after=411120 iterations=256\nBENCH size=8192 before=2507920 after=420544 iterations=256\nBENCH size=65536 before=17193152 after=394576 iterations=256\nLAYOUT before=7976 after=7984\n",
+    "stderr": ""
+  }
+]

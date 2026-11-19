@@ -1,0 +1,124 @@
+{
+  "client": "installed DSH Streamable HTTP connector",
+  "registered_tools": 93,
+  "relay_id": "legacyedit",
+  "sources": "manual mode.toml + options.toml includes, no MCP markers",
+  "multi_file_edit": true,
+  "field_removal": {
+    "local": "channel_buffer",
+    "remote": "max_channels",
+    "assignments_absent": true
+  },
+  "mode_conversion": "agent -> hub authenticated WebSocket probe -> agent with registered traffic",
+  "baseline": "pipeline-ok",
+  "business_status": 200,
+  "business_body": "pipeline-ok",
+  "idempotent": true,
+  "conflict": "stale multi-source plan rejected; temporary value retained",
+  "restore": "nested conversions and both stopped runtimes restored exact complete source revisions and traffic",
+  "rejected": 12,
+  "final_local_runtime": "stopped",
+  "final_remote_runtime": "stopped",
+  "original_remote_runtime": "restored",
+  "timestamp": "2026-11-05T14:16:07.165859+00:00",
+  "tools": [
+    "relay_config_get",
+    "relay_config_edit_prepare",
+    "relay_config_edit_preflight",
+    "relay_config_edit_apply",
+    "relay_config_edit_restore"
+  ],
+  "execution": {
+    "server": "actual installed Workbench Update QA.app; UI issued Bearer",
+    "transport": "Streamable HTTP",
+    "writes": "installed DSH MCP connector; model separately loaded Skills",
+    "model_skills": "vhttpd-deploy and vhttpd-debug reloaded by actual DSH skill tool, 16th turn"
+  },
+  "runtime": {
+    "local_version": "0.9.0",
+    "remote_test_package": "sha256-50bbf946eaaebad6d932f1170b9ef80bf8048f5a0d6d13741169e5f31a0df485",
+    "remote_original_package": "sha256-4a494e68c788578bd4884a240a0b04e1df1b20c1d07b4ab3bdbd171c93837adc",
+    "instance": "mcp-shared-config-qa",
+    "instance_id": "a3f98d37d0a38b357d18049e",
+    "same_existing_instance": true,
+    "new_vm_or_hub_process": false,
+    "bodytest_changed": false,
+    "carrier": "local vhttpd actively connects remote vhttpd WebSocket, port 55311; SSH only manages instance"
+  },
+  "restored_source_sha256": {
+    "local": {
+      "mode.toml": "3ac2958535b80d0ed4d310b515ac0b0d49c0c12d7d2c121f9a6cd0e1b43645ae",
+      "options.toml": "732d3efba08560fe1863f2f8573aa407a595a2dd7a7e7db7f2d86693884f81c6"
+    },
+    "remote": {
+      "mode.toml": "eacf6473eaa9eeec72c1ca32437d95a90d8032119ceb553fb5280870a78456dd",
+      "options.toml": "640e14fc8f57c18f980e33f336575fe16cc4d118116e719d8d98d7cd0458cd66"
+    }
+  },
+  "checks": {
+    "mac_editor_and_ordinary": "2 suites passed",
+    "mac_fragment_merge": "passed",
+    "mac_include_loader_and_override": "passed",
+    "mac_http_mcp": "passed outside sandbox for loopback listeners",
+    "linux_editor_ordinary_fragment_override": "4 suites passed, nocache, GCC, gc none",
+    "linux_compiler": "/home/guweigang/v/v 0.5.2 d13ccdd, local-dev, unchanged",
+    "linux_vjsx": "existing clean /home/guweigang/vhttpd-db-probe-qa/vjsx, 259620f1981a3573777ec8cda72883b1866404a7",
+    "linux_quickjs": "/home/guweigang/vhttpd-linux-deps/.deps/quickjs",
+    "runtime_builds": "production macOS and Linux Boehm GC verified",
+    "skill_format": "both passed using existing skill-validator virtualenv",
+    "secret_absence": "fixture carrier token not present in all MCP response records",
+    "auth_reference_preview": "final Mac and Linux editor regression passed",
+    "post_e2e_auth_preview": "After full DSH flow, safe auth reference was added to conversion preview; final Mac/Linux tests passed and final signed Desktop installed. Full flow used the immediately preceding build with identical execution logic.",
+    "document_links": "OpenKnowledge scoped dead-link graph empty; markdown lint had no configured checks"
+  },
+  "scope": {
+    "updates": [
+      "mode",
+      "carrier",
+      "node_id",
+      "path",
+      "listener",
+      "autostart",
+      "max_channels",
+      "channel_buffer",
+      "reconnect_delay_ms"
+    ],
+    "remove_fields": [
+      "mode",
+      "carrier",
+      "node_id",
+      "path",
+      "listener",
+      "autostart",
+      "max_channels",
+      "channel_buffer",
+      "reconnect_delay_ms",
+      "token",
+      "url",
+      "auth"
+    ],
+    "split": "disjoint top-level Relay fields in existing include sources; duplicate fields rejected even if equal",
+    "restart": "entire environment for apply and restore",
+    "limits": [
+      "WebSocket carrier only",
+      "no arbitrary nested options edits",
+      "no physical source file creation/deletion",
+      "no sources outside environment root",
+      "session-scoped plans; no crash recovery guarantee"
+    ]
+  },
+  "cleanup": {
+    "local_root_and_catalog": "restored",
+    "remote_root_and_runtime": "restored",
+    "fixture_include_files": "removed after independent exact-byte comparison",
+    "remote_test_package": "retained outside installed package catalog",
+    "temporary_management_listener": "stopped",
+    "mcp_listener": "closed through Desktop UI",
+    "default_environment": "default running, vhttpd 0.9.0; final Desktop UI observed PID 96304",
+    "local_test_ports": "55301, 55302, 64105 have no listeners"
+  },
+  "workspace_head_at_evidence": "84ab7664adaebc9386fd85223899b97c9e293abc",
+  "desktop_sha256": "a067784003e23b33ef20d471133d80927c483c49d555d585c524b5b3b8b0c45f",
+  "bundled_runtime_sha256": "b04ab2a8215b05377f6fd95401449b382553bcd391bfa6228a95913a29d4a714",
+  "desktop_backup": "Workbench Before Structural Relay Edit.app"
+}

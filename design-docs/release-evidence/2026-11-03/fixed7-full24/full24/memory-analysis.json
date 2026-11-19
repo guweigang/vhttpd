@@ -1,0 +1,110 @@
+{
+  "status": "failed",
+  "updated_utc": "2026-11-03T14:22:16.439294+00:00",
+  "sample_count": 2228,
+  "phases": {
+    "baseline": {
+      "sample_count": 60,
+      "first_60s": {
+        "VmRSS": 76858.0,
+        "RssAnon": 49454.0,
+        "fd_count": 22.0,
+        "Threads": 21.0
+      },
+      "last_60s": {
+        "VmRSS": 75176.0,
+        "RssAnon": 47772.0,
+        "fd_count": 22.0,
+        "Threads": 21.0
+      }
+    },
+    "load": {
+      "sample_count": 2168,
+      "first_60s": {
+        "VmRSS": 77710.0,
+        "RssAnon": 50306.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      "last_60s": {
+        "VmRSS": 64418.0,
+        "RssAnon": 54766.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      }
+    },
+    "cooldown": {
+      "sample_count": 0,
+      "first_60s": null,
+      "last_60s": null
+    }
+  },
+  "load_hourly": [
+    {
+      "hour": 1,
+      "samples": 360,
+      "VmRSS": 77776.0,
+      "RssAnon": 50372.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    {
+      "hour": 2,
+      "samples": 360,
+      "VmRSS": 77496.0,
+      "RssAnon": 50092.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    {
+      "hour": 3,
+      "samples": 360,
+      "VmRSS": 77320.0,
+      "RssAnon": 49916.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    {
+      "hour": 4,
+      "samples": 360,
+      "VmRSS": 77040.0,
+      "RssAnon": 49636.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    {
+      "hour": 5,
+      "samples": 360,
+      "VmRSS": 60832.0,
+      "RssAnon": 51068.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    {
+      "hour": 6,
+      "samples": 360,
+      "VmRSS": 63542.0,
+      "RssAnon": 53890.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    },
+    {
+      "hour": 7,
+      "samples": 8,
+      "VmRSS": 64488.0,
+      "RssAnon": 54836.0,
+      "fd_count": 22.0,
+      "Threads": 22.0
+    }
+  ],
+  "load_peak_rss_kib": 78068,
+  "load_growth_kib": -13292.0,
+  "counters": {
+    "http_ok": 864863,
+    "http_errors": 0,
+    "paseo_ok": 10546,
+    "paseo_errors": 0
+  },
+  "gate": "failed",
+  "failure": "Workload did not complete successfully"
+}

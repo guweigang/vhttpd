@@ -1,0 +1,12 @@
+---- Testing... ----------------------------------------------------------------
+OK    [1/5] C: 126624.222 ms, R:   128.264 ms /home/guweigang/vhttpd-ui2-v-d13ccdd/vlib/veb/context_response_test.v
+
+       >>>>> 2026-11-10 11:57:41.786425 | period  1 | started:   5:00.045 ago | vjobs: 1 | _test.v files:     5 | C:   1 | R:   0
+       >>>>> compiling  1/1 , T:  0, started:   2:53.164 ago, `/home/guweigang/vhttpd-ui2-v-d13ccdd/vlib/veb/controller_static_regression_test.v`
+
+OK    [2/5] C: 200504.148 ms, R:    53.927 ms /home/guweigang/vhttpd-ui2-v-d13ccdd/vlib/veb/controller_static_regression_test.v
+OK    [3/5] C: 98846.279 ms, R:    65.458 ms /home/guweigang/vhttpd-ui2-v-d13ccdd/vlib/veb/middleware_response_lifetime_test.v
+OK    [4/5] C: 43839.662 ms, R:    47.106 ms /home/guweigang/vhttpd-ui2-v-d13ccdd/vlib/veb/response_writer_append_test.v
+Summary for all V _test.v files: 5 passed, 5 total. Elapsed time: 502771 ms, on 1 job. Comptime: 502343 ms. Runtime: 323 ms.
+OK    [5/5] C: 32528.836 ms, R:    28.386 ms /home/guweigang/vhttpd-ui2-v-d13ccdd/vlib/veb/response_writer_transfer_test.v
+--------------------------------------------------------------------------------

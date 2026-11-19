@@ -1,6 +1,7 @@
 module executor
 
 import json2 as json
+import encoding.base64
 import upstream.transport
 import vjsx
 
@@ -47,6 +48,25 @@ fn InProcVjsxResponseCodec.from_js_value(val vjsx.Value, req_id string) transpor
 	}
 	if !body_val.is_undefined() && !body_val.is_null() {
 		body = body_val.to_string()
+	}
+	// JSON is the JS/native envelope. Explicit base64 preserves every byte,
+	// including NUL and non-UTF-8 content, without String(Uint8Array) coercion.
+	binary_val := val.get('bodyBase64')
+	defer { binary_val.free() }
+	if !binary_val.is_undefined() {
+		encoded := binary_val.to_string()
+		if !binary_val.is_string() || encoded.len > 96 * 1024 * 1024 {
+			return transport.WorkerResponse{ id: req_id, status: 500, body: 'invalid_binary_response' }
+		}
+		decoded := base64.decode(encoded)
+		if base64.encode(decoded) != encoded {
+			return transport.WorkerResponse{
+				id:     req_id
+				status: 500
+				body:   'invalid_binary_response'
+			}
+		}
+		body = decoded.bytestr()
 	}
 	headers_val := val.get('headers')
 	defer {

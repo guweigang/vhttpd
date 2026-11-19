@@ -1,0 +1,10 @@
+---- Testing... ----------------------------------------------------------------
+FAIL   271.805 ms /Users/guweigang/local/v/vlib/v/tests/concurrency/shared_gc_memory_test.v
+V panic: Unreachable shared wrappers retained payloads: 53248 -> 4415488
+ v hash: d13ccdd
+    pid: 0x1dcb
+    tid: 0x1f5755300
+0   dyld                                0x00000001883d8d7c start + 6652
+--------------------------------------------------------------------------------
+To reproduce just failure 1 run:    /Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/v-before-shared-gc -prod -cc clang -gc boehm -d use_bundled_libgc -enable-globals /Users/guweigang/local/v/vlib/v/tests/concurrency/shared_gc_memory_test.v
+Summary for all V _test.v files: 1 failed, 1 total. Elapsed time: 6475 ms, on 1 job. Comptime: 6203 ms. Runtime: 271 ms.

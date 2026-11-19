@@ -1,0 +1,29 @@
+# Remote project fragment. Reuses its existing native MySQL db/wechat resource.
+# Keep this listener private (SSH forwarding), or configure TLS before exposing
+# it publicly. Include this file from the remote project's version=2 config.
+[listeners.database_relay]
+protocol = "websocket"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19898
+
+[relays.database]
+mode = "hub"
+carrier = "websocket"
+listener = "listener:database_relay"
+path = "/relay"
+node_id = "remote-database"
+token = "${env.VHTTPD_DATABASE_RELAY_TOKEN}"
+
+[adapters.remote_database]
+kind = "db-resource"
+options.resource = "db/wechat"
+# Use a MySQL user with SELECT-only privileges for a security boundary.
+# This session default prevents accidental writes by ordinary SDK operations.
+# Set read-write explicitly when debugging real persistence operations.
+options.access = "read-only"
+
+[[pipelines]]
+id = "resource/database"
+ingress = "relay:database"
+egress = "adapter:remote_database"

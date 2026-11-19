@@ -1,0 +1,242 @@
+--- g0h0/src/admin_workbench_focus.v
++++ g0h1/src/admin_workbench_focus.v
+@@ -1,6 +1,5 @@
+ module main
+ 
+-import executor
+ import json2 as json
+ import time
+ import veb
+@@ -36,8 +35,8 @@
+ 			cfg := cfgs[i] or { continue }
+ 			if !cfg.serve_data_plane || cfg.plan_listener_id != listener { continue }
+ 			runtime.control_plane.mu.@lock()
+-			samples := runtime.control_plane.http_observations.requests[pipeline] or { []executor.AdminHttpObservationError{} }
+-			found = samples.any(it.observation_id == id) || runtime.control_plane.http_observations.errors.any(it.pipeline_id == pipeline && it.observation_id == id)
++			samples := runtime.control_plane.http_observations.requests[pipeline] or { HttpObservationRing{} }
++			found = samples.entries.any(it.observation_id == id) || runtime.control_plane.http_observations.errors.entries.any(it.pipeline_id == pipeline && it.observation_id == id)
+ 			runtime.control_plane.mu.unlock()
+ 			break
+ 		}
+--- g0h0/src/http_observation_runtime.v
++++ g0h1/src/http_observation_runtime.v
+@@ -10,24 +10,23 @@
+ // IDs, never request URLs. Empty ID covers requests without a compiled route.
+ struct HttpObservations {
+ mut:
+-	total executor.AdminHttpMetrics
+-	routes map[string]executor.AdminHttpMetrics
+-	errors []executor.AdminHttpObservationError
+-	requests map[string][]executor.AdminHttpObservationError
++	total HttpObservedMetrics
++	routes map[string]HttpObservedMetrics
++	errors HttpObservationRing
++	requests map[string]HttpObservationRing
+ 	buckets map[i64]HttpObservationBucket
+ 	last_bucket_unix i64
+ 	window_reset_unix i64
+ }
+ 
+-fn http_metrics_record(previous executor.AdminHttpMetrics, status int, duration_ms i64, at_unix i64) executor.AdminHttpMetrics {
++fn http_metrics_record(previous HttpObservedMetrics, status int, duration_ms i64, at_unix i64) HttpObservedMetrics {
+ 	duration := if duration_ms > 0 { duration_ms } else { i64(0) }
+-	mut buckets := previous.duration_buckets.clone()
+-	if buckets.len != 9 { buckets = []i64{len: 9} }
+-	for i, upper in [i64(1), 5, 10, 50, 100, 500, 1000, 5000] {
++	mut buckets := previous.duration_buckets
++	for i, upper in [i64(1), 5, 10, 50, 100, 500, 1000, 5000]! {
+ 		if duration <= upper { buckets[i]++ }
+ 	}
+ 	buckets[8]++ // +Inf; buckets are cumulative.
+-	return executor.AdminHttpMetrics{
++	return HttpObservedMetrics{
+ 		requests_total: previous.requests_total + 1
+ 		errors_total: previous.errors_total + if status >= 400 { i64(1) } else { i64(0) }
+ 		client_errors_total: previous.client_errors_total + if status >= 400 && status < 500 { i64(1) } else { i64(0) }
+@@ -49,18 +48,16 @@
+ fn (mut observations HttpObservations) record_staged(pipeline string, method string, status int, duration_ms i64, observation_id string, at_unix i64, stages executor.AdminHttpStages) {
+ 	observations.total = http_metrics_record(observations.total, status, duration_ms, at_unix)
+ 	key := if pipeline in observations.routes || observations.routes.len < 512 { pipeline } else { '@overflow' }
+-	previous := observations.routes[key] or { executor.AdminHttpMetrics{} }
++	previous := observations.routes[key] or { HttpObservedMetrics{} }
+ 	observations.routes[key] = http_metrics_record(previous, status, duration_ms, at_unix)
+ 	observations.record_window(key, status, duration_ms, at_unix)
+ 	if duration_ms >= 1 {
+-		mut samples := observations.requests[key] or { []executor.AdminHttpObservationError{} }
+-		samples << executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}
+-		if samples.len > 50 { samples = samples[samples.len - 50..].clone() }
++		mut samples := observations.requests[key] or { HttpObservationRing{} }
++		samples.append(executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}, 50)
+ 		observations.requests[key] = samples
+ 	}
+ 	if status >= 400 {
+-		observations.errors << executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}
+-		if observations.errors.len > 20 { observations.errors = observations.errors[observations.errors.len - 20..].clone() }
++		observations.errors.append(executor.AdminHttpObservationError{stages:stages,pipeline_id: key, method: method, status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}, 20)
+ 	}
+ }
+ 
+@@ -84,13 +81,21 @@
+ 		source:'request'
+ 		message:'${ctx.req.method} ${status} ${duration_ms} ms'
+ 	})
+-	if duration_ms >= 1 || status >= 400 {
++	if http_observation_should_log(status, duration_ms, log.get_level()) {
+ 		entry := executor.AdminHttpObservationError{stages:stages,pipeline_id: pipeline, method: ctx.req.method.str(), status: status, duration_ms: duration_ms, observation_id: observation_id, at_unix: at_unix}
+ 		line := http_observation_log(app.app_build_cfg.plan_listener_id, entry)
+ 		if status >= 400 { log.warn(line) } else { log.info(line) }
+ 	}
+ }
+ 
++fn http_observation_should_log(status int, duration_ms i64, level log.Level) bool {
++	return if status >= 400 {
++		int(level) >= int(log.Level.warn)
++	} else {
++		duration_ms >= 1 && int(level) >= int(log.Level.info)
++	}
++}
++
+ // Allowlisted structured completion log: never include URL, headers, body or errors.
+ fn http_observation_log(listener string, entry executor.AdminHttpObservationError) string {
+ 	return '[http.observation] ' + json.encode({'observation_id': entry.observation_id, 'listener': listener, 'pipeline': entry.pipeline_id, 'method': entry.method, 'status': '${entry.status}', 'duration_ms': '${entry.duration_ms}', 'at_unix': '${entry.at_unix}', 'queue_ms':'${entry.stages.queue_ms:.3f}', 'vjsx_ms':'${entry.stages.vjsx_ms:.3f}', 'adapter_ms':'${entry.stages.adapter_ms:.3f}', 'other_ms':'${entry.stages.other_ms:.3f}', 'queue_observed':'${entry.stages.queue_observed}', 'vjsx_observed':'${entry.stages.vjsx_observed}', 'adapter_observed':'${entry.stages.adapter_observed}', 'stages_available':'${entry.stages.available}'}, escape_unicode: true)
+--- g0h0/src/http_observation_storage.v
++++ g0h1/src/http_observation_storage.v
+@@ -0,0 +1,63 @@
++module main
++
++import executor
++
++// Mutable listener-owned counters. The public DTO owns a slice only when an
++// admin reader takes a snapshot, rather than allocating four slices per request.
++struct HttpObservedMetrics {
++	requests_total      i64
++	errors_total        i64
++	client_errors_total i64
++	server_errors_total i64
++	timeouts_total      i64
++	duration_sum_ms     i64
++	duration_count      i64
++	duration_max_ms     i64
++	duration_buckets    [9]i64
++	last_status         int
++	last_completed_unix i64
++}
++
++fn (metrics HttpObservedMetrics) snapshot() executor.AdminHttpMetrics {
++	return executor.AdminHttpMetrics{
++		requests_total:      metrics.requests_total
++		errors_total:        metrics.errors_total
++		client_errors_total: metrics.client_errors_total
++		server_errors_total: metrics.server_errors_total
++		timeouts_total:      metrics.timeouts_total
++		duration_sum_ms:     metrics.duration_sum_ms
++		duration_count:      metrics.duration_count
++		duration_max_ms:     metrics.duration_max_ms
++		duration_buckets:    metrics.duration_buckets[..].clone()
++		last_status:         metrics.last_status
++		last_completed_unix: metrics.last_completed_unix
++	}
++}
++
++// Written only under ControlPlaneRuntime.mu. Replacing a slot releases all of
++// its old references; chronological copying happens only for admin reads.
++struct HttpObservationRing {
++mut:
++	entries []executor.AdminHttpObservationError
++	next    int
++}
++
++fn (mut ring HttpObservationRing) append(entry executor.AdminHttpObservationError, limit int) {
++	if ring.entries.len == 0 {
++		ring.entries = []executor.AdminHttpObservationError{cap: limit}
++	}
++	if ring.entries.len < limit {
++		ring.entries << entry
++		return
++	}
++	ring.entries[ring.next] = entry
++	ring.next = (ring.next + 1) % limit
++}
++
++fn (ring &HttpObservationRing) snapshot() []executor.AdminHttpObservationError {
++	mut entries := []executor.AdminHttpObservationError{cap: ring.entries.len}
++	for i in 0 .. ring.entries.len {
++		entries << ring.entries[(ring.next + i) % ring.entries.len]
++	}
++	return entries
++}
+--- g0h0/src/http_observation_time_window.v
++++ g0h1/src/http_observation_time_window.v
+@@ -7,8 +7,8 @@
+ 
+ struct HttpObservationBucket {
+ mut:
+-	total executor.AdminHttpMetrics
+-	routes map[string]executor.AdminHttpMetrics
++	total HttpObservedMetrics
++	routes map[string]HttpObservedMetrics
+ }
+ 
+ fn http_metrics_merge(a executor.AdminHttpMetrics, b executor.AdminHttpMetrics) executor.AdminHttpMetrics {
+@@ -37,13 +37,15 @@
+ 		observations.requests.clear()
+ 		observations.window_reset_unix = at_unix
+ 	}
+-	observations.last_bucket_unix = stamp
+-	for old in observations.buckets.keys() {
+-		if old < stamp - 900 { observations.buckets.delete(old) }
++	if observations.last_bucket_unix != stamp {
++		for old in observations.buckets.keys() {
++			if old < stamp - 900 { observations.buckets.delete(old) }
++		}
+ 	}
++	observations.last_bucket_unix = stamp
+ 	mut bucket := observations.buckets[stamp] or { HttpObservationBucket{} }
+ 	bucket.total = http_metrics_record(bucket.total, status, duration_ms, at_unix)
+-	bucket.routes[key] = http_metrics_record(bucket.routes[key] or { executor.AdminHttpMetrics{} }, status, duration_ms, at_unix)
++	bucket.routes[key] = http_metrics_record(bucket.routes[key] or { HttpObservedMetrics{} }, status, duration_ms, at_unix)
+ 	observations.buckets[stamp] = bucket
+ }
+ 
+@@ -71,12 +73,12 @@
+ 		mut routes := map[string]executor.AdminHttpMetrics{}
+ 		for stamp, bucket in app.control_plane.http_observations.buckets {
+ 			if stamp < lower || stamp > now { continue }
+-			value := if filtered { bucket.routes[pipeline] or { executor.AdminHttpMetrics{} } } else { bucket.total }
++			value := if filtered { (bucket.routes[pipeline] or { HttpObservedMetrics{} }).snapshot() } else { bucket.total.snapshot() }
+ 			metrics = http_metrics_merge(metrics, value)
+ 			series[stamp] = http_metrics_merge(series[stamp] or { executor.AdminHttpMetrics{} }, value)
+ 			for id, route in bucket.routes {
+ 				if filtered && id != pipeline { continue }
+-				routes[id] = http_metrics_merge(routes[id] or { executor.AdminHttpMetrics{} }, route)
++				routes[id] = http_metrics_merge(routes[id] or { executor.AdminHttpMetrics{} }, route.snapshot())
+ 			}
+ 		}
+ 		app.control_plane.mu.unlock()
+@@ -133,7 +135,7 @@
+ 		cfg := cfgs[i] or { continue }
+ 		if !cfg.serve_data_plane || cfg.plan_listener_id != listener { continue }
+ 		app.control_plane.mu.@lock()
+-		samples := (app.control_plane.http_observations.requests[pipeline] or { []executor.AdminHttpObservationError{} }).clone()
++		samples := (app.control_plane.http_observations.requests[pipeline] or { HttpObservationRing{} }).snapshot()
+ 		app.control_plane.mu.unlock()
+ 		retained = samples.len
+ 		for entry in samples {
+--- g0h0/src/server.v
++++ g0h1/src/server.v
+@@ -111,12 +111,12 @@
+ 		cfg := cfgs[i] or { continue }
+ 		pipelines := app.admin_pipeline_runtime_snapshot()
+ 		app.control_plane.mu.@lock()
+-		metrics := app.control_plane.http_observations.total
++		metrics := app.control_plane.http_observations.total.snapshot()
+ 		mut route_metrics := []executor.AdminHttpRouteMetrics{}
+ 		mut ids := app.control_plane.http_observations.routes.keys()
+ 		ids.sort()
+-		for id in ids { route_metrics << executor.AdminHttpRouteMetrics{pipeline_id: id, metrics: app.control_plane.http_observations.routes[id]} }
+-		errors := app.control_plane.http_observations.errors.clone()
++		for id in ids { route_metrics << executor.AdminHttpRouteMetrics{pipeline_id: id, metrics: app.control_plane.http_observations.routes[id].snapshot()} }
++		errors := app.control_plane.http_observations.errors.snapshot()
+ 		app.control_plane.mu.unlock()
+ 		summaries << executor.AdminListenerRuntimeSummary{
+ 			listener_id: cfg.plan_listener_id

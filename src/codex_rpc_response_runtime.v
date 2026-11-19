@@ -10,13 +10,21 @@ fn (mut app App) codex_handle_response(instance string, cls codex.RpcClassificat
 
 	// Check for pending RPCs FIRST so we know the stream_id
 	id := cls.id_raw.int()
-	pending, _ := app.codex_take_pending_rpc(instance, id)
+	pending, found := app.codex_take_pending_rpc(instance, id)
+	if !found || (pending.expires_at_ms > 0 && pending.expires_at_ms <= time.now().unix_milli()) { return }
 	if pending.routing_is_retired() {
 		log.debug('[codex] retired stream response discarded instance=${instance} id=${id}')
 		return
 	}
 	log.info('[codex] 🧩 response match instance=${codex.ProviderRuntime.normalize_instance(instance)} id=${cls.id_raw} pending_method=${pending.method} pending_stream=${pending.stream_id} pending_message=${pending.message_id}')
 
+	if app.providers.codex.snapshot(instance).application_messages {
+		if pending.method != '' {
+			result_raw := codex.RpcField.raw(raw, if cls.has_error { 'error' } else { 'result' })
+			app.dispatch_codex_rpc_response(instance, pending, result_raw, cls.has_error, raw)
+		}
+		return
+	}
 	if cls.has_error {
 		if pending.stream_id != '' {
 			app.codex_clear_read_fallback(instance, pending.stream_id)

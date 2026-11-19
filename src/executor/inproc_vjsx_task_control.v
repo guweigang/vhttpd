@@ -1,6 +1,7 @@
 module executor
 
 import sync
+import memidle
 import time
 import vjsx
 
@@ -22,6 +23,8 @@ mut:
 	done        chan bool = chan bool{cap: 1}
 	started     chan bool = chan bool{cap: 1}
 	mailbox_key string
+	mailbox_bytes int
+	mailbox_deadline i64
 	notified    bool
 	session     ?&vjsx.RuntimeSession
 }
@@ -48,6 +51,12 @@ fn (e InProcVjsxExecutor) begin_task(mut control ExecutorTaskControl, lane_id st
 		state.mu.unlock()
 		return false
 	}
+	if control.mailbox_deadline > 0 && time.sys_mono_now() >= control.mailbox_deadline {
+		control.mu.unlock()
+		state.mu.unlock()
+		e.cancel_task(mut control, 'inproc_vjsx_executor_websocket_queue_timeout')
+		return false
+	}
 	// Affinity withdrawal may race the deferred cancellation after dequeue.
 	// A worker must still own its mailbox selection before starting execution.
 	if control.mailbox_key != ''
@@ -68,6 +77,7 @@ fn (e InProcVjsxExecutor) begin_task(mut control ExecutorTaskControl, lane_id st
 				return false
 			}
 			state.lanes[idx].inflight++
+			memidle.begin()
 			control.owns_lane = true
 			break
 		}
@@ -114,7 +124,7 @@ fn (e InProcVjsxExecutor) finish_task(mut control ExecutorTaskControl) {
 	state.mu.@lock()
 	if owns_lane {
 		for i, lane in state.lanes {
-			if lane.id == lane_id && lane.inflight > 0 { state.lanes[i].inflight-- }
+			if lane.id == lane_id && lane.inflight > 0 { state.lanes[i].inflight--; memidle.end() }
 		}
 	}
 	state.release_websocket_mailbox_claim_locked(control.mailbox_key, control)
@@ -142,7 +152,7 @@ fn (e InProcVjsxExecutor) cancel_task(mut control ExecutorTaskControl, reason st
 		state.release_websocket_mailbox_claim_locked(control.mailbox_key, control)
 		if control.owns_lane {
 			for i, lane in state.lanes {
-				if lane.id == control.lane_id && lane.inflight > 0 { state.lanes[i].inflight-- }
+				if lane.id == control.lane_id && lane.inflight > 0 { state.lanes[i].inflight--; memidle.end() }
 			}
 			control.owns_lane = false
 		}
@@ -247,7 +257,7 @@ fn task_is_pending(control &ExecutorTaskControl) bool {
 fn (mut state VjsxExecutorState) pending_mailbox_controls_locked(key string) []&ExecutorTaskControl {
 	mut pending := []&ExecutorTaskControl{}
 	for _, control in state.tasks {
-		mut task := control
+		mut task := unsafe { control }
 		task.mu.@lock()
 		if task.mailbox_key == key && task.phase == .pending { pending << task }
 		task.mu.unlock()

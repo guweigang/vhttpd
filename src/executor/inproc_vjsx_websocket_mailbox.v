@@ -1,5 +1,13 @@
 module executor
 
+import json2 as json
+import time
+
+const websocket_mailbox_task_limit = 1024
+const websocket_mailbox_key_limit = 128
+const websocket_mailbox_byte_limit = 16 * 1024 * 1024
+const websocket_mailbox_frame_limit = 1024 * 1024
+
 fn (e InProcVjsxExecutor) bind_websocket_task_lane(task InProcVjsxWebSocketTask, lane_id string) {
 	if lane_id.trim_space() == '' {
 		return
@@ -158,12 +166,22 @@ fn (e InProcVjsxExecutor) try_schedule_websocket_mailboxes() {
 }
 
 fn (e InProcVjsxExecutor) enqueue_websocket_mailbox_task(task InProcVjsxWebSocketTask) {
+	bytes := json.encode(task.frame).len
+	if bytes > websocket_mailbox_frame_limit {
+		e.reject_websocket_task(task, 'inproc_vjsx_executor_mailbox_capacity')
+		return
+	}
 	key := if task.actor_serialized {
 		task.actor_key.trim_space()
 	} else {
 		task.affinity_key.trim_space()
 	}
 	if key == '' {
+		e.reject_websocket_task(task, 'inproc_vjsx_executor_mailbox_key_missing')
+		return
+	}
+	if key.len > 4096 {
+		e.reject_websocket_task(task, 'inproc_vjsx_executor_mailbox_capacity')
 		return
 	}
 	mut state := e.state
@@ -171,6 +189,24 @@ fn (e InProcVjsxExecutor) enqueue_websocket_mailbox_task(task InProcVjsxWebSocke
 	if state.stopping {
 		state.mu.unlock()
 		e.cancel_websocket_task(task)
+		return
+	}
+	mut count := 0
+	mut key_count := 0
+	mut retained_bytes := bytes
+	for _, existing in state.tasks {
+		existing.mu.@lock()
+		if existing.mailbox_key != '' {
+			count++
+			retained_bytes += existing.mailbox_bytes
+			if existing.mailbox_key == key { key_count++ }
+		}
+		existing.mu.unlock()
+	}
+	if count >= websocket_mailbox_task_limit || key_count >= websocket_mailbox_key_limit
+		|| retained_bytes > websocket_mailbox_byte_limit {
+		state.mu.unlock()
+		e.reject_websocket_task(task, 'inproc_vjsx_executor_mailbox_capacity')
 		return
 	}
 	mut control := task.slot.control
@@ -181,6 +217,8 @@ fn (e InProcVjsxExecutor) enqueue_websocket_mailbox_task(task InProcVjsxWebSocke
 	control.mu.@lock()
 	control.started = task.started
 	control.mailbox_key = key
+	control.mailbox_bytes = bytes
+	control.mailbox_deadline = time.sys_mono_now() + inproc_vjsx_websocket_queue_wait_timeout
 	control.mu.unlock()
 	mut queue := state.websocket_mailbox_by_key[key] or { []InProcVjsxWebSocketTask{} }
 	queue << task
@@ -232,9 +270,13 @@ fn (e InProcVjsxExecutor) restore_websocket_mailbox_task(key string, task InProc
 }
 
 fn (e InProcVjsxExecutor) cancel_websocket_task(original InProcVjsxWebSocketTask) {
+	e.reject_websocket_task(original, 'inproc_vjsx_executor_closed')
+}
+
+fn (e InProcVjsxExecutor) reject_websocket_task(original InProcVjsxWebSocketTask, reason string) {
 	mut task := original
 	task.slot.mu.@lock()
-	task.slot.result = InProcVjsxWebSocketTaskResult{ error: 'inproc_vjsx_executor_closed' }
+	task.slot.result = InProcVjsxWebSocketTaskResult{ error: reason }
 	task.slot.ready = true
 	task.slot.mu.unlock()
 	// Also bind tasks rejected before admission; cancellation has one notifier.
@@ -242,5 +284,5 @@ fn (e InProcVjsxExecutor) cancel_websocket_task(original InProcVjsxWebSocketTask
 	task.slot.control.done = task.done
 	task.slot.control.started = task.started
 	task.slot.control.mu.unlock()
-	e.cancel_task(mut task.slot.control, 'inproc_vjsx_executor_closed')
+	e.cancel_task(mut task.slot.control, reason)
 }

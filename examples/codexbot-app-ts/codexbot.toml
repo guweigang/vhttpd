@@ -1,47 +1,20 @@
-[paths]
-root = "../../"
-vjsx_app = "${root}/examples/codexbot-app-ts/app.mts"
-vjsx_build_root = "${root}/tmp/codexbot-vjsx-build"
+# Standalone launcher. Desktop installs component.toml into its existing environment.
+version = 2
+include = ["component.toml"]
 
-[files]
-pid_file = "${paths.root}/tmp/vhttpd_codexbot_ts_19883.pid"
-event_log = "${paths.root}/tmp/vhttpd_codexbot_ts_19883.events.ndjson"
-
-[runtime]
+[server]
 timezone = "Asia/Shanghai"
+pid_file = "runtime.pid"
 
-[admin]
+[observability]
+event_log = "events.ndjson"
+
+[listeners.codexbot_admin]
+protocol = "http"
+transport = "tcp"
 host = "127.0.0.1"
 port = 19983
+
+[control]
+listener = "listener:codexbot_admin"
 token = "change-me"
-
-[feishu]
-enabled = true
-open_base_url = "https://open.feishu.cn/open-apis"
-reconnect_delay_ms = 3000
-token_refresh_skew_seconds = 60
-recent_event_limit = 20
-
-[codex]
-enabled = true
-url = "${env.CODEX_URL:-ws://127.0.0.1:4500}"
-model = "gpt-5.4"
-effort = "medium"
-cwd = "${env.CODEX_CWD:-../../codex/default}"
-#approval_policy = "never"
-approval_policy = "untrusted"
-sandbox = "workspace-write"
-reconnect_delay_ms = 3000
-flush_interval_ms = 400
-
-[sites.codexbot]
-host = "127.0.0.1"
-port = 19883
-root = "${paths.root}/examples/codexbot-app-ts"
-executor = "vjsx"
-app = "${paths.vjsx_app}"
-vjsx.build_root = "${paths.vjsx_build_root}"
-vjsx.runtime_profile = "node"
-vjsx.thread_count = 2
-vjsx.enable_fs = true
-feishu.enabled = true

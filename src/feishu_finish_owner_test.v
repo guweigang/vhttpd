@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import command
 import config
 import executor as execmod
@@ -50,7 +52,7 @@ fn test_feishu_finish_retirement_rejects_late_segment_publication() {
 		assert !app.feishu_runtime_publish_finish_segment(claim, 'late')
 		assert !app.providers.feishu.commit_buffer_finish_claim(claim, 'old', 2, 1000)
 		assert !app.providers.feishu.cancel_buffer_finish(claim)
-		assert app.providers.codex.snapshot('main').stream_map.len == 0
+		assert app.providers.codex.snapshot('main').reply_sessions.stream_map.len == 0
 	}
 }
 
@@ -89,7 +91,7 @@ fn test_feishu_finish_raw_transport_cannot_publish_targets_from_unowned_metadata
 	mut app := feishu_finish_test_app()
 	result := app.feishu_runtime_send_followup_segment(feishu.StreamBuffer{ message_id: 'unknown', app: 'main', stream_id: 'retired', receive_id: 'chat', receive_id_type: 'chat_id', segment_index: 2 }, 'text', true, '') or { panic(err) }
 	assert result == 'om_test_1'
-	assert app.providers.codex.snapshot('main').stream_map.len == 0
+	assert app.providers.codex.snapshot('main').reply_sessions.stream_map.len == 0
 }
 
 fn test_feishu_retired_finish_does_not_start_another_http_segment() {
@@ -101,7 +103,7 @@ fn test_feishu_retired_finish_does_not_start_another_http_segment() {
 	app.feishu_runtime_send_finish_segment(claim, 'late', true, '', 2) or { failed = true }
 	assert failed
 	assert app.providers.feishu.http_test_calls == 0
-	assert app.providers.codex.snapshot('main').stream_map.len == 0
+	assert app.providers.codex.snapshot('main').reply_sessions.stream_map.len == 0
 }
 
 fn test_feishu_finish_segment_publication_and_session_clear_are_serialized() {
@@ -133,7 +135,7 @@ fn test_feishu_finish_segment_publication_and_session_clear_are_serialized() {
 		writer.wait()
 		clearer.wait()
 		assert app.providers.feishu.buffers.len == 0
-		assert app.providers.codex.snapshot('main').stream_map.len == 0
+		assert app.providers.codex.snapshot('main').reply_sessions.stream_map.len == 0
 	}
 }
 
@@ -150,7 +152,7 @@ fn test_feishu_finish_http_failure_releases_claim_and_successful_split_publishes
 	app.providers.feishu.register_stream_buffer('root', 'stream', 'main', 'chat', 'chat_id', '')
 	app.feishu_runtime_flush_buffer('root', '', true) or { panic(err) }
 	assert app.providers.feishu.buffers['root'].sealed
-	assert app.providers.codex.snapshot('main').stream_map['stream'].len == 1
+	assert app.providers.codex.snapshot('main').reply_sessions.stream_map['stream'].len == 1
 }
 
 fn test_feishu_finish_one_active_registration_rejects_concurrent_end_requests() {

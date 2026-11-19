@@ -1,0 +1,117 @@
+18775: GC_generic_malloc_inner_small(size_t lb, int kind)
+18776: {
+18777:   struct obj_kind *ok = &GC_obj_kinds[kind];
+18778:   size_t lg = GC_size_map[lb];
+18779:   void **opp = &ok->ok_freelist[lg];
+18780:   void *op = *opp;
+18781: 
+18782:   GC_ASSERT(I_HOLD_LOCK());
+18783:   if (UNLIKELY(NULL == op)) {
+18784:     if (0 == lg) {
+18785:       if (UNLIKELY(!GC_is_initialized)) {
+18786:         UNLOCK(); /*< just to unset `GC_lock_holder` */
+18787:         GC_init();
+18788:         LOCK();
+18789:         lg = GC_size_map[lb];
+18790:       }
+18791:       if (0 == lg) {
+18792:         GC_extend_size_map(lb);
+18793:         lg = GC_size_map[lb];
+18794:         GC_ASSERT(lg != 0);
+18795:       }
+18796:       /* Retry. */
+18797:       opp = &ok->ok_freelist[lg];
+18798:       op = *opp;
+18799:     }
+18800:     if (NULL == op) {
+18801:       if (NULL == ok->ok_reclaim_list && !GC_alloc_reclaim_list(ok))
+18802:         return NULL;
+18803:       op = GC_allocobj(lg, kind);
+18804:       if (NULL == op)
+18805:         return NULL;
+18806:     }
+18807:   }
+18808:   *opp = obj_link(op);
+18809:   obj_link(op) = NULL;
+18810:   GC_bytes_allocd += GRANULES_TO_BYTES((word)lg);
+18811:   return op;
+18812: }
+18813: 
+
+19011: GC_generic_malloc_uncollectable(size_t lb, int kind)
+19012: {
+19013:   void *op;
+19014:   size_t lb_orig = lb;
+19015: 
+19016:   GC_ASSERT(kind < MAXOBJKINDS);
+19017:   if (EXTRA_BYTES != 0 && LIKELY(lb != 0)) {
+19018:     /*
+19019:      * We do not need the extra byte, since this will not be collected
+19020:      * anyway.
+19021:      */
+19022:     lb--;
+19023:   }
+19024: 
+19025:   if (SMALL_OBJ(lb)) {
+19026:     void **opp;
+19027:     size_t lg;
+19028: 
+19029:     if (UNLIKELY(get_have_errors()))
+19030:       GC_print_all_errors();
+19031:     GC_notify_or_invoke_finalizers();
+19032:     GC_DBG_COLLECT_AT_MALLOC(lb_orig);
+19033:     LOCK();
+19034:     lg = GC_size_map[lb];
+19035:     opp = &GC_obj_kinds[kind].ok_freelist[lg];
+19036:     op = *opp;
+19037:     if (LIKELY(op != NULL)) {
+19038:       *opp = obj_link(op);
+19039:       obj_link(op) = 0;
+19040:       GC_bytes_allocd += GRANULES_TO_BYTES((word)lg);
+19041:       /*
+19042:        * Mark bit was already set on free list.  It will be cleared only
+19043:        * temporarily during a collection, as a result of the normal
+19044:        * free-list mark bit clearing.
+19045:        */
+19046:       GC_non_gc_bytes += GRANULES_TO_BYTES((word)lg);
+19047:     } else {
+19048:       op = GC_generic_malloc_inner_small(lb, kind);
+19049:       if (NULL == op) {
+19050:         GC_oom_func oom_fn = GC_oom_fn;
+19051:         UNLOCK();
+19052:         return (*oom_fn)(lb_orig);
+19053:       }
+19054:       /* For small objects, the free lists are completely marked. */
+19055:     }
+19056:     GC_ASSERT(GC_is_marked(op));
+19057:     UNLOCK();
+19058:   } else {
+19059:     op = GC_generic_malloc_aligned(lb, kind, 0 /* `flags` */,
+19060:                                    0 /* `align_m1` */);
+19061:     if (op /* `!= NULL` */) { /*< CPPCHECK */
+
+19268: static void
+19269: free_internal(void *p, const hdr *hhdr)
+19270: {
+19271:   size_t lb = hhdr->hb_sz;           /*< size in bytes */
+19272:   size_t lg = BYTES_TO_GRANULES(lb); /*< size in granules */
+19273:   int kind = hhdr->hb_obj_kind;
+19274: 
+19275:   GC_bytes_freed += lb;
+19276:   if (IS_UNCOLLECTABLE(kind))
+19277:     GC_non_gc_bytes -= lb;
+19278:   if (LIKELY(lg <= MAXOBJGRANULES)) {
+19279:     struct obj_kind *ok = &GC_obj_kinds[kind];
+19280:     void **flh;
+19281: 
+19282:     /*
+19283:      * It is unnecessary to clear the mark bit.  If the object is
+19284:      * reallocated, it does not matter.  Otherwise, the collector will
+19285:      * do it, since it is on a free list.
+19286:      */
+19287:     if (ok->ok_init && LIKELY(lb > sizeof(ptr_t))) {
+19288:       BZERO((ptr_t *)p + 1, lb - sizeof(ptr_t));
+19289:     }
+19290: 
+19291:     flh = &ok->ok_freelist[lg];
+19292:     obj_link(p) = *flh;

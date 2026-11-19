@@ -1,0 +1,120 @@
+{
+  "status": "short_comparison_completed_release_acceptance_open",
+  "source": "Frozen previously tested g1h1 source, plus only Context reference and bounded per-runtime config cache and tests. Excludes unrelated current workspace changes.",
+  "candidate_sha256": "60da360c10cc76bc5f37c609b95dc275bec98f88c256f31cf7c491c31ef43faf",
+  "baseline_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+  "scanner_sha256": "041e89551cbd5c180bfba82684c6631a294c08c3ab4d59b8edaf099a30c42cc5",
+  "gc_object_sha256": "d59d73ed9f3b18383d7098c64cdd5835300f63e7504c50671fe4889a59eea7cf",
+  "allocation_summary": {
+    "http": {
+      "before_mib_per_second": 9.842158711623723,
+      "after_mib_per_second": 9.209507972566968,
+      "reduction_percent": 6.42796725386664
+    },
+    "paseo": {
+      "before_mib_per_second": 1.7274610758406344,
+      "after_mib_per_second": 0.8015319508956642,
+      "reduction_percent": 53.600578206625315
+    },
+    "mixed": {
+      "before_mib_per_second": 11.395812763380242,
+      "after_mib_per_second": 9.921170908752266,
+      "reduction_percent": 12.94020782235602
+    }
+  },
+  "protocol": "Serial before/after/after/before; fresh process/directory for every run. After warmup: 30s baseline,60s HTTP,60s Paseo,120s mixed,180s natural cooling. Same representative synthetic topology/configuration previously validated as four-runtime/two-root fixture. Not real business traffic or dependencies. No debugger, injected helper or forced GC. Readonly proc metadata and limited isolated-runtime smaps snapshots.",
+  "total_validations": {
+    "http_ok": 57452,
+    "http_errors": 0,
+    "paseo_ok": 350,
+    "paseo_errors": 0
+  },
+  "expected_http_status": "Fixture deliberately returns a validated 503 every twentieth HTTP worker request; zero validation failures is not zero non-2xx responses.",
+  "safety": {
+    "memory_max_mib": 256,
+    "memory_swap_max": 0,
+    "cpu_quota": "30%",
+    "private_network": true,
+    "stable_start_gate_mib": 640,
+    "host_guard_mib": 512,
+    "min_host_available_mib": 765.16015625,
+    "pressure_idle_attempt_increases": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "oom": false,
+    "unit": "vhttpd-hotpath-pair-20261110.service",
+    "result": "success; exit 0; inactive; all four runtime PIDs gone"
+  },
+  "interpretation": [
+    "Whole-package GC allocation rate improvement repeats closely in both arms: approximately 6.4% HTTP,53.6% Paseo,13.0% mixed. Cumulative allocation is churn, not live bytes.",
+    "Mixed-load anonymous tail medians: before 43.62-55.56 MiB,after 38.95-46.25 MiB. Ranges overlap; single-run RSS improvements are not guaranteed. Adjacent AB/BA comparisons favor candidate, but two runs per package do not establish statistical or long-term acceptance.",
+    "Natural-cooling anonymous tail medians: before 27.89-37.08 MiB,after 27.41-35.83 MiB. Adjacent pair differences only 0.48-1.25 MiB. Lower absolute reclaimed MiB for candidate reflects lower pressure starting point and is not itself a regression.",
+    "Boehm mapped heap declines naturally after cooling; free bytes and epochs show collection/reuse under load. Mapped capacity is not physical RSS. No positive finding of sustained unbounded growth in these short phases; no 24-hour/no-leak proof.",
+    "File-backed RSS varies even within baseline package:  natural-end RssFile 21,860 vs 27,776 KiB; candidate 27,772 vs 27,944 KiB. Isolated smaps show executable/shared-library clean pages. Text section grew only 2816 bytes,rodata shrank 8928 bytes. Exact trigger of file-page residency variation unproven; do not label this anonymous leak or 6 MiB code growth.",
+    "Business remains old 0890d931 package with 126.3125MiB anonymous memory. This candidate has not been deployed to bodytest; no real-business memory benefit is claimed."
+  ],
+  "next_priority": "Keep both allocation fixes; prioritize remaining measured HTTP Context/response copies with source/codegen evidence and bounded validation. P0-02 remains open pending representative real-app acceptance and final-candidate24-hour/platform checks. No new24-hour job started.",
+  "toolchain": "Fixed image f3795a8c5067f58da6c2cad071ccbb7394196df15b249e325c995382d120ef58, existing V0.5.2 d13ccdd and native Ubuntu x86_64-linux-gnu-gcc13 cross compiler,O2/Boehm; exact original collector objects and SDK259620f1. Existing balanced veb activity hooks match baseline hashes. No new V/vjsx patch. Earlier macOS/Linux targeted tests documented on2026-11-09; not rerun this turn without source changes. No full repository or Windows gate claimed.",
+  "artifact_locations": {
+    "local_package": "/Users/guweigang/Source/vhttpd/.runtime/hotpath-pair-20261110/packages/after",
+    "remote_root": "/root/vhttpd-release-tests/20261110-hotpath-pair",
+    "frozen_source": "frozen-candidate-source.tar.gz",
+    "source_manifest": "source-manifest.json",
+    "build_audit": "packages/after/cross-audit.json"
+  },
+  "build_commands": [
+    [
+      "docker",
+      "run",
+      "--rm",
+      "--network",
+      "none",
+      "--platform",
+      "linux/amd64",
+      "--cpus",
+      "2",
+      "--memory",
+      "3g",
+      "--entrypoint",
+      "bash",
+      "-v",
+      "/Users/guweigang/Source/vhttpd/.runtime/hotpath-pair-20261110:/input",
+      "-v",
+      "/Users/guweigang/Source/vhttpd/.runtime/gc-http-factorial-20261109:/previous:ro",
+      "-v",
+      "/Users/guweigang/Source/vhttpd/.runtime/soak-memory-20261102/scan-idle-20261105:/old:ro",
+      "vhttpd-gc-o2-toolchain:20261103",
+      "/input/generate.sh"
+    ],
+    [
+      "orb",
+      "-m",
+      "ubuntu",
+      "bash",
+      "-lc",
+      "python3 /Users/guweigang/Source/vhttpd/.runtime/hotpath-pair-20261110/build_one.py after"
+    ],
+    [
+      "python3",
+      "/Users/guweigang/Source/vhttpd/.runtime/hotpath-pair-20261110/publish.py"
+    ],
+    [
+      "systemd-run",
+      "--unit=vhttpd-hotpath-pair-20261110",
+      "--property=MemoryMax=256M",
+      "--property=MemorySwapMax=0",
+      "--property=CPUQuota=30%",
+      "--property=TasksMax=128",
+      "--property=Nice=19",
+      "--property=PrivateNetwork=yes",
+      "--property=TimeoutStopSec=45",
+      "--property=WorkingDirectory=/root/vhttpd-release-tests/20261110-hotpath-pair",
+      "/usr/bin/python3",
+      "/root/vhttpd-release-tests/20261110-hotpath-pair/controller.py"
+    ]
+  ],
+  "command_context": "Commands are argv arrays. Build commands ran on macOS or via orb as shown; systemd-run ran on the remote Ubuntu host after verified package/scripts transfer. Absolute paths are from this run; use fresh paths/unit names for a new experiment. Compiler/link argv is preserved verbatim in cross-audit.json."
+}

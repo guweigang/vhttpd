@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "group": "vhs1109_1225391",
+  "binary_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+  "limits": {
+    "memory.max": "268435456",
+    "memory.swap.max": "0",
+    "cpu.max": "30000 100000"
+  },
+  "runtime": 1225575,
+  "phase": "baseline",
+  "elapsed": 15.264315785025246,
+  "profiles": [
+    "baseline"
+  ],
+  "failure": "",
+  "traceback": "Traceback (most recent call last):\n  File \"/root/vhttpd-release-tests/20261109-gc-http-factorial/07-scope-short/driver_scope.py\", line 38, in <module>\n    if rec and rec.poll() is not None:assert rec.returncode==0;rec=None\n                                             ^^^^^^^^^^^^^^^^^\nAssertionError\n"
+}

@@ -1,0 +1,53 @@
+--- a/appkit/ui_macos_darwin.v
++++ b/appkit/ui_macos_darwin.v
+@@ -1549,7 +1549,7 @@
+ 			native_update_toggle_button(native, el)
+ 		}
+ 		.dropdown {
+-			native_update_dropdown(native, el)
++			native_update_dropdown(native, el, declared_text_changed)
+ 		}
+ 		.text_field {
+ 			native_update_text_field(native, element_rect(el.frame), el.placeholder, el.text,
+@@ -2861,17 +2861,34 @@
+ 
+ fn native_new_dropdown(el Element) NativeView {
+ 	dropdown_view := macos.msg_id_rect(macos.alloc('NSPopUpButton'), 'initWithFrame:', appkit_rect(element_rect(el.frame)))
+-	native_update_dropdown(dropdown_view, el)
++	native_update_dropdown(dropdown_view, el, true)
+ 	return dropdown_view
+ }
+ 
+-fn native_update_dropdown(popup NativeView, el Element) {
++fn native_update_dropdown(popup NativeView, el Element, declared_text_changed bool) {
+ 	native_set_frame(popup, element_rect(el.frame))
+-	macos.msg_void(popup, 'removeAllItems')
+-	for item in el.menu {
+-		macos.msg_void1(popup, 'addItemWithTitle:', macos.nsstring(item.title))
+-	}
+-	native_select_dropdown_item(popup, el.text)
++	// A refresh can run while NSPopUpButton is tracking a mouse selection.
++	// Rebuilding an unchanged menu cancels tracking; resetting its selection
++	// also overwrites the native choice before the action reaches the model.
++	mut items_changed := macos.msg_i64(popup, 'numberOfItems') != el.menu.len
++	if !items_changed {
++		for i, item in el.menu {
++			title := macos.msg_id_u64(popup, 'itemTitleAtIndex:', u64(i))
++			if macos.utf8_string(title) != item.title {
++				items_changed = true
++				break
++			}
++		}
++	}
++	if items_changed {
++		macos.msg_void(popup, 'removeAllItems')
++		for item in el.menu {
++			macos.msg_void1(popup, 'addItemWithTitle:', macos.nsstring(item.title))
++		}
++	}
++	if items_changed || declared_text_changed {
++		native_select_dropdown_item(popup, el.text)
++	}
+ 	macos.msg_void1(popup, 'setFont:', native_font(el.text_style.size, el.text_style.bold, el.text_style.italic))
+ 	macos.msg_void_bool(popup, 'setBordered:', box_draws_fill(el.box))
+ 	macos.msg_void_u64(popup, 'setBezelStyle:', 1)

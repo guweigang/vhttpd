@@ -1,5 +1,7 @@
 module main
 
+import conversation_binding
+
 import codex
 import command
 import config
@@ -170,12 +172,12 @@ fn test_control_clear_mutates_stored_alias_entries_without_replacing_their_runti
 		app.providers.codex.instances[name] = codex.ProviderRuntime{
 			instance:         name
 			active_stream_id: 'foreign'
-			stream_map:       {
+			reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 				'stream': [
 					codex.CodexTarget{ platform: 'feishu', message_id: 'message' },
 					codex.CodexTarget{ platform: 'other', message_id: 'retain' },
 				]
-			}
+			}}
 		}
 	}
 	assert control_generation_execute(mut app, control_generation_packet('session.clear', generation, '')).status == 'cleared'
@@ -183,8 +185,8 @@ fn test_control_clear_mutates_stored_alias_entries_without_replacing_their_runti
 		rt := app.providers.codex.instances[name] or { panic('lost registry') }
 		assert rt.instance == name
 		assert rt.active_stream_id == 'foreign'
-		assert rt.stream_map['stream'].len == 1
-		assert rt.stream_map['stream'][0].message_id == 'retain'
+		assert rt.reply_sessions.stream_map['stream'].len == 1
+		assert rt.reply_sessions.stream_map['stream'][0].message_id == 'retain'
 	}
 }
 
@@ -195,9 +197,9 @@ fn test_control_clear_cancels_error_only_jobs_but_preserves_retained_alias_owner
 		if retained {
 			app.providers.codex.instances['default'] = codex.ProviderRuntime{
 				instance:   'default'
-				stream_map: {
+				reply_sessions: &conversation_binding.SessionManager[codex.CodexTarget]{stream_map: {
 					'stream': [codex.CodexTarget{ platform: 'other', message_id: 'keep' }]
-				}
+				}}
 			}
 		}
 		job := app.codex_queue_error_burst(if retained { 'main' } else { 'orphan' }, 'stream', 'old') or { panic('missing job') }

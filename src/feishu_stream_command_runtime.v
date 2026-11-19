@@ -9,6 +9,7 @@ fn (mut app App) feishu_runtime_execute_stream_command(admission feishu.StreamCo
 	mut state := &app.providers.feishu
 	buf := state.stream_command_snapshot(admission) or { return error('feishu_stream_command_retired') }
 	if req.target != buf.message_id { return error('feishu_stream_command_retired') }
+	app.touch_reply_stream(buf.stream_id)
 	match action {
 		'append' {
 			result := state.append_stream_command(admission, req.text)!
@@ -35,6 +36,6 @@ fn (mut app App) feishu_runtime_finish_stream_failure(claim feishu.StreamFailure
 	state.mu.@lock()
 	defer { state.mu.unlock() }
 	released := state.finish_stream_failure_release_unlocked(claim) or { return false }
-	app.codex_release_feishu_targets(released)
+	app.release_reply_binding(released.binding_release())
 	return true
 }

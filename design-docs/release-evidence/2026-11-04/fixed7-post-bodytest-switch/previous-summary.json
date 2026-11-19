@@ -1,0 +1,37 @@
+{
+  "status": "stopped_on_request",
+  "phase": "load",
+  "pressure_seconds": 11812.5,
+  "early_mib_rss_anon": [
+    79.71,
+    53.01
+  ],
+  "late_mib_rss_anon": [
+    60.6,
+    51.02
+  ],
+  "hourly_mib_rss_anon": [
+    [
+      79.68,
+      52.98
+    ],
+    [
+      79.45,
+      52.74
+    ],
+    [
+      62.48,
+      52.68
+    ],
+    [
+      60.6,
+      51.02
+    ]
+  ],
+  "cooldown_samples": 0,
+  "oom": false,
+  "http_ok": 471731,
+  "paseo_ok": 5752,
+  "http_errors": 0,
+  "paseo_errors": 0
+}

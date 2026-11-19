@@ -207,6 +207,7 @@ pub mut:
 
 pub struct FeishuAppConfig {
 pub mut:
+	application_messages bool @[toml: 'application_messages']
 	app_id             string @[toml: 'app_id']
 	app_secret         string @[toml: 'app_secret']
 	verification_token string @[toml: 'verification_token']
@@ -215,6 +216,7 @@ pub mut:
 
 pub struct CodexConfig {
 pub mut:
+	application_messages bool @[toml: 'application_messages']
 	enabled            bool
 	url                string = 'ws://127.0.0.1:4500' @[toml: 'url']
 	model              string = 'o4-mini' @[toml: 'model']
@@ -424,6 +426,11 @@ pub mut:
 
 pub fn default_vhttpd_config() VhttpdConfig {
 	return VhttpdConfig{}
+}
+
+// Resolve configuration identity consistently for runtime management as well as startup.
+pub fn source_config_path(args []string) string {
+	return config_path_from_args(args)
 }
 
 fn config_path_from_args(args []string) string {
@@ -1112,6 +1119,7 @@ fn decode_mcp_config_map(entry map[string]toml.Any) McpConfig {
 
 fn decode_feishu_app_config_map(entry map[string]toml.Any) FeishuAppConfig {
 	return FeishuAppConfig{
+		application_messages: toml_bool_from_map(entry, 'application_messages', false)
 		app_id:             toml_string_from_map(entry, 'app_id', '')
 		app_secret:         toml_string_from_map(entry, 'app_secret', '')
 		verification_token: toml_string_from_map(entry, 'verification_token', '')
@@ -1170,6 +1178,7 @@ fn decode_feishu_config_map(entry map[string]toml.Any) FeishuConfig {
 
 fn decode_codex_config_map(entry map[string]toml.Any) CodexConfig {
 	mut cfg := CodexConfig{}
+	cfg.application_messages = toml_bool_from_map(entry, 'application_messages', false)
 	if 'enabled' in entry {
 		cfg.enabled = toml_bool_from_map(entry, 'enabled', cfg.enabled)
 	}

@@ -100,6 +100,7 @@ fn (mut app App) provider_runtime_settings_snapshot() provider.ProviderRuntimeSe
 
 fn codex_state_from_settings(settings provider.ProviderRuntimeSettings) codex.CodexState {
 	return codex.CodexState.new(codex.RuntimeSettings{
+		application_messages: settings.codex.application_messages
 		enabled:            settings.codex.enabled
 		url:                settings.codex.url
 		model:              settings.codex.model

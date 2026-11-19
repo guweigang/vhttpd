@@ -1,0 +1,7 @@
+{
+  "base_commit": "d260cecd415a8640fb655819efd52caee32e5fc2",
+  "vjsx_commit": "259620f1981a3573777ec8cda72883b1866404a7",
+  "fix_file_sha256": "5b96c315f373726f3983145159a8a5df8672ba7c99597089baf36fcd6d3ba38d",
+  "diagnostic": true,
+  "not_official_release": true
+}

@@ -1,3 +1,4 @@
+import { createMessageProtocolAdapter } from "./message-protocol.mjs";
 import { feishuText, feishuCard, feishuUpdateText, feishuUpdateCard, feishuStreamAppendText, feishuStreamFinish, codexRpcCall, codexRpcReply, codexTurnStart, codexTurnInterrupt, codexSessionClear, feishuSessionClear, providerInstanceUpsert, providerInstanceEnsure } from "./commands.mts";
 import { isUseCommandText } from "./command-text-rules.mjs";
 import { createFeishuInboundDeduper } from "../feishu/dedupe.mts";
@@ -28,7 +29,7 @@ import {
   isCodexThreadIdleStatus,
   normalizeCodexRuntimeStatus,
 } from "../codex/protocol.mts";
-import { isBusyStream, isStaleBusyStream, positiveIntegerEnv } from "./busy-guard.mts";
+import { isBusyStream, isStaleBusyStream } from "./busy-guard.mts";
 import {
   isItemLifecycleNotification,
   isThreadScopedSession,
@@ -38,7 +39,7 @@ import {
   threadRootIdFromSessionKey,
 } from "../feishu/card-policy.mts";
 import { mdBullet, mdInline, mdSection, mdText } from "./ui-text.mts";
-import { botDefaults } from "../config/config.mts";
+import { botDefaults, botAdminToken } from "../config/config.mts";
 import providerConfig from "../config/provider-config.mts";
 import {
   createReplyContext,
@@ -70,6 +71,7 @@ import {
   rememberSelectionScope,
   resetChatThread,
   runtimeSnapshot,
+  resolveProtocolStream,
   upsertApprovalRequestState,
   unbindProjectFromChat,
   upsertItemRenderState,
@@ -81,11 +83,13 @@ import {
   updateChatState,
 } from "./state.mjs";
 
+const messageProtocol = createMessageProtocolAdapter({ resolveStream: resolveProtocolStream });
+
 const CODEXBOT_TS_BUILD = "codexbot-ts-2026-04-01-idle-session-fix";
 const ENABLE_ITEM_RENDER_STREAMS = typeof __vhttpd_enable_item_render_streams__ !== 'undefined' ? __vhttpd_enable_item_render_streams__ : true;
 const FEISHU_INBOUND_DEDUPE_WINDOW_MS = 2 * 60 * 1000;
 const FEISHU_INBOUND_DEDUPE_LIMIT = 1024;
-const ACTIVE_STREAM_STALE_MS = positiveIntegerEnv("CODEXBOT_TS_ACTIVE_STREAM_STALE_MS", 3 * 60 * 1000);
+const ACTIVE_STREAM_STALE_MS = botDefaults().activeStreamStaleMs;
 const feishuInboundDeduper = createFeishuInboundDeduper({
   dedupeWindowMs: FEISHU_INBOUND_DEDUPE_WINDOW_MS,
   dedupeLimit: FEISHU_INBOUND_DEDUPE_LIMIT,
@@ -101,7 +105,6 @@ const codexRpcHelpers = createCodexRpcHelpers({
 const {
   codeQueryMethods: CODEX_QUERY_METHODS,
   codexRpcDebugText,
-  codexRpcIndicatesMissingThread,
   defaultCodexParams,
   extractAnswerFromThreadReadResult,
   extractExactAnswerFromThreadReadResult,
@@ -126,7 +129,8 @@ async function detachStaleActiveStream(session, stream) {
     completedAt: Date.now(),
     lastEvent: "stale.auto_detach",
   });
-  await resetChatThread(session.sessionKey, session.chatId);
+  // A resume timeout says nothing about the existence of the saved history.
+  if (stream.status !== "resuming_thread") await resetChatThread(session.sessionKey, session.chatId);
   return (await getStreamState(stream.streamId)) || {
     ...stream,
     status: "cancelled",
@@ -304,13 +308,13 @@ const handleCodexNotification = createCodexNotificationRouter({
 });
 
 const handleCodexRpcResponse = createCodexRpcResponseRouter({
+  ensureChatState,
   botDefaults,
   buildTag: CODEXBOT_TS_BUILD,
   buildThreadStartParams,
   codexRpcCall,
   codexRpcDebugText,
   codexRpcErrorText: botTextHelpers.codexRpcErrorText,
-  codexRpcIndicatesMissingThread,
   consumePendingThreadRename,
   continueQueuedTurnStart,
   deleteThreadName,
@@ -591,12 +595,17 @@ export function createBotApp() {
         return ctx.text("OK", 200);
       }
       if (ctx.path === "/admin/state") {
+        const token = botAdminToken();
+        if (!token || ctx.header("authorization") !== `Bearer ${token}`) {
+          return ctx.json({ ok: false, error: "unauthorized" }, 401);
+        }
         return ctx.json(
           {
             ok: true,
             app: "codexbot-app-ts",
             dispatchKind: ctx.runtime.dispatchKind,
             snapshot: await runtimeSnapshot(),
+            protocol: messageProtocol.snapshot(),
           },
           200,
         );
@@ -613,6 +622,8 @@ export function createBotApp() {
     },
 
     async websocket_upstream(frame) {
+      frame = await messageProtocol.adapt(frame);
+      if (!frame) return { handled: false, commands: [] };
       frame.runtime.log("codexbot-app-ts upstream", CODEXBOT_TS_BUILD, frame.provider, frame.eventType, frame.target);
       if (frame.provider === "feishu" && (frame.eventType === "im.message.receive_v1" || frame.eventType === "card.action.trigger")) {
         return completeReplyResponse(await routeFeishuCommand(frame));

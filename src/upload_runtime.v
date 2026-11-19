@@ -281,6 +281,7 @@ fn (mut app App) dispatch_upload_completed_vjsx(engines EngineRuntime, handler s
 	app.emit('upload.completed.dispatch', ok)
 }
 
+@[markused]
 fn handle_upload_route(mut app App, mut ctx Context, rule RuntimeRouteRule, method string, path string, req_id string, trace_id string, start_ms i64, query map[string]string, body_on_head string, remote_addr string) veb.Result {
 	return handle_upload_route_on_view(mut app, mut ctx, app.transform_dispatch_view(), rule, method, path, req_id, trace_id, start_ms, query, body_on_head, remote_addr)
 }

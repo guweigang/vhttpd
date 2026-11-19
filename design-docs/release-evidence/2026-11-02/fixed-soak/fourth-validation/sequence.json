@@ -1,0 +1,34 @@
+{
+  "status": "failed",
+  "started_utc": "2026-11-02T13:13:56Z",
+  "binary": "/root/vhttpd-release-tests/20261102-fixed4/package/vhttpd",
+  "binary_sha256": "b26060c5aaf1eaa2ce505a4eb8b60f97808fae95daf216c5bb1153280437bb50",
+  "retained_rss_budget_kib": 16384,
+  "max_load_rss_kib": 262144,
+  "asset_sha256": {
+    "remote_soak.py": "8ba82131730756fc5d5f53deb83399c79dd2dee64737186af402b32e7e9fc1b9",
+    "ws_client.py": "08ebd66512e24d6c174513597919ff57cf04133e8dba3b6b211a506c7633ccc8",
+    "paseo.mts": "f8d431d53e3a1f02a85e910bab1922529d7cf352783f2f0a283ea81886f3f0b6",
+    "paseo-component.toml": "2e67ee169a67d6aa68141a2d83df052a8b0d168992736956cacaf3a282e0a829"
+  },
+  "cases": [
+    {
+      "workload": "paseo",
+      "baseline_rss_kib": 50260,
+      "settled_rss_kib": 55868,
+      "max_load_rss_kib": 56156,
+      "http_ok": 0,
+      "paseo_ok": 78
+    },
+    {
+      "workload": "http",
+      "baseline_rss_kib": 50040,
+      "settled_rss_kib": 49812,
+      "max_load_rss_kib": 50312,
+      "http_ok": 6390,
+      "paseo_ok": 0
+    }
+  ],
+  "current_case": "mixed",
+  "failure": "Retained RSS grew more than 16 MiB: 64376 -> 86704 KiB"
+}

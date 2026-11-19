@@ -20,6 +20,7 @@ pub:
 
 pub struct CodexRuntimeSettings {
 pub:
+	application_messages bool
 	enabled            bool
 	url                string
 	model              string
@@ -149,6 +150,7 @@ pub fn ProviderRuntimeSettings.resolve(args []string, cfg config.VhttpdConfig) P
 			apps:                       feishu_apps.clone()
 		}
 		codex:                CodexRuntimeSettings{
+			application_messages: cfg.codex.application_messages
 			enabled:            cfg.codex.enabled
 			url:                if cfg.codex.url.trim_space() != '' {
 				cfg.codex.url

@@ -1,0 +1,509 @@
+--- g0h0/src/websocket_upstream_provider_control.v
++++ g1h0/src/websocket_upstream_provider_control.v
+@@ -1,5 +1,6 @@
+ module main
+ 
++import memidle
+ import log
+ import net.websocket
+ 
+@@ -51,6 +52,8 @@
+ }
+ 
+ fn (mut app App) websocket_upstream_provider_handle_message(provider string, instance string, mut ws_client websocket.Client, msg &websocket.Message) ! {
++	memidle.begin()
++	defer { memidle.end() }
+ 	if provider == websocket_upstream_provider_codex {
+ 		mut payload_preview := ''
+ 		if msg.opcode == .text_frame || msg.opcode == .binary_frame || msg.opcode == .continuation {
+--- g0h0/src/websocket_relay_runtime.v
++++ g1h0/src/websocket_relay_runtime.v
+@@ -1,5 +1,6 @@
+ module main
+ 
++import memidle
+ import log
+ import net.websocket
+ import relay
+@@ -45,6 +46,8 @@
+ }
+ 
+ fn relay_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
++	memidle.begin()
++	defer { memidle.end() }
+ 	mut state := unsafe { &RelayWebSocketBridgeState(ref) }
+ 	if !state.lifecycle.can_process_messages() {
+ 		return
+--- g0h0/src/websocket_relay_agent_runtime.v
++++ g1h0/src/websocket_relay_agent_runtime.v
+@@ -1,5 +1,6 @@
+ module main
+ 
++import memidle
+ import net.websocket
+ import time
+ import relay
+@@ -198,6 +199,8 @@
+ }
+ 
+ fn relay_agent_message_cb(mut client websocket.Client, msg &websocket.Message, ref voidptr) ! {
++	memidle.begin()
++	defer { memidle.end() }
+ 	mut state := unsafe { &RelayAgentSocketState(ref) }
+ 	if state.session.stopped() { return }
+ 	RelayAgentRuntime.handle_message(state.ctx, state.descriptor, mut client, msg)!
+--- g0h0/src/websocket_runtime.v
++++ g1h0/src/websocket_runtime.v
+@@ -1,5 +1,6 @@
+ module main
+ 
++import memidle
+ import upstream.transport
+ import ws
+ import connection_runtime
+@@ -41,6 +42,8 @@
+ }
+ 
+ pub fn (kernel WebSocketKernelPort) dispatch_event(frame transport.WorkerWebSocketFrame) !transport.WorkerWebSocketDispatchResponse {
++	memidle.begin()
++	defer { memidle.end() }
+ 	if kernel.dispatch_event_fn != unsafe { nil } { return kernel.dispatch_event_fn(frame) }
+ 	if owner := kernel.owner { return owner.dispatch_event(frame) }
+ 	panic('websocket kernel operation missing: dispatch_event')
+--- g0h0/src/server_runtime_orchestrator.v
++++ g1h0/src/server_runtime_orchestrator.v
+@@ -1,6 +1,7 @@
+ module main
+ 
+ import log
++import memidle
+ import net
+ import net.openssl
+ import os
+@@ -62,6 +63,9 @@
+ }
+ 
+ fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
++	memidle.begin()
++	defer { memidle.end() }
++	memidle.start()
+ 	if !lifecycle.shutdown.begin_start() { return }
+ 	defer { lifecycle.shutdown.end_start() }
+ 	log.debug('[vhttpd] start_server_runtime: initializing app runtime site=${runtime_cfg.site_id}')
+--- g0h0/src/websocket_ingress_runtime.v
++++ g1h0/src/websocket_ingress_runtime.v
+@@ -1,5 +1,6 @@
+ module main
+ 
++import memidle
+ import dispatch
+ import executor
+ import log
+@@ -101,6 +102,8 @@
+ }
+ 
+ fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
++	memidle.begin()
++	defer { memidle.end() }
+ 	mut state := unsafe { &ws.BridgeState(ref) }
+ 	state.rt.trace('ws.message.enter', {
+ 		'conn_id':     state.conn_id
+--- g0h0/src/executor/inproc_vjsx_lane_pool.v
++++ g1h0/src/executor/inproc_vjsx_lane_pool.v
+@@ -1,6 +1,7 @@
+ module executor
+ 
+ import time
++import memidle
+ 
+ pub fn (e InProcVjsxExecutor) select_next_lane() !VjsxExecutionLane {
+ 	mut state := e.state
+@@ -21,6 +22,7 @@
+ 			continue
+ 		}
+ 		state.lanes[idx].inflight++
++		memidle.begin()
+ 		state.rr_index = (idx + 1) % state.lanes.len
+ 		return state.lanes[idx]
+ 	}
+@@ -42,6 +44,7 @@
+ 			continue
+ 		}
+ 		state.lanes[idx].inflight++
++		memidle.begin()
+ 		return state.lanes[idx]
+ 	}
+ 	return error('inproc_vjsx_executor_lane_not_found')
+@@ -68,6 +71,7 @@
+ 			return error('inproc_vjsx_executor_no_available_lane')
+ 		}
+ 		state.lanes[idx].inflight++
++		memidle.begin()
+ 		state.rr_index = (idx + 1) % state.lanes.len
+ 		return state.lanes[idx]
+ 	}
+@@ -158,6 +162,7 @@
+ 		}
+ 		if state.lanes[i].inflight > 0 {
+ 			state.lanes[i].inflight--
++			memidle.end()
+ 		}
+ 		break
+ 	}
+--- g0h0/src/executor/inproc_vjsx_task_control.v
++++ g1h0/src/executor/inproc_vjsx_task_control.v
+@@ -1,6 +1,7 @@
+ module executor
+ 
+ import sync
++import memidle
+ import time
+ import vjsx
+ 
+@@ -68,6 +69,7 @@
+ 				return false
+ 			}
+ 			state.lanes[idx].inflight++
++			memidle.begin()
+ 			control.owns_lane = true
+ 			break
+ 		}
+@@ -114,7 +116,7 @@
+ 	state.mu.@lock()
+ 	if owns_lane {
+ 		for i, lane in state.lanes {
+-			if lane.id == lane_id && lane.inflight > 0 { state.lanes[i].inflight-- }
++			if lane.id == lane_id && lane.inflight > 0 { state.lanes[i].inflight--; memidle.end() }
+ 		}
+ 	}
+ 	state.release_websocket_mailbox_claim_locked(control.mailbox_key, control)
+@@ -142,7 +144,7 @@
+ 		state.release_websocket_mailbox_claim_locked(control.mailbox_key, control)
+ 		if control.owns_lane {
+ 			for i, lane in state.lanes {
+-				if lane.id == control.lane_id && lane.inflight > 0 { state.lanes[i].inflight-- }
++				if lane.id == control.lane_id && lane.inflight > 0 { state.lanes[i].inflight--; memidle.end() }
+ 			}
+ 			control.owns_lane = false
+ 		}
+--- g0h0/src/executor/inproc_vjsx_host_lifecycle.v
++++ g1h0/src/executor/inproc_vjsx_host_lifecycle.v
+@@ -1,11 +1,14 @@
+ module executor
+ 
+ import log
++import memidle
+ import os
+ import vjsx
+ import vjsx.runtimejs
+ 
+ pub fn (e InProcVjsxExecutor) ensure_lane_host(idx int) ! {
++	memidle.begin()
++	defer { memidle.end() }
+ 	mut state := e.state
+ 	state.mu.@lock()
+ 	if state.stopping {
+--- g0h0/src/ws/dispatch_session.v
++++ g1h0/src/ws/dispatch_session.v
+@@ -1,5 +1,6 @@
+ module ws
+ 
++import memidle
+ import encoding.base64
+ import log
+ import net
+@@ -137,6 +138,8 @@
+ }
+ 
+ fn dispatch_session_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
++	memidle.begin()
++	defer { memidle.end() }
+ 	mut state := unsafe { &DispatchBridgeState(ref) }
+ 	if !state.lifecycle.can_process_messages() {
+ 		log.debug('[vhttpd] websocket dispatch message ignored conn_id=${state.conn_id} request_id=${state.request_id} reason=closed')
+--- g0h0/src/memory_request_activity.v
++++ g1h0/src/memory_request_activity.v
+@@ -0,0 +1,15 @@
++module main
++
++import memidle
++import net.http
++
++// veb invokes these optional hooks on every dispatch path, including native,
++// static, admin, refusing middleware, 404/405 and parser-error early returns.
++fn (mut app App) before_handle_request(req http.Request) {
++	if is_websocket_upgrade(req) { memidle.touch() } else { memidle.begin() }
++}
++fn (mut app App) after_handle_request(req http.Request) {
++	if is_websocket_upgrade(req) { memidle.touch() } else { memidle.end() }
++}
++fn (mut app AdminApp) before_handle_request(req http.Request) { memidle.begin() }
++fn (mut app AdminApp) after_handle_request(req http.Request) { memidle.end() }
+--- g0h0/src/memidle/idle_policy_test.c
++++ g1h0/src/memidle/idle_policy_test.c
+@@ -0,0 +1,44 @@
++#include <assert.h>
++#include <stdio.h>
++#include <string.h>
++#include "idle.c"
++#ifndef _WIN32
++static void *activity_thread(void *unused) {
++ (void)unused;
++ for(int i=0;i<10000;i++){vhttpd_memory_begin();vhttpd_memory_end();}
++ return NULL;
++}
++#endif
++static void reset_policy(void) { memset(&vhttpd_memory_idle_state,0,sizeof vhttpd_memory_idle_state);started=collecting=0; }
++int main(void) {
++ const uint64_t heap=64*1024*1024, now=monotonic_ns();
++ reset_policy();assert(vhttpd_memory_start_once()==1);assert(vhttpd_memory_start_once()==0);
++ /* An active request cannot become eligible merely by taking a long time. */
++ vhttpd_memory_begin();assert(!claim_at(now+10*QUIET_NS,heap));vhttpd_memory_end();
++ assert(!claim_at(vhttpd_memory_idle_state.last_activity_ns+QUIET_NS-1,heap));
++ assert(claim_at(vhttpd_memory_idle_state.last_activity_ns+QUIET_NS,heap));
++ assert(!claim_at(now+10*QUIET_NS,heap));
++ /* New traffic invalidates a claim; aborted passes must not raise the floor. */
++ vhttpd_memory_begin();assert(!vhttpd_memory_still_idle());vhttpd_memory_end();
++ vhttpd_memory_finish(heap,0,0);assert(vhttpd_memory_stats().cancelled==1);assert(vhttpd_memory_stats().heap_after_bytes==0);
++ uint64_t next=vhttpd_memory_idle_state.last_attempt_ns+COOLDOWN_NS;
++ assert(!claim_at(next-1,heap));assert(claim_at(next,heap));assert(vhttpd_memory_still_idle());
++ vhttpd_memory_finish(20*1024*1024,1234,2);
++ assert(vhttpd_memory_stats().collections==1);assert(vhttpd_memory_stats().passes==2);
++ assert(!claim_at(next+COOLDOWN_NS,20*1024*1024));
++ vhttpd_memory_begin();vhttpd_memory_end();
++ assert(claim_at(next+COOLDOWN_NS,20*1024*1024));
++ vhttpd_memory_finish(20*1024*1024,1500,2);
++ next+=COOLDOWN_NS;
++ assert(!claim_at(next+COOLDOWN_NS,28*1024*1024-1));
++ assert(claim_at(next+COOLDOWN_NS,28*1024*1024));vhttpd_memory_finish(4*1024*1024,2345,1);
++ assert(!claim_at(next+2*COOLDOWN_NS,MIN_HEAP_BYTES-1));
++ reset_policy();
++#ifndef _WIN32
++ pthread_t threads[8];for(int i=0;i<8;i++)assert(!pthread_create(&threads[i],NULL,activity_thread,NULL));
++ for(int i=0;i<8;i++)pthread_join(threads[i],NULL);
++ assert(vhttpd_memory_stats().active==0);assert(vhttpd_memory_stats().generation==160000);
++#endif
++ puts("idle policy: active, quiet window, concurrent claims, cancellation, cooldown, growth floor and concurrency passed");
++ return 0;
++}
+--- g0h0/src/memidle/idle.h
++++ g1h0/src/memidle/idle.h
+@@ -0,0 +1,18 @@
++#ifndef VHTTPD_MEMORY_IDLE_H
++#define VHTTPD_MEMORY_IDLE_H
++#include <stdint.h>
++typedef struct {
++ uint64_t active, last_activity_ns, last_attempt_ns;
++ uint64_t attempts, collections, last_elapsed_ns, max_elapsed_ns;
++ uint64_t heap_after_bytes, generation, claimed_generation, cancelled, passes;
++} VhttpdMemoryIdleStats;
++void vhttpd_memory_begin(void);
++void vhttpd_memory_end(void);
++void vhttpd_memory_touch(void);
++int vhttpd_memory_start_once(void);
++int vhttpd_memory_claim(uint64_t heap_bytes);
++int vhttpd_memory_still_idle(void);
++int vhttpd_memory_is_quiet(void);
++void vhttpd_memory_finish(uint64_t heap_bytes, uint64_t elapsed_ns, int passes);
++VhttpdMemoryIdleStats vhttpd_memory_stats(void);
++#endif
+--- g0h0/src/memidle/runtime.c.v
++++ g1h0/src/memidle/runtime.c.v
+@@ -0,0 +1,82 @@
++module memidle
++
++import time
++
++#flag @VMODROOT/src/memidle/idle.c
++#include "@VMODROOT/src/memidle/idle.h"
++
++fn C.vhttpd_memory_begin()
++fn C.vhttpd_memory_end()
++fn C.vhttpd_memory_touch()
++fn C.vhttpd_memory_start_once() int
++fn C.vhttpd_memory_claim(heap u64) int
++fn C.vhttpd_memory_still_idle() int
++fn C.vhttpd_memory_finish(heap u64, elapsed u64, passes int)
++
++pub fn begin() { C.vhttpd_memory_begin() }
++pub fn end() { C.vhttpd_memory_end() }
++pub fn touch() { C.vhttpd_memory_touch() }
++
++$if gcboehm ? {
++	#include <gc.h>
++	fn C.GC_get_heap_size() uint
++	fn C.GC_gcollect_and_unmap()
++}
++
++// One process-wide worker, including processes with only native HTTP routes.
++pub fn start() {
++	$if gcboehm ? {
++		if C.vhttpd_memory_start_once() != 0 { spawn reclaim_loop() }
++	}
++}
++
++fn reclaim_loop() {
++	$if gcboehm ? {
++		for {
++			time.sleep(time.second)
++			if C.vhttpd_memory_claim(u64(C.GC_get_heap_size())) == 0 { continue }
++			started := time.sys_mono_now()
++			mut passes := 0
++			// A request can arrive after a quiet-period claim. Recheck before
++			// each pass; never hold an application/allocator gate across GC.
++			if C.vhttpd_memory_still_idle() != 0 { C.GC_gcollect_and_unmap(); passes++ }
++			if C.vhttpd_memory_still_idle() != 0 { C.GC_gcollect_and_unmap(); passes++ }
++			C.vhttpd_memory_finish(u64(C.GC_get_heap_size()), u64(time.sys_mono_now()-started), passes)
++		}
++	}
++}
++
++@[typedef]
++struct C.VhttpdMemoryIdleStats {
++	active u64
++	last_activity_ns u64
++	last_attempt_ns u64
++	attempts u64
++	collections u64
++	last_elapsed_ns u64
++	max_elapsed_ns u64
++	heap_after_bytes u64
++	generation u64
++	claimed_generation u64
++	cancelled u64
++	passes u64
++}
++fn C.vhttpd_memory_stats() C.VhttpdMemoryIdleStats
++
++pub struct Stats {
++pub:
++	active u64
++	attempts u64
++	collections u64
++	last_elapsed_ns u64
++	max_elapsed_ns u64
++	heap_after_bytes u64
++	cancelled u64
++	passes u64
++}
++pub fn stats() Stats {
++	s := C.vhttpd_memory_stats()
++	return Stats{active:s.active, attempts:s.attempts, collections:s.collections,
++		last_elapsed_ns:s.last_elapsed_ns,max_elapsed_ns:s.max_elapsed_ns,
++		heap_after_bytes:s.heap_after_bytes,cancelled:s.cancelled,passes:s.passes}
++}
+--- g0h0/src/memidle/idle.c
++++ g1h0/src/memidle/idle.c
+@@ -0,0 +1,93 @@
++#include "idle.h"
++#include <stddef.h>
++#ifdef _WIN32
++#include <windows.h>
++static volatile LONG memory_lock;
++static int lock_try(void) { return InterlockedCompareExchange(&memory_lock,1,0)==0; }
++static void lock_enter(void) { while(!lock_try()) SwitchToThread(); }
++static void lock_leave(void) { InterlockedExchange(&memory_lock,0); }
++static uint64_t monotonic_ns(void) { return (uint64_t)GetTickCount64()*1000000; }
++#else
++#include <pthread.h>
++#include <time.h>
++static pthread_mutex_t memory_lock=PTHREAD_MUTEX_INITIALIZER;
++static int lock_try(void) { return pthread_mutex_trylock(&memory_lock)==0; }
++static void lock_enter(void) { pthread_mutex_lock(&memory_lock); }
++static void lock_leave(void) { pthread_mutex_unlock(&memory_lock); }
++static uint64_t monotonic_ns(void) {
++ struct timespec t;
++ if(clock_gettime(CLOCK_MONOTONIC,&t)!=0) return 0;
++ return (uint64_t)t.tv_sec*1000000000+(uint64_t)t.tv_nsec;
++}
++#endif
++#define QUIET_NS (UINT64_C(30)*1000000000)
++#define COOLDOWN_NS (UINT64_C(60)*1000000000)
++#define MIN_HEAP_BYTES (UINT64_C(16)*1024*1024)
++#define MIN_GROWTH_BYTES (UINT64_C(8)*1024*1024)
++/* One linked definition, shared by every V module and C translation unit. */
++VhttpdMemoryIdleStats vhttpd_memory_idle_state;
++static int started, collecting;
++
++void vhttpd_memory_begin(void) {
++ lock_enter();
++ vhttpd_memory_idle_state.active++;
++ vhttpd_memory_idle_state.generation++;
++ vhttpd_memory_idle_state.last_activity_ns=monotonic_ns();
++ lock_leave();
++}
++void vhttpd_memory_end(void) {
++ lock_enter();
++ if(vhttpd_memory_idle_state.active) vhttpd_memory_idle_state.active--;
++ vhttpd_memory_idle_state.last_activity_ns=monotonic_ns();
++ vhttpd_memory_idle_state.generation++;
++ lock_leave();
++}
++void vhttpd_memory_touch(void) {
++ lock_enter();
++ vhttpd_memory_idle_state.last_activity_ns=monotonic_ns();
++ vhttpd_memory_idle_state.generation++;
++ lock_leave();
++}
++int vhttpd_memory_start_once(void) {
++ lock_enter();int result=!started;
++ if(result) { started=1;vhttpd_memory_idle_state.last_activity_ns=monotonic_ns(); }
++ lock_leave();return result;
++}
++static int claim_at(uint64_t now,uint64_t heap) {
++ VhttpdMemoryIdleStats *s=&vhttpd_memory_idle_state;
++ if(!now || collecting || s->active || now<s->last_activity_ns || now-s->last_activity_ns<QUIET_NS) return 0;
++ if(s->last_attempt_ns && (now<s->last_attempt_ns || now-s->last_attempt_ns<COOLDOWN_NS)) return 0;
++ if(heap<MIN_HEAP_BYTES) return 0;
++ /* A new workload may leave garbage without expanding an existing pool. */
++ if(s->heap_after_bytes && s->generation==s->claimed_generation &&
++    (heap<s->heap_after_bytes || heap-s->heap_after_bytes<MIN_GROWTH_BYTES)) return 0;
++ collecting=1;s->last_attempt_ns=now;s->claimed_generation=s->generation;s->attempts++;
++ return 1;
++}
++int vhttpd_memory_claim(uint64_t heap) {
++ if(!lock_try())return 0;
++ int result=claim_at(monotonic_ns(),heap);lock_leave();return result;
++}
++int vhttpd_memory_is_quiet(void) {
++ lock_enter();uint64_t now=monotonic_ns();
++ int result=now && !vhttpd_memory_idle_state.active && now>=vhttpd_memory_idle_state.last_activity_ns && now-vhttpd_memory_idle_state.last_activity_ns>=QUIET_NS;
++ lock_leave();return result;
++}
++int vhttpd_memory_still_idle(void) {
++ lock_enter();int result=collecting && !vhttpd_memory_idle_state.active && vhttpd_memory_idle_state.generation==vhttpd_memory_idle_state.claimed_generation;
++ lock_leave();return result;
++}
++void vhttpd_memory_finish(uint64_t heap,uint64_t elapsed,int passes) {
++ lock_enter();
++ if(passes>0) {
++  vhttpd_memory_idle_state.collections++;
++  vhttpd_memory_idle_state.passes+=(uint64_t)passes;
++  vhttpd_memory_idle_state.heap_after_bytes=heap;
++ } else { vhttpd_memory_idle_state.cancelled++; }
++ vhttpd_memory_idle_state.last_elapsed_ns=elapsed;
++ if(elapsed>vhttpd_memory_idle_state.max_elapsed_ns)vhttpd_memory_idle_state.max_elapsed_ns=elapsed;
++ collecting=0;lock_leave();
++}
++VhttpdMemoryIdleStats vhttpd_memory_stats(void) {
++ lock_enter();VhttpdMemoryIdleStats result=vhttpd_memory_idle_state;lock_leave();return result;
++}
+--- g0h0/src/executor/vjsx_compiler_memory.h
++++ g1h0/src/executor/vjsx_compiler_memory.h
+@@ -1,6 +1,8 @@
+ #ifndef VHTTPD_VJSX_COMPILER_MEMORY_H
+ #define VHTTPD_VJSX_COMPILER_MEMORY_H
+ 
++#include "../memidle/idle.h"
++
+ /* QuickJS uses libc allocations, while V's compiler bridge uses Boehm.
+  * Return free libc pages after the temporary compiler has been destroyed. */
+ #if defined(__GLIBC__)
+@@ -13,6 +15,7 @@
+ }
+ 
+ static inline int vhttpd_maintain_allocator(int active) {
++    if (!active && !vhttpd_memory_is_quiet()) return 0;
+ #if __GLIBC_PREREQ(2, 33)
+     static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+     static time_t last_attempt;

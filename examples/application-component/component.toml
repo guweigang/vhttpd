@@ -1,0 +1,23 @@
+# Business component only. Shared resources and Admin stay in the environment.
+[listeners.component_demo]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19903
+
+[engines.component_demo]
+kind = "vjsx"
+entry = "main.mjs"
+runtime_profile = "script"
+thread_count = 1
+
+[adapters.component_demo]
+kind = "http-handler"
+engine = "engine:component_demo"
+
+[[pipelines]]
+id = "component_demo.http"
+group = "component_demo"
+ingress = "listener:component_demo"
+match.paths = ["*"]
+egress = "adapter:component_demo"

@@ -143,7 +143,7 @@ fn (mut registry SessionRegistry) buffer_pending_unlocked(session_id string, lin
 	if pending.len >= max {
 		return error('relay_session_pending_full:${session_id}:${link_id}')
 	}
-	pending << frame
+	pending << frame.owned_copy()
 	session.pending_by_link[link_id] = pending
 	registry.sessions[session_id] = session
 }

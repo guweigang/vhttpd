@@ -1,0 +1,10 @@
+# Include alongside mysql-agent.toml in the local project. Keep the existing
+# vjsx engine and its Relay-backed db/wechat resource; cloud functions unchanged.
+[adapters.local_debug]
+kind = "debug-http"
+engine = "engine:wechat"
+
+[[pipelines]]
+id = "debug/http"
+ingress = "relay:database"
+egress = "adapter:local_debug"

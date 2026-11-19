@@ -76,6 +76,8 @@ fn HttpIngressRuntime.handle_on_view(mut app App, mut ctx Context, method string
 	remote_addr := if isnil(ctx.conn) { '' } else { ctx.conn.peer_ip() or { '' } }
 	req_id := resolve_request_id(ctx, path)
 	trace_id := resolve_trace_id(ctx, path)
+	ctx.observed_request_id = req_id
+	ctx.observed_trace_id = trace_id
 
 	request_path, query_string := transport.normalize_request_target(path)
 	normalized_target := transport.normalize_path(request_path)

@@ -1,0 +1,2181 @@
+{
+  "windows": {
+    "baseline": {
+      "events": 648,
+      "requested_bytes": 72274,
+      "duration_first_to_last_event_s": 0.9112733990186825,
+      "first_time": 653305.385591339,
+      "last_time": 653306.296864738,
+      "lost_events": 0,
+      "unmatched_exits_at_window_boundary": 0,
+      "misnested_scope_exits": 0,
+      "open_scopes_at_window_end": 0,
+      "exclusive_scope": [
+        {
+          "scope": "@outside-instrumented-scopes",
+          "requested_bytes": 70058,
+          "events": 444,
+          "fraction_of_recorded_requests": 0.9693389047236904
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "requested_bytes": 1468,
+          "events": 160,
+          "fraction_of_recorded_requests": 0.020311591997122062
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "requested_bytes": 748,
+          "events": 44,
+          "fraction_of_recorded_requests": 0.010349503279187537
+        }
+      ],
+      "inclusive_scope_not_additive": [
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "requested_bytes": 1468,
+          "fraction_of_recorded_requests": 0.020311591997122062,
+          "entered_calls": 4
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "requested_bytes": 748,
+          "fraction_of_recorded_requests": 0.010349503279187537,
+          "entered_calls": 44
+        }
+      ],
+      "api_kind_requested_bytes": {
+        "scan": 50688,
+        "atomic": 21586
+      },
+      "top_requested_sizes": [
+        {
+          "kind": "scan",
+          "size": 1231,
+          "scope": "@outside-instrumented-scopes",
+          "events": 32,
+          "bytes": 39392
+        },
+        {
+          "kind": "scan",
+          "size": 1759,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 3518
+        },
+        {
+          "kind": "atomic",
+          "size": 112,
+          "scope": "@outside-instrumented-scopes",
+          "events": 28,
+          "bytes": 3136
+        },
+        {
+          "kind": "atomic",
+          "size": 91,
+          "scope": "@outside-instrumented-scopes",
+          "events": 24,
+          "bytes": 2184
+        },
+        {
+          "kind": "scan",
+          "size": 151,
+          "scope": "@outside-instrumented-scopes",
+          "events": 10,
+          "bytes": 1510
+        },
+        {
+          "kind": "scan",
+          "size": 17,
+          "scope": "executor__VjsxSourceScanner__signature",
+          "events": 78,
+          "bytes": 1326
+        },
+        {
+          "kind": "atomic",
+          "size": 114,
+          "scope": "@outside-instrumented-scopes",
+          "events": 8,
+          "bytes": 912
+        },
+        {
+          "kind": "scan",
+          "size": 79,
+          "scope": "@outside-instrumented-scopes",
+          "events": 10,
+          "bytes": 790
+        },
+        {
+          "kind": "scan",
+          "size": 391,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 782
+        },
+        {
+          "kind": "atomic",
+          "size": 125,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6,
+          "bytes": 750
+        },
+        {
+          "kind": "scan",
+          "size": 17,
+          "scope": "executor__VjsxSourceScanner__probe",
+          "events": 44,
+          "bytes": 748
+        },
+        {
+          "kind": "atomic",
+          "size": 115,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6,
+          "bytes": 690
+        },
+        {
+          "kind": "scan",
+          "size": 32,
+          "scope": "@outside-instrumented-scopes",
+          "events": 20,
+          "bytes": 640
+        },
+        {
+          "kind": "atomic",
+          "size": 130,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 520
+        },
+        {
+          "kind": "atomic",
+          "size": 128,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 512
+        },
+        {
+          "kind": "atomic",
+          "size": 127,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 508
+        },
+        {
+          "kind": "atomic",
+          "size": 124,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 496
+        },
+        {
+          "kind": "atomic",
+          "size": 121,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 484
+        },
+        {
+          "kind": "atomic",
+          "size": 120,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 480
+        },
+        {
+          "kind": "atomic",
+          "size": 116,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 464
+        },
+        {
+          "kind": "scan",
+          "size": 223,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 446
+        },
+        {
+          "kind": "atomic",
+          "size": 111,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 444
+        },
+        {
+          "kind": "scan",
+          "size": 55,
+          "scope": "@outside-instrumented-scopes",
+          "events": 8,
+          "bytes": 440
+        },
+        {
+          "kind": "atomic",
+          "size": 109,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 436
+        },
+        {
+          "kind": "atomic",
+          "size": 107,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 428
+        },
+        {
+          "kind": "atomic",
+          "size": 101,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 404
+        },
+        {
+          "kind": "scan",
+          "size": 199,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 398
+        },
+        {
+          "kind": "atomic",
+          "size": 99,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 396
+        },
+        {
+          "kind": "scan",
+          "size": 175,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 350
+        },
+        {
+          "kind": "atomic",
+          "size": 86,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 344
+        },
+        {
+          "kind": "atomic",
+          "size": 83,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 332
+        },
+        {
+          "kind": "atomic",
+          "size": 137,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 274
+        },
+        {
+          "kind": "atomic",
+          "size": 136,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 272
+        },
+        {
+          "kind": "atomic",
+          "size": 131,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 262
+        },
+        {
+          "kind": "atomic",
+          "size": 26,
+          "scope": "@outside-instrumented-scopes",
+          "events": 10,
+          "bytes": 260
+        },
+        {
+          "kind": "atomic",
+          "size": 129,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 258
+        },
+        {
+          "kind": "atomic",
+          "size": 126,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 252
+        },
+        {
+          "kind": "atomic",
+          "size": 122,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 244
+        },
+        {
+          "kind": "atomic",
+          "size": 15,
+          "scope": "@outside-instrumented-scopes",
+          "events": 16,
+          "bytes": 240
+        },
+        {
+          "kind": "atomic",
+          "size": 118,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 236
+        },
+        {
+          "kind": "atomic",
+          "size": 39,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6,
+          "bytes": 234
+        },
+        {
+          "kind": "atomic",
+          "size": 117,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 234
+        },
+        {
+          "kind": "atomic",
+          "size": 113,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 226
+        },
+        {
+          "kind": "atomic",
+          "size": 110,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 220
+        },
+        {
+          "kind": "scan",
+          "size": 103,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 206
+        },
+        {
+          "kind": "atomic",
+          "size": 103,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 206
+        },
+        {
+          "kind": "atomic",
+          "size": 9,
+          "scope": "@outside-instrumented-scopes",
+          "events": 22,
+          "bytes": 198
+        },
+        {
+          "kind": "atomic",
+          "size": 97,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 194
+        },
+        {
+          "kind": "atomic",
+          "size": 95,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 190
+        },
+        {
+          "kind": "atomic",
+          "size": 93,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 186
+        },
+        {
+          "kind": "atomic",
+          "size": 92,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 184
+        },
+        {
+          "kind": "atomic",
+          "size": 13,
+          "scope": "@outside-instrumented-scopes",
+          "events": 14,
+          "bytes": 182
+        },
+        {
+          "kind": "atomic",
+          "size": 44,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 176
+        },
+        {
+          "kind": "atomic",
+          "size": 87,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 174
+        },
+        {
+          "kind": "atomic",
+          "size": 28,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6,
+          "bytes": 168
+        },
+        {
+          "kind": "atomic",
+          "size": 84,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 168
+        },
+        {
+          "kind": "atomic",
+          "size": 38,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 152
+        },
+        {
+          "kind": "atomic",
+          "size": 35,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 140
+        },
+        {
+          "kind": "atomic",
+          "size": 34,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 136
+        },
+        {
+          "kind": "atomic",
+          "size": 21,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6,
+          "bytes": 126
+        }
+      ],
+      "top_direct_callers": [
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array+0x97",
+          "bytes": 39392
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "executor__VjsxSourceScanner__collect_files+0x180",
+          "bytes": 9150
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array+0xd8",
+          "bytes": 8440
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string__trim_chars+0x23d",
+          "bytes": 4466
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "map_clone_string+0x47",
+          "bytes": 3404
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "executor__VjsxSourceScanner__collect_files+0x1d2",
+          "bytes": 2460
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "cstring_to_vstring+0x36",
+          "bytes": 1426
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "caller": "u64__hex+0xca",
+          "bytes": 1322
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "caller": "executor__VjsxSourceScanner__probe+0x232",
+          "bytes": 748
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "unix__wait_for_common+0x1f0",
+          "bytes": 640
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string_concat_pair+0x56",
+          "bytes": 342
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string__trim_right+0x29a",
+          "bytes": 338
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "caller": "os__File__read+0x129",
+          "bytes": 78
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "caller": "executor__VjsxSourceScanner__signature+0x2db",
+          "bytes": 68
+        }
+      ]
+    },
+    "http": {
+      "events": 70441,
+      "requested_bytes": 9423364,
+      "duration_first_to_last_event_s": 2.008528191014193,
+      "first_time": 653332.090149219,
+      "last_time": 653334.09867741,
+      "lost_events": 0,
+      "unmatched_exits_at_window_boundary": 0,
+      "misnested_scope_exits": 0,
+      "open_scopes_at_window_end": 1,
+      "exclusive_scope": [
+        {
+          "scope": "@outside-instrumented-scopes",
+          "requested_bytes": 5994872,
+          "events": 54023,
+          "fraction_of_recorded_requests": 0.6361711168113637
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "requested_bytes": 1321536,
+          "events": 9440,
+          "fraction_of_recorded_requests": 0.1402403642690657
+        },
+        {
+          "scope": "executor.InProcVjsxResponseCodec@static@from_js_value",
+          "requested_bytes": 688718,
+          "events": 1230,
+          "fraction_of_recorded_requests": 0.07308621422243691
+        },
+        {
+          "scope": "App__complete_http_observation",
+          "requested_bytes": 677946,
+          "events": 1134,
+          "fraction_of_recorded_requests": 0.07194309802741357
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "requested_bytes": 454435,
+          "events": 3154,
+          "fraction_of_recorded_requests": 0.048224285934407286
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "requested_bytes": 281442,
+          "events": 1053,
+          "fraction_of_recorded_requests": 0.029866404396561567
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "requested_bytes": 2936,
+          "events": 320,
+          "fraction_of_recorded_requests": 0.0003115660182499583
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "requested_bytes": 1479,
+          "events": 87,
+          "fraction_of_recorded_requests": 0.00015695032050125625
+        }
+      ],
+      "inclusive_scope_not_additive": [
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "requested_bytes": 2464689,
+          "fraction_of_recorded_requests": 0.2615508644259099,
+          "entered_calls": 83
+        },
+        {
+          "scope": "App__complete_http_observation",
+          "requested_bytes": 959388,
+          "fraction_of_recorded_requests": 0.10180950242397513,
+          "entered_calls": 81
+        },
+        {
+          "scope": "executor.InProcVjsxResponseCodec@static@from_js_value",
+          "requested_bytes": 688718,
+          "fraction_of_recorded_requests": 0.07308621422243691,
+          "entered_calls": 82
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "requested_bytes": 454435,
+          "fraction_of_recorded_requests": 0.048224285934407286,
+          "entered_calls": 83
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "requested_bytes": 281442,
+          "fraction_of_recorded_requests": 0.029866404396561567,
+          "entered_calls": 81
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "requested_bytes": 2936,
+          "fraction_of_recorded_requests": 0.0003115660182499583,
+          "entered_calls": 8
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "requested_bytes": 1479,
+          "fraction_of_recorded_requests": 0.00015695032050125625,
+          "entered_calls": 87
+        }
+      ],
+      "api_kind_requested_bytes": {
+        "scan": 4959454,
+        "atomic": 4221222,
+        "realloc": 242688
+      },
+      "top_requested_sizes": [
+        {
+          "kind": "atomic",
+          "size": 7374,
+          "scope": "@outside-instrumented-scopes",
+          "events": 162,
+          "bytes": 1194588
+        },
+        {
+          "kind": "scan",
+          "size": 8168,
+          "scope": "@outside-instrumented-scopes",
+          "events": 82,
+          "bytes": 669776
+        },
+        {
+          "kind": "scan",
+          "size": 8168,
+          "scope": "App__complete_http_observation",
+          "events": 81,
+          "bytes": 661608
+        },
+        {
+          "kind": "scan",
+          "size": 7976,
+          "scope": "@outside-instrumented-scopes",
+          "events": 82,
+          "bytes": 654032
+        },
+        {
+          "kind": "atomic",
+          "size": 7374,
+          "scope": "executor.InProcVjsxResponseCodec@static@from_js_value",
+          "events": 82,
+          "bytes": 604668
+        },
+        {
+          "kind": "scan",
+          "size": 192,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2830,
+          "bytes": 543360
+        },
+        {
+          "kind": "scan",
+          "size": 79,
+          "scope": "@outside-instrumented-scopes",
+          "events": 5931,
+          "bytes": 468549
+        },
+        {
+          "kind": "scan",
+          "size": 160,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2771,
+          "bytes": 443360
+        },
+        {
+          "kind": "atomic",
+          "size": 4097,
+          "scope": "@outside-instrumented-scopes",
+          "events": 63,
+          "bytes": 258111
+        },
+        {
+          "kind": "atomic",
+          "size": 144,
+          "scope": "@outside-instrumented-scopes",
+          "events": 1619,
+          "bytes": 233136
+        },
+        {
+          "kind": "atomic",
+          "size": 8223,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 21,
+          "bytes": 172683
+        },
+        {
+          "kind": "atomic",
+          "size": 2079,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 83,
+          "bytes": 172557
+        },
+        {
+          "kind": "atomic",
+          "size": 2079,
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "events": 83,
+          "bytes": 172557
+        },
+        {
+          "kind": "atomic",
+          "size": 2079,
+          "scope": "@outside-instrumented-scopes",
+          "events": 81,
+          "bytes": 168399
+        },
+        {
+          "kind": "atomic",
+          "size": 2079,
+          "scope": "application_logs__Store__persist",
+          "events": 81,
+          "bytes": 168399
+        },
+        {
+          "kind": "scan",
+          "size": 160,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 743,
+          "bytes": 118880
+        },
+        {
+          "kind": "scan",
+          "size": 127,
+          "scope": "@outside-instrumented-scopes",
+          "events": 802,
+          "bytes": 101854
+        },
+        {
+          "kind": "atomic",
+          "size": 16,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6277,
+          "bytes": 100432
+        },
+        {
+          "kind": "scan",
+          "size": 607,
+          "scope": "@outside-instrumented-scopes",
+          "events": 162,
+          "bytes": 98334
+        },
+        {
+          "kind": "scan",
+          "size": 591,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 165,
+          "bytes": 97515
+        },
+        {
+          "kind": "scan",
+          "size": 575,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 164,
+          "bytes": 94300
+        },
+        {
+          "kind": "atomic",
+          "size": 4637,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 20,
+          "bytes": 92740
+        },
+        {
+          "kind": "scan",
+          "size": 1231,
+          "scope": "@outside-instrumented-scopes",
+          "events": 64,
+          "bytes": 78784
+        },
+        {
+          "kind": "realloc",
+          "size": 240,
+          "scope": "@outside-instrumented-scopes",
+          "events": 327,
+          "bytes": 78480
+        },
+        {
+          "kind": "realloc",
+          "size": 216,
+          "scope": "@outside-instrumented-scopes",
+          "events": 328,
+          "bytes": 70848
+        },
+        {
+          "kind": "atomic",
+          "size": 1059,
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "events": 62,
+          "bytes": 65658
+        },
+        {
+          "kind": "scan",
+          "size": 192,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 332,
+          "bytes": 63744
+        },
+        {
+          "kind": "scan",
+          "size": 728,
+          "scope": "@outside-instrumented-scopes",
+          "events": 82,
+          "bytes": 59696
+        },
+        {
+          "kind": "scan",
+          "size": 311,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 165,
+          "bytes": 51315
+        },
+        {
+          "kind": "scan",
+          "size": 303,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 165,
+          "bytes": 49995
+        },
+        {
+          "kind": "realloc",
+          "size": 288,
+          "scope": "@outside-instrumented-scopes",
+          "events": 162,
+          "bytes": 46656
+        },
+        {
+          "kind": "atomic",
+          "size": 18,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2553,
+          "bytes": 45954
+        },
+        {
+          "kind": "scan",
+          "size": 271,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 166,
+          "bytes": 44986
+        },
+        {
+          "kind": "scan",
+          "size": 271,
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "events": 166,
+          "bytes": 44986
+        },
+        {
+          "kind": "atomic",
+          "size": 21,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2105,
+          "bytes": 44205
+        },
+        {
+          "kind": "atomic",
+          "size": 9,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4764,
+          "bytes": 42876
+        },
+        {
+          "kind": "realloc",
+          "size": 264,
+          "scope": "@outside-instrumented-scopes",
+          "events": 162,
+          "bytes": 42768
+        },
+        {
+          "kind": "scan",
+          "size": 79,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 519,
+          "bytes": 41001
+        },
+        {
+          "kind": "scan",
+          "size": 488,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 83,
+          "bytes": 40504
+        },
+        {
+          "kind": "scan",
+          "size": 488,
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "events": 83,
+          "bytes": 40504
+        },
+        {
+          "kind": "scan",
+          "size": 319,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 124,
+          "bytes": 39556
+        },
+        {
+          "kind": "scan",
+          "size": 160,
+          "scope": "executor.InProcVjsxResponseCodec@static@from_js_value",
+          "events": 246,
+          "bytes": 39360
+        },
+        {
+          "kind": "scan",
+          "size": 223,
+          "scope": "@outside-instrumented-scopes",
+          "events": 169,
+          "bytes": 37687
+        },
+        {
+          "kind": "atomic",
+          "size": 5,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6878,
+          "bytes": 34390
+        },
+        {
+          "kind": "atomic",
+          "size": 515,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 62,
+          "bytes": 31930
+        },
+        {
+          "kind": "scan",
+          "size": 192,
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "events": 166,
+          "bytes": 31872
+        },
+        {
+          "kind": "atomic",
+          "size": 297,
+          "scope": "application_logs__Store__persist",
+          "events": 98,
+          "bytes": 29106
+        },
+        {
+          "kind": "scan",
+          "size": 127,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 227,
+          "bytes": 28829
+        },
+        {
+          "kind": "atomic",
+          "size": 256,
+          "scope": "@outside-instrumented-scopes",
+          "events": 107,
+          "bytes": 27392
+        },
+        {
+          "kind": "atomic",
+          "size": 296,
+          "scope": "application_logs__Store__persist",
+          "events": 92,
+          "bytes": 27232
+        },
+        {
+          "kind": "scan",
+          "size": 160,
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "events": 166,
+          "bytes": 26560
+        },
+        {
+          "kind": "scan",
+          "size": 319,
+          "scope": "@outside-instrumented-scopes",
+          "events": 81,
+          "bytes": 25839
+        },
+        {
+          "kind": "atomic",
+          "size": 24,
+          "scope": "@outside-instrumented-scopes",
+          "events": 1065,
+          "bytes": 25560
+        },
+        {
+          "kind": "atomic",
+          "size": 144,
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "events": 166,
+          "bytes": 23904
+        },
+        {
+          "kind": "atomic",
+          "size": 1061,
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "events": 20,
+          "bytes": 21220
+        },
+        {
+          "kind": "atomic",
+          "size": 257,
+          "scope": "@outside-instrumented-scopes",
+          "events": 82,
+          "bytes": 21074
+        },
+        {
+          "kind": "scan",
+          "size": 240,
+          "scope": "@outside-instrumented-scopes",
+          "events": 82,
+          "bytes": 19680
+        },
+        {
+          "kind": "atomic",
+          "size": 51,
+          "scope": "executor.InProcVjsxResponseCodec@static@from_js_value",
+          "events": 328,
+          "bytes": 16728
+        },
+        {
+          "kind": "atomic",
+          "size": 15,
+          "scope": "@outside-instrumented-scopes",
+          "events": 1094,
+          "bytes": 16410
+        },
+        {
+          "kind": "atomic",
+          "size": 13,
+          "scope": "@outside-instrumented-scopes",
+          "events": 1250,
+          "bytes": 16250
+        }
+      ],
+      "top_direct_callers": [
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__handle_request_and_route_T_App_Context+0x7c4",
+          "bytes": 669776
+        },
+        {
+          "scope": "App__complete_http_observation",
+          "caller": "App__complete_http_observation+0x83",
+          "bytes": 661608
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__handle_request_and_route_T_App_Context+0x6cc",
+          "bytes": 654032
+        },
+        {
+          "scope": "executor.InProcVjsxResponseCodec@static@from_js_value",
+          "caller": "cstring_to_vstring+0x36",
+          "bytes": 608850
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__Context__send_response_to_client+0x9e",
+          "bytes": 597294
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__Context__preserve_for_response_writer+0x68",
+          "bytes": 597294
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array+0x97",
+          "bytes": 587559
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "__new_array+0x97",
+          "bytes": 420319
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "new_map_data+0xe9",
+          "bytes": 417120
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__set_general+0x62a",
+          "bytes": 279360
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__set_general+0x5dc",
+          "bytes": 249552
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__set_general+0x48e",
+          "bytes": 209520
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "array__ensure_cap+0x94",
+          "bytes": 194781
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "__new_array_noscan+0x9a",
+          "bytes": 174069
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "array__ensure_cap+0xf6",
+          "bytes": 172683
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "__new_array_noscan+0x9a",
+          "bytes": 172557
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "caller": "__new_array_noscan+0x9a",
+          "bytes": 172557
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string__substr+0x119",
+          "bytes": 172074
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array_noscan+0x9a",
+          "bytes": 168399
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "strings__Builder__str+0x66",
+          "bytes": 129327
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "DenseArray__reserve+0x187",
+          "bytes": 119496
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "DenseArray__reserve+0x1aa",
+          "bytes": 119256
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "new_map_data+0xe9",
+          "bytes": 118880
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__select_route+0x340",
+          "bytes": 108076
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "Array_u8__bytestr+0x26",
+          "bytes": 92680
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array+0xd8",
+          "bytes": 91886
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "caller": "strings__Builder__str+0x66",
+          "bytes": 87969
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "map_clone_string+0x47",
+          "bytes": 78144
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "__new_array+0xd8",
+          "bytes": 77540
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__v3_internal_symbol_static_48747470496e677265737352756e74696d65407374617469634068616e646c655f6f6e5f76696577+0xc2",
+          "bytes": 59696
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "executor__VjsxRuntimeFacadeConfig__owned_copy+0x4b",
+          "bytes": 40504
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "caller": "executor__VjsxRuntimeFacadeConfig__owned_copy+0x4b",
+          "bytes": 40504
+        },
+        {
+          "scope": "executor.InProcVjsxResponseCodec@static@from_js_value",
+          "caller": "new_map_data+0xe9",
+          "bytes": 39360
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "http__Header__keys+0x18f",
+          "bytes": 37290
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "caller": "__new_array+0xd8",
+          "bytes": 35026
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string__to_lower_ascii+0x2b",
+          "bytes": 33943
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string_plus_many_general+0x6c",
+          "bytes": 32004
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "VMapData__set_general+0x62a",
+          "bytes": 31872
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "VMapData__set_general+0x5dc",
+          "bytes": 31872
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "arrays__uniq_T_string+0x24c",
+          "bytes": 30946
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "strings__Builder__str+0x66",
+          "bytes": 27205
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "caller": "new_map_data+0xe9",
+          "bytes": 26560
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__clone+0xec",
+          "bytes": 26240
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "impl_i64_to_string.part.0+0x19",
+          "bytes": 24969
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "logging__append_line_with+0x225",
+          "bytes": 24046
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "logging__write_log_bytes+0x174",
+          "bytes": 24046
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "VMapData__set_general+0x48e",
+          "bytes": 23904
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "Array_string__join+0x81",
+          "bytes": 23688
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__clone+0x9a",
+          "bytes": 23616
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "http__Header__custom_values+0x215",
+          "bytes": 23104
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__build_runtime_payload",
+          "caller": "__new_array+0x97",
+          "bytes": 22493
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "array__ensure_cap+0x94",
+          "bytes": 21781
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "logging__append_line_with+0x225",
+          "bytes": 20800
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "logging__write_log_bytes+0x174",
+          "bytes": 20800
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "strings__Builder__str+0x66",
+          "bytes": 20719
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "urllib__parse_url+0x12a",
+          "bytes": 19680
+        },
+        {
+          "scope": "executor__InProcVjsxExecutor__dispatch_http_once",
+          "caller": "map_clone_string+0x47",
+          "bytes": 19222
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "executor__VjsxSourceScanner__collect_files+0x180",
+          "bytes": 18300
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "DenseArray__clone+0x185",
+          "bytes": 17712
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string_concat_pair+0x56",
+          "bytes": 16379
+        }
+      ]
+    },
+    "paseo": {
+      "events": 33521,
+      "requested_bytes": 3910266,
+      "duration_first_to_last_event_s": 4.003402094938792,
+      "first_time": 653369.986694845,
+      "last_time": 653373.99009694,
+      "lost_events": 0,
+      "unmatched_exits_at_window_boundary": 0,
+      "misnested_scope_exits": 0,
+      "open_scopes_at_window_end": 1,
+      "exclusive_scope": [
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "requested_bytes": 2063043,
+          "events": 16694,
+          "fraction_of_recorded_requests": 0.5275965880582038
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "requested_bytes": 1783163,
+          "events": 15833,
+          "fraction_of_recorded_requests": 0.45602089474219915
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "requested_bytes": 55264,
+          "events": 182,
+          "fraction_of_recorded_requests": 0.014133053863854786
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "requested_bytes": 5872,
+          "events": 640,
+          "fraction_of_recorded_requests": 0.0015016881204501177
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "requested_bytes": 2924,
+          "events": 172,
+          "fraction_of_recorded_requests": 0.0007477752152922588
+        }
+      ],
+      "inclusive_scope_not_additive": [
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "requested_bytes": 2063043,
+          "fraction_of_recorded_requests": 0.5275965880582038,
+          "entered_calls": 27
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "requested_bytes": 55264,
+          "fraction_of_recorded_requests": 0.014133053863854786,
+          "entered_calls": 14
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "requested_bytes": 5872,
+          "fraction_of_recorded_requests": 0.0015016881204501177,
+          "entered_calls": 16
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "requested_bytes": 2924,
+          "fraction_of_recorded_requests": 0.0007477752152922588,
+          "entered_calls": 172
+        }
+      ],
+      "api_kind_requested_bytes": {
+        "atomic": 1602865,
+        "scan": 1374037,
+        "uncollectable": 3216,
+        "realloc": 930148
+      },
+      "top_requested_sizes": [
+        {
+          "kind": "atomic",
+          "size": 15559,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 27,
+          "bytes": 420093
+        },
+        {
+          "kind": "scan",
+          "size": 160,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 1686,
+          "bytes": 269760
+        },
+        {
+          "kind": "scan",
+          "size": 160,
+          "scope": "@outside-instrumented-scopes",
+          "events": 1082,
+          "bytes": 173120
+        },
+        {
+          "kind": "atomic",
+          "size": 144,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 1106,
+          "bytes": 159264
+        },
+        {
+          "kind": "scan",
+          "size": 1231,
+          "scope": "@outside-instrumented-scopes",
+          "events": 128,
+          "bytes": 157568
+        },
+        {
+          "kind": "atomic",
+          "size": 5218,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 27,
+          "bytes": 140886
+        },
+        {
+          "kind": "scan",
+          "size": 192,
+          "scope": "@outside-instrumented-scopes",
+          "events": 723,
+          "bytes": 138816
+        },
+        {
+          "kind": "scan",
+          "size": 11192,
+          "scope": "@outside-instrumented-scopes",
+          "events": 9,
+          "bytes": 100728
+        },
+        {
+          "kind": "atomic",
+          "size": 2079,
+          "scope": "@outside-instrumented-scopes",
+          "events": 47,
+          "bytes": 97713
+        },
+        {
+          "kind": "realloc",
+          "size": 440,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 211,
+          "bytes": 92840
+        },
+        {
+          "kind": "realloc",
+          "size": 528,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 157,
+          "bytes": 82896
+        },
+        {
+          "kind": "realloc",
+          "size": 1320,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 53,
+          "bytes": 69960
+        },
+        {
+          "kind": "realloc",
+          "size": 2552,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 27,
+          "bytes": 68904
+        },
+        {
+          "kind": "atomic",
+          "size": 144,
+          "scope": "@outside-instrumented-scopes",
+          "events": 454,
+          "bytes": 65376
+        },
+        {
+          "kind": "realloc",
+          "size": 2376,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 27,
+          "bytes": 64152
+        },
+        {
+          "kind": "scan",
+          "size": 79,
+          "scope": "@outside-instrumented-scopes",
+          "events": 719,
+          "bytes": 56801
+        },
+        {
+          "kind": "realloc",
+          "size": 1056,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 53,
+          "bytes": 55968
+        },
+        {
+          "kind": "realloc",
+          "size": 352,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 132,
+          "bytes": 46464
+        },
+        {
+          "kind": "realloc",
+          "size": 880,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 52,
+          "bytes": 45760
+        },
+        {
+          "kind": "scan",
+          "size": 223,
+          "scope": "@outside-instrumented-scopes",
+          "events": 185,
+          "bytes": 41255
+        },
+        {
+          "kind": "realloc",
+          "size": 792,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 52,
+          "bytes": 41184
+        },
+        {
+          "kind": "scan",
+          "size": 8168,
+          "scope": "@outside-instrumented-scopes",
+          "events": 5,
+          "bytes": 40840
+        },
+        {
+          "kind": "scan",
+          "size": 7976,
+          "scope": "@outside-instrumented-scopes",
+          "events": 5,
+          "bytes": 39880
+        },
+        {
+          "kind": "realloc",
+          "size": 704,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 52,
+          "bytes": 36608
+        },
+        {
+          "kind": "realloc",
+          "size": 176,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 186,
+          "bytes": 32736
+        },
+        {
+          "kind": "scan",
+          "size": 127,
+          "scope": "@outside-instrumented-scopes",
+          "events": 254,
+          "bytes": 32258
+        },
+        {
+          "kind": "realloc",
+          "size": 616,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 52,
+          "bytes": 32032
+        },
+        {
+          "kind": "realloc",
+          "size": 288,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 106,
+          "bytes": 30528
+        },
+        {
+          "kind": "atomic",
+          "size": 2079,
+          "scope": "application_logs__Store__persist",
+          "events": 14,
+          "bytes": 29106
+        },
+        {
+          "kind": "atomic",
+          "size": 4127,
+          "scope": "@outside-instrumented-scopes",
+          "events": 7,
+          "bytes": 28889
+        },
+        {
+          "kind": "atomic",
+          "size": 528,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 54,
+          "bytes": 28512
+        },
+        {
+          "kind": "scan",
+          "size": 303,
+          "scope": "@outside-instrumented-scopes",
+          "events": 93,
+          "bytes": 28179
+        },
+        {
+          "kind": "scan",
+          "size": 384,
+          "scope": "@outside-instrumented-scopes",
+          "events": 72,
+          "bytes": 27648
+        },
+        {
+          "kind": "realloc",
+          "size": 120,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 211,
+          "bytes": 25320
+        },
+        {
+          "kind": "realloc",
+          "size": 144,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 157,
+          "bytes": 22608
+        },
+        {
+          "kind": "scan",
+          "size": 3727,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6,
+          "bytes": 22362
+        },
+        {
+          "kind": "atomic",
+          "size": 2500,
+          "scope": "@outside-instrumented-scopes",
+          "events": 8,
+          "bytes": 20000
+        },
+        {
+          "kind": "realloc",
+          "size": 360,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 53,
+          "bytes": 19080
+        },
+        {
+          "kind": "realloc",
+          "size": 696,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 27,
+          "bytes": 18792
+        },
+        {
+          "kind": "realloc",
+          "size": 648,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 27,
+          "bytes": 17496
+        },
+        {
+          "kind": "realloc",
+          "size": 160,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 106,
+          "bytes": 16960
+        },
+        {
+          "kind": "scan",
+          "size": 151,
+          "scope": "@outside-instrumented-scopes",
+          "events": 112,
+          "bytes": 16912
+        },
+        {
+          "kind": "scan",
+          "size": 1359,
+          "scope": "@outside-instrumented-scopes",
+          "events": 12,
+          "bytes": 16308
+        },
+        {
+          "kind": "atomic",
+          "size": 8071,
+          "scope": "@outside-instrumented-scopes",
+          "events": 2,
+          "bytes": 16142
+        },
+        {
+          "kind": "scan",
+          "size": 2671,
+          "scope": "@outside-instrumented-scopes",
+          "events": 6,
+          "bytes": 16026
+        },
+        {
+          "kind": "scan",
+          "size": 64,
+          "scope": "@outside-instrumented-scopes",
+          "events": 236,
+          "bytes": 15104
+        },
+        {
+          "kind": "scan",
+          "size": 55,
+          "scope": "@outside-instrumented-scopes",
+          "events": 270,
+          "bytes": 14850
+        },
+        {
+          "kind": "atomic",
+          "size": 21,
+          "scope": "@outside-instrumented-scopes",
+          "events": 707,
+          "bytes": 14847
+        },
+        {
+          "kind": "atomic",
+          "size": 272,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 53,
+          "bytes": 14416
+        },
+        {
+          "kind": "realloc",
+          "size": 544,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 26,
+          "bytes": 14144
+        },
+        {
+          "kind": "scan",
+          "size": 1759,
+          "scope": "@outside-instrumented-scopes",
+          "events": 8,
+          "bytes": 14072
+        },
+        {
+          "kind": "atomic",
+          "size": 3516,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 14064
+        },
+        {
+          "kind": "realloc",
+          "size": 264,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 53,
+          "bytes": 13992
+        },
+        {
+          "kind": "atomic",
+          "size": 3484,
+          "scope": "@outside-instrumented-scopes",
+          "events": 4,
+          "bytes": 13936
+        },
+        {
+          "kind": "scan",
+          "size": 488,
+          "scope": "@outside-instrumented-scopes",
+          "events": 28,
+          "bytes": 13664
+        },
+        {
+          "kind": "realloc",
+          "size": 96,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 132,
+          "bytes": 12672
+        },
+        {
+          "kind": "realloc",
+          "size": 240,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 52,
+          "bytes": 12480
+        },
+        {
+          "kind": "atomic",
+          "size": 112,
+          "scope": "@outside-instrumented-scopes",
+          "events": 111,
+          "bytes": 12432
+        },
+        {
+          "kind": "scan",
+          "size": 847,
+          "scope": "@outside-instrumented-scopes",
+          "events": 14,
+          "bytes": 11858
+        },
+        {
+          "kind": "realloc",
+          "size": 216,
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "events": 52,
+          "bytes": 11232
+        }
+      ],
+      "top_direct_callers": [
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "DenseArray__reserve+0x1aa",
+          "bytes": 692824
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "__new_array_noscan+0x9a",
+          "bytes": 420093
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array+0x97",
+          "bytes": 316381
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "new_map_data+0xe9",
+          "bytes": 269760
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "VMapData__reserve+0x88",
+          "bytes": 202192
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array_noscan+0x9a",
+          "bytes": 190200
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "DenseArray__reserve+0x187",
+          "bytes": 188952
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "new_map_data+0xe9",
+          "bytes": 144320
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "string__trim_chars+0x23d",
+          "bytes": 141518
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array+0xd8",
+          "bytes": 88207
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string__trim_chars+0x23d",
+          "bytes": 80006
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "map_clone_string+0x47",
+          "bytes": 79639
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "array__ensure_cap+0x94",
+          "bytes": 63931
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__set_general+0x5dc",
+          "bytes": 55832
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__set_general+0x62a",
+          "bytes": 49920
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string_plus_many_general+0x6c",
+          "bytes": 48334
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "VMapData__set_general+0x52b",
+          "bytes": 46368
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "strings__Builder__str+0x66",
+          "bytes": 44831
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "websocket__Server__handle_handshake+0x5c6",
+          "bytes": 44768
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "ws__HubState__register_owned_dispatch_conn+0xb5",
+          "bytes": 44768
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "map_clone_string+0x47",
+          "bytes": 43090
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__handle_request_and_route_T_App_Context+0x7c4",
+          "bytes": 40840
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__handle_request_and_route_T_App_Context+0x6cc",
+          "bytes": 39880
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__set_general+0x48e",
+          "bytes": 37440
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "cstring_to_vstring+0x36",
+          "bytes": 37152
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "executor__VjsxSourceScanner__collect_files+0x180",
+          "bytes": 36600
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "DenseArray__clone+0x185",
+          "bytes": 34560
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "__new_array_noscan+0x9a",
+          "bytes": 30100
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "DenseArray__clone+0x1de",
+          "bytes": 29408
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "array__ensure_cap+0xf6",
+          "bytes": 29234
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__clone+0xec",
+          "bytes": 28800
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "array__clone_to_depth+0x3bf",
+          "bytes": 27004
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "VMapData__clone+0x9a",
+          "bytes": 25920
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "new_array_from_c_array+0x59",
+          "bytes": 22718
+        },
+        {
+          "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+          "caller": "json2__Decoder__decode_string_value+0xfa",
+          "bytes": 19166
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "executor__VjsxRuntimeFacadeConfig__owned_copy+0x4b",
+          "bytes": 13664
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "Array_u8__bytestr+0x26",
+          "bytes": 11477
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "ws__IngressRun__write_client_close+0xb1",
+          "bytes": 11192
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "executor__VjsxSourceScanner__collect_files+0x1d2",
+          "bytes": 9840
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "__new_array_noscan+0xe0",
+          "bytes": 8430
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "strings__Builder__str+0x66",
+          "bytes": 6890
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "veb__select_route+0x340",
+          "bytes": 6590
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "logging__append_line_with+0x225",
+          "bytes": 6330
+        },
+        {
+          "scope": "application_logs__Store__persist",
+          "caller": "logging__write_log_bytes+0x174",
+          "bytes": 6330
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "json2__Decoder__decode_string_value+0xfa",
+          "bytes": 5986
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "sync__new_channel_st+0x9c",
+          "bytes": 5952
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "sync__new_channel_st+0xf5",
+          "bytes": 5952
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__signature",
+          "caller": "u64__hex+0xca",
+          "bytes": 5288
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "json2__encode_T_executor__InProcVjsxHostSessionStoreResponse+0xf9",
+          "bytes": 4752
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string__to_lower_ascii+0x2b",
+          "bytes": 4648
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "Array_string__join+0x81",
+          "bytes": 4382
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "http__Header__keys+0x18f",
+          "bytes": 3712
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string__clone+0x2f",
+          "bytes": 3608
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "arrays__uniq_T_string+0x24c",
+          "bytes": 3422
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "http__Header__custom_values+0x215",
+          "bytes": 3348
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "urllib__parse_query_values+0x427",
+          "bytes": 2996
+        },
+        {
+          "scope": "executor__VjsxSourceScanner__probe",
+          "caller": "executor__VjsxSourceScanner__probe+0x232",
+          "bytes": 2924
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "string_concat_pair+0x56",
+          "bytes": 2595
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "unix__wait_for_common+0x1f0",
+          "bytes": 2464
+        },
+        {
+          "scope": "@outside-instrumented-scopes",
+          "caller": "application_logs__log_message+0x120",
+          "bytes": 2396
+        }
+      ]
+    }
+  },
+  "method": "All recorded allocation API entries assigned by SAME-TID function entry/return nesting, not global allocation deltas. Exclusive scopes partition requested bytes; inclusive totals overlap. Window-boundary partial scopes are reported. Realloc bytes are requested target size, not net allocation. Profiling perturbs throughput; not acceptance data."
+}

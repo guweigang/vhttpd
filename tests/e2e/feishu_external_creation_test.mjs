@@ -40,8 +40,17 @@ test('external PHP issuance: captured grants, expiry, 4096 capacity, revoke/repl
   const writeConfig = value => fs.writeFileSync(config, `[server]\nhost = "127.0.0.1"\nport = ${webPort}\n[files]\nevent_log = "${root}/events.ndjson"\npid_file = "${root}/runtime.pid"\n[worker]\nautostart = false\n[admin]\nenabled = true\nhost = "127.0.0.1"\nport = ${adminPort}\ntoken = "${value}"\non_data_plane = false\n`);
   let child, done, output = '';
   const secrets = [token];
+  let requestNumber = 0;
   const request = async (suffix = '', options = {}) => {
-    const response = await fetch(origin + route + suffix, {redirect: 'manual', signal: AbortSignal.timeout(3000), ...options});
+    requestNumber++;
+    let response;
+    try {
+      response = await fetch(origin + route + suffix, {redirect: 'manual', signal: AbortSignal.timeout(3000), ...options});
+    } catch (cause) {
+      let diagnostic = output.slice(-12000);
+      for (const secret of secrets) diagnostic = diagnostic.split(secret).join('[redacted]');
+      throw new Error(`Creation request ${requestNumber} failed; exit=${child?.exitCode}, signal=${child?.signalCode}\n${diagnostic}`, {cause});
+    }
     return {status: response.status, headers: response.headers, body: await response.text()};
   };
   const post = (body, suffix = '') => request(suffix, {method: 'POST', headers: {'x-vhttpd-admin-token': token, 'Content-Type': 'application/json'}, body: JSON.stringify(body)});

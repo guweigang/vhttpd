@@ -57,6 +57,7 @@ fn (mut app App) apply_provider_instance_unlocked(prepared PreparedProviderInsta
 			app.providers.codex.mu.@lock()
 			mut rt := codex_instance_for_control_unlocked(app.providers.codex, spec.instance)
 			rt.configuration_generation++
+			if prepared.fields['application_messages'] { rt.application_messages = cfg.application_messages }
 			if prepared.fields['url'] && cfg.url.trim_space() != '' { rt.url = cfg.url }
 			if prepared.fields['model'] && cfg.model.trim_space() != '' { rt.model = cfg.model }
 			if prepared.fields['effort'] && cfg.effort.trim_space() != '' { rt.effort = cfg.effort }
@@ -92,6 +93,13 @@ fn codex_instance_for_control_unlocked(state &codex.CodexState, instance string)
 
 fn (mut app App) start_provider_instance(prepared PreparedProviderInstance) {
 	if prepared.changed {
+		// Application-owned instances can be the first provider configuration in
+		// a v2 environment. Publish their command handlers before connecting.
+		if _ := app.get_provider_spec(prepared.spec.provider) {
+		} else {
+			app.bootstrap_provider(prepared.spec.provider)
+			ProviderStartupRuntime.start_feishu_background(mut app)
+		}
 		_ = app.ensure_websocket_upstream_provider_running(prepared.spec.provider, prepared.spec.instance)
 	}
 }

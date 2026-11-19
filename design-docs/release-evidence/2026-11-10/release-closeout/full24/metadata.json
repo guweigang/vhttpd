@@ -1,0 +1,93 @@
+{
+  "status": "running",
+  "unit": "vhttpd-soak-dca8844f-full24-20261110.service",
+  "binary_sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+  "build_info": {
+    "gc": "boehm",
+    "gc_enabled": true,
+    "version": "0.9.0"
+  },
+  "baseline_seconds": 600,
+  "pressure_seconds": 86400,
+  "cooldown_seconds": 600,
+  "preflight_memavailable_kib": [
+    1004064,
+    1010916,
+    1010924,
+    1015000,
+    1011260,
+    1018076
+  ],
+  "start_threshold_mib": 640,
+  "host_guard_mib": 512,
+  "limits": {
+    "MemoryMax": "256M",
+    "MemorySwapMax": 0,
+    "CPUQuota": "30%",
+    "PrivateNetwork": true
+  },
+  "business_identity": {
+    "health": {
+      "19887": 200,
+      "19901": 200,
+      "19987": 200
+    },
+    "pid": 1974907,
+    "start_ticks": "71602815",
+    "binary_sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+    "package_sha256": "c72f262d578b0567d74265815f74628b88d912c796e0533bdccc82fc3b60ed93",
+    "runtime_id": "sha256-c72f262d578b0567d74265815f74628b88d912c796e0533bdccc82fc3b60ed93",
+    "previous_id": "sha256-506c0e2fc8560547fb9935469b8644b86ea07758f66b5ede73d16dcf6c9e1041",
+    "upgrade_id": "8354eaddd8e701768b256668",
+    "listeners": [
+      "127.0.0.1:19887",
+      "127.0.0.1:19901",
+      "127.0.0.1:19987",
+      "127.0.0.1:58595"
+    ],
+    "revision": "10b4306f17dd757da1be8db6bc8060ad4de5bcf3f4f13722817b848c15301da2",
+    "utc": "2026-11-10T06:45:24.857144+00:00"
+  },
+  "launch": [
+    "systemd-run",
+    "--unit=vhttpd-soak-dca8844f-full24-20261110.service",
+    "--property=MemoryMax=256M",
+    "--property=MemorySwapMax=0",
+    "--property=CPUQuota=30%",
+    "--property=TasksMax=128",
+    "--property=PrivateNetwork=yes",
+    "--property=Nice=19",
+    "--property=IOWeight=1",
+    "--property=UMask=0077",
+    "--property=KillMode=control-group",
+    "--property=RuntimeMaxSec=90000",
+    "--property=TimeoutStopSec=45",
+    "--working-directory=/root/vhttpd-release-tests/20261110-dca8844f-full24",
+    "/usr/bin/python3",
+    "/root/vhttpd-release-tests/20261110-dca8844f-full24/run_full24.py"
+  ],
+  "existing_gate": {
+    "retained_rss_mib": 16,
+    "pressure_rss_mib": 256,
+    "fd_increment": 8
+  },
+  "scope": "Synthetic HTTP/Paseo, four-runtime scan topology. Real bodytest runs separately with read-only monitoring. No DB/provider/real business replay claim.",
+  "asset_sha256": {
+    "gc-layout.json": "fec447d4dd8ba02d3a9f93ffe1a8fe11813ef2ebf65b50cac95cb9375d15c95c",
+    "ws_client.py": "08ebd66512e24d6c174513597919ff57cf04133e8dba3b6b211a506c7633ccc8",
+    "business-identity.json": "f0691e2705037189adea9240031032b9eadeba69b49068221b30965e85447635",
+    "topology.ndjson": "8f74d2f3402c132feabbc485d2690dfa8eeffb9601b148717229545ad6604e56",
+    "paseo.mts": "f8d431d53e3a1f02a85e910bab1922529d7cf352783f2f0a283ea81886f3f0b6",
+    "analyze_soak.py": "4544d2ae86c575915480fef16fbcfb40ca370bd1b60f231f463055ffee121a25",
+    "run_full24.py": "000ef0bbfb677592f7e79aab81bb89efbd2b5c2e86241bacd52321e21ff11da9",
+    "counter.py": "44ba79afcf84b08ba0d25cc610363a20c7255bc75d2b9e7bd14d7d448211be6e",
+    "gc_partition.py": "f259fa71289687237d7915b65e4f97d3054fb034ecd8c6cd3f31241fc209cdca",
+    "paseo-component.toml": "2e67ee169a67d6aa68141a2d83df052a8b0d168992736956cacaf3a282e0a829",
+    "soak_case.py": "fbbbe972fa2d679832598fec8f265d25701cb2ba04b68d266bb1b082603837f2"
+  },
+  "runtime_pid": 1979291,
+  "runtime_start_ticks": 71633275,
+  "verified_utc": "2026-11-10T06:50:38.295815+00:00",
+  "estimated_pressure_start_utc": "2026-11-10T07:00:38.292926+00:00",
+  "estimated_complete_utc": "2026-11-11T07:10:38.292926+00:00"
+}

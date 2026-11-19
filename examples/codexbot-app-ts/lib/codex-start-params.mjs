@@ -22,6 +22,18 @@ export function buildThreadStartParams(state, defaults) {
   };
 }
 
+// Resume metadata only; turn history remains on the server and is not replayed.
+export function buildThreadResumeParams(state, defaults) {
+  return {
+    threadId: state.threadId,
+    model: state.model,
+    cwd: state.cwd,
+    approvalPolicy: defaults.approvalPolicy,
+    sandbox: defaults.sandbox,
+    excludeTurns: true,
+  };
+}
+
 export function buildTurnStartParams(stream, state, defaults) {
   return {
     threadId: state.threadId || stream.threadId || "",

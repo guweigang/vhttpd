@@ -74,11 +74,11 @@
     const routeNodes = nodes.filter(node => node.domain === 'pipeline');
     const observed = listeners.filter(node => registered.some(item => item.listener_id === node.id));
     const notices = [];
-    if (!connected) notices.push({tone:'danger', title:authRequired ? '需要重新登录' : '运行状态无法确认', detail:authRequired ? '回到 Mac 工作台，点击“打开浏览器”重新登录。' : '检查 Mac 工作台中的实例与启动日志，再刷新此页。', view:null});
+    if (!connected) notices.push({tone:'danger', title:authRequired ? '需要重新登录' : '运行状态无法确认', detail:authRequired ? '回到工作台，点击“打开浏览器”重新登录。' : '检查工作台中的实例与启动日志，再刷新此页。', view:null});
     if (connected && !knownPlan) notices.push({tone:'warning',title:'配置生效状态未确认',detail:'整项目检查未完成或配置校验失败。查看项目配置；管理接口可连接不表示新配置已生效。',view:'apps',action:'检查配置'});
     if (pending) {
       const changed = [['restart_listeners','监听'],['changed_pipelines','路由'],['drain_engines','执行器'],['reload_relays','Relay']].map(([key,label]) => array(plan[key]).length ? label+' '+array(plan[key]).length+' 项' : '').filter(Boolean).join('、');
-      notices.push({tone:'warning',title:'待重启生效',detail:(changed ? '影响'+changed+'。' : '')+'新配置尚未生效。回到 Mac 工作台点击“重启并生效”，完成后自动检查整个项目。',view:'apps',action:'继续编辑'});
+      notices.push({tone:'warning',title:'待重启生效',detail:(changed ? '影响'+changed+'。' : '')+'新配置尚未生效。回到工作台点击“重启并生效”，完成后自动检查整个项目。',view:'apps',action:'继续编辑'});
     }
     const agents = connected ? array(runtime.relay?.agents) : [];
     const failedAgents = agents.filter(agent => ['backoff','closed','disconnected'].includes(agent.state));

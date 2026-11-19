@@ -46,11 +46,9 @@ fn relay_pipeline_dispatch_event_fields(outcome RelayPipelineDispatchOutcome) ma
 fn relay_pipeline_response_frame(outcome RelayPipelineDispatchOutcome) relay.WireFrame {
 	return relay.WireFrame{
 		version:       relay.wire_version
-		kind:          if outcome.action == 'failed' {
-			relay.WireFrameKind.error
-		} else {
-			relay.WireFrameKind.data
-		}
+		// Application errors are returned data, not transport channel-close
+        // frames. The sender must be able to drain the correlated error.
+        kind: relay.WireFrameKind.data
 		id:            'relay-response:${outcome.exchange_id}'
 		trace_id:      outcome.trace_id
 		channel_id:    outcome.channel_id
@@ -82,7 +80,8 @@ fn (mut app App) dispatch_relay_ingress_frame(relay_id string, carrier_id string
 			RelayPipelineDispatchOutcome{
 				trace_id:    frame.trace_id
 				exchange_id: frame.id
-				action:      'rejected'
+				action:      'failed'
+				channel_id: frame.channel_id
 				status:      404
 				error:       'relay_pipeline_not_found:${relay_id}'
 				error_class: 'relay_pipeline_not_found'
@@ -98,6 +97,21 @@ fn (mut app App) dispatch_relay_ingress_frame(relay_id string, carrier_id string
 }
 
 fn (mut app App) dispatch_and_send_relay_ingress_frame(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64) []RelayPipelineDispatchOutcome {
+	return app.dispatch_and_send_relay_ingress_owned(relay_id, carrier_id, frame, created_at_ms, relay.InboundLease{})
+}
+
+fn (mut app App) dispatch_and_send_relay_ingress_owned(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64, lease relay.InboundLease) []RelayPipelineDispatchOutcome {
+	// DB and local execution must not block the socket reader. Their finite
+	// request channels are retired by their exact inbound OPEN ownership.
+	if app.relay_frame_targets_database(relay_id, carrier_id, frame, created_at_ms) {
+		spawn app.dispatch_and_send_relay_ingress_frame_now(relay_id, carrier_id, frame, created_at_ms, lease)
+		return []RelayPipelineDispatchOutcome{}
+	}
+	return app.dispatch_and_send_relay_ingress_frame_now(relay_id, carrier_id, frame, created_at_ms, relay.InboundLease{})
+}
+
+fn (mut app App) dispatch_and_send_relay_ingress_frame_now(relay_id string, carrier_id string, frame relay.WireFrame, created_at_ms i64, lease relay.InboundLease) []RelayPipelineDispatchOutcome {
+	defer { app.relay.finish_inbound_delivery(lease) }
 	mut carrier := ws.new_relay_carrier(app.websocket.build_relay_carrier_context(), carrier_id)
 	mut outcomes := app.dispatch_relay_ingress_frame(relay_id, carrier_id, frame, created_at_ms)
 	for i, outcome in outcomes {
@@ -157,6 +171,15 @@ fn (mut app App) dispatch_relay_pipeline_adapter_egress_on_view(view PipelineDis
 	adapter_plan := view.plan.adapters[adapter_id] or {
 		return relay_pipeline_failure(exchange, 404, 'relay_adapter_unknown:${adapter_id}',
 			'relay_adapter_unknown')
+	}
+	if adapter_plan.kind == 'debug-control' {
+		return app.dispatch_takeover_control(view, adapter_plan, exchange)
+	}
+	if adapter_plan.kind == 'debug-http' {
+		return app.dispatch_takeover_http(view, adapter_plan, exchange)
+	}
+	if adapter_plan.kind == 'db-resource' {
+		return app.dispatch_relay_database(view, adapter_plan, exchange)
 	}
 	if adapter_plan.kind == 'provider-action' {
 		return app.dispatch_relay_provider_action_adapter(adapter_plan, adapter_id, exchange)

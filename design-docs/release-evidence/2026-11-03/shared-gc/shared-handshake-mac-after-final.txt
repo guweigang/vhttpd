@@ -1,0 +1,4 @@
+---- Testing... ----------------------------------------------------------------
+OK   10809.890 ms /Users/guweigang/Source/vhttpd/src/ws/handshake_memory_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 117216 ms, on 1 job. Comptime: 106401 ms. Runtime: 10809 ms.

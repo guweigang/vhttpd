@@ -1,0 +1,41 @@
+import subprocess
+code=r'''from pathlib import Path
+import os,struct,json,datetime,collections,time
+pid=697847;proc=Path('/proc')/str(pid);exe=Path('/root/vhttpd-release-tests/20261103-fixed6/package/vhttpd')
+assert (proc/'exe').resolve()==exe
+assert (proc/'stat').read_text().rpartition(') ')[2].split()[19]=='9646788'
+base=next(int(x.split('-')[0],16) for x in (proc/'maps').read_text().splitlines() if x.endswith(str(exe)) and x.split()[2]=='00000000')
+f=os.open(str(proc/'mem'),os.O_RDONLY)
+def read(a,n):return os.pread(f,n,a)
+def word(a):return struct.unpack('<Q',read(a,8))[0]
+def counts():
+ g=base+0xf361e0;return {'non_gc_bytes':word(base+0xf628c0),'gc_no':word(base+0xf628b8),'heap_size':word(g)-word(g+0x160),'free_bytes':word(g+0x28)-word(g+0x160),'bytes_since_gc':word(g+0x50),'total_bytes':word(g+0x40)+word(g+0x50),'os_bytes':word(g+0x48)}
+start=time.monotonic();before=counts();bi=word(base+0xf361e0+120);seen=set();hist=collections.Counter();blocks=0;skipped=0;small_words=collections.Counter();small_deltas=collections.Counter();code_words=collections.Counter();first_words=collections.Counter()
+while bi and bi not in seen and len(seen)<10000:
+ seen.add(bi);index=struct.unpack('<1028Q',read(bi,8224));bi=index[1024]
+ for hdr in index[:1024]:
+  if hdr<=4095:continue
+  try:h=read(hdr,104)
+  except OSError:skipped+=1;continue
+  if len(h)!=104 or h[25]&4:continue
+  addr=struct.unpack_from('<Q',h,16)[0];sz=struct.unpack_from('<Q',h,32)[0];marks=struct.unpack_from('<Q',h,56)[0]
+  if not marks or not sz or sz>256*1024*1024:continue
+  bitmap=struct.unpack_from('<5Q',h,64);blocks+=1
+  for off in ([0] if sz>2048 else range(0,4096-sz+1,sz)):
+   bit=off//16
+   if bitmap[bit//64]>>(bit%64)&1:
+    hist[(h[24],sz)]+=1
+    if h[24]==2 and sz==16:
+     try:
+      words=struct.unpack('<2Q',read(addr+off,16));small_words[words]+=1;small_deltas[words[0]-(addr+off)]+=1;first_words[words[0]]+=1
+      if base<=words[0]<base+0xb90000:code_words[words[0]-base]+=1
+     except OSError:pass
+free16=set(); head=word(word(base+0xf24d00+2*32)+8)
+while head and head not in free16 and len(free16)<1000000:
+ free16.add(head)
+ try:head=word(head)
+ except OSError:break
+out={'kind2_16_code_words':[(hex(k),v) for k,v in code_words.most_common(20)],'kind2_16_common_first_words':[(hex(k),v) for k,v in first_words.most_common(10)],'kind2_16_pointer_deltas':small_deltas.most_common(10),'kind2_16_common_words':[{'words':[hex(v) for v in w],'count':n} for w,n in small_words.most_common(12)],'free_kind2_size16_slots':len(free16),'utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'pid':pid,'method':'read-only /proc/mem; exact GC counter offsets verified from fixed6 disassembly; header/mark layout from same bundled GC source and prior exact-binary validation; non-atomic marks are not exact live allocations','duration_seconds':time.monotonic()-start,'gc_before':before,'gc_after':counts(),'blocks':blocks,'skipped':skipped,'marked_bytes':sum(sz*n for (k,sz),n in hist.items()),'histogram':[{'kind':k,'object_size':sz,'count':n,'bytes':sz*n}for(k,sz),n in sorted(hist.items(),key=lambda x:x[0][1]*x[1],reverse=True)]}
+os.close(f);dest=Path('/root/vhttpd-release-tests/20261103-fixed6-diagnosis');(dest/('passive-'+datetime.datetime.now(datetime.timezone.utc).strftime('%H%M%S')+'.json')).write_text(json.dumps(out,indent=2)+'\n');print(json.dumps({**out,'histogram':out['histogram'][:20]},indent=2))
+'''
+subprocess.run(['ssh','-p','2222','-o','BatchMode=yes','-o','ConnectTimeout=10','root@bullsoft.org','python3 -'],input=code,text=True,check=True,timeout=30)

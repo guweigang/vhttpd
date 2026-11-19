@@ -1,18 +1,14 @@
 module codex
 
+import protocol_diagnostics
+import conversation_binding
 import sync
 import time
 import net.websocket as ws
 
 // ── Codex Target ──
 
-pub struct CodexTarget {
-pub:
-	stream_generation string
-	buffer_message_id string
-	platform          string
-	message_id        string
-}
+pub type CodexTarget = conversation_binding.ReplyTarget
 
 // ── Pending RPC ──
 
@@ -20,6 +16,7 @@ pub struct PendingRpc {
 	registration    ?&PendingRpcIdentity
 	routing_retired bool
 pub:
+	expires_at_ms i64
 	instance   string
 	method     string
 	stream_id  string
@@ -58,6 +55,7 @@ pub:
 
 pub struct AdminRuntimeSnapshot {
 pub:
+	protocol protocol_diagnostics.Snapshot
 	enabled            bool
 	connected          bool
 	initialized        bool
@@ -76,7 +74,11 @@ pub:
 // ── Provider Runtime ──
 
 pub struct ProviderRuntime {
+mut:
+	handshake ?&Handshake
 pub mut:
+	protocol protocol_diagnostics.Snapshot
+	application_messages bool
 	configuration_generation u64
 	instance                 string
 	enabled                  bool
@@ -101,10 +103,10 @@ pub mut:
 	thread_id                string
 	active_stream_id         string
 	conn                     ?&ws.Client
-	stream_map               map[string][]CodexTarget
 	rpc_id_counter           int
 	pending_rpcs             map[int]PendingRpc
 	thread_stream_map        map[string]string
+	reply_sessions &conversation_binding.SessionManager[CodexTarget] = &conversation_binding.SessionManager[CodexTarget]{}
 	read_fallback_seq        int
 	read_fallbacks           map[string]ReadFallback
 }
@@ -171,6 +173,10 @@ pub fn (mut rt ProviderRuntime) note_connected(ws_url string) {
 }
 
 pub fn (mut rt ProviderRuntime) note_disconnected(reason string) {
+	if mut h := rt.handshake {
+		if !rt.initialized { h.settle(HandshakeResult{ failure: 'transport_disconnected' }) }
+	}
+	rt.handshake = none
 	rt.connected = false
 	rt.initialized = false
 	rt.last_disconnect_at_unix = time.now().unix()
@@ -197,7 +203,9 @@ pub fn (mut rt ProviderRuntime) next_rpc_id() int {
 }
 
 pub fn (mut rt ProviderRuntime) remember_pending_rpc(id int, pending PendingRpc) {
-	rt.pending_rpcs[id] = pending
+	if pending.instance.len + pending.method.len + pending.stream_id.len + pending.message_id.len > 4096 { return }
+	if !rt.can_register_rpcs(1) { return }
+	rt.pending_rpcs[id] = PendingRpc{...pending, expires_at_ms: time.now().unix_milli() + pending_rpc_timeout_ms}
 }
 
 pub fn (mut rt ProviderRuntime) bind_stream_to_current_thread(stream_id string) string {
@@ -223,6 +231,7 @@ pub fn (mut rt ProviderRuntime) bind_stream_to_thread(thread_id string, stream_i
 
 pub struct RuntimeStateView {
 pub:
+	protocol protocol_diagnostics.Snapshot
 	connected          bool
 	initialized        bool
 	ws_url             string
@@ -237,6 +246,7 @@ pub:
 
 pub fn (rt &ProviderRuntime) state_view() RuntimeStateView {
 	return RuntimeStateView{
+		protocol: rt.protocol
 		connected:          rt.connected
 		initialized:        rt.initialized
 		ws_url:             rt.ws_url
@@ -254,6 +264,7 @@ pub fn (rt &ProviderRuntime) state_view() RuntimeStateView {
 
 pub struct RuntimeSettings {
 pub:
+	application_messages bool
 	enabled            bool
 	url                string
 	model              string
@@ -285,6 +296,7 @@ pub fn CodexState.new(settings RuntimeSettings) CodexState {
 
 pub fn ProviderRuntime.new(settings RuntimeSettings) ProviderRuntime {
 	return ProviderRuntime{
+		application_messages: settings.application_messages
 		enabled:            settings.enabled
 		url:                settings.url
 		model:              settings.model
@@ -295,7 +307,7 @@ pub fn ProviderRuntime.new(settings RuntimeSettings) ProviderRuntime {
 		reconnect_delay_ms: settings.reconnect_delay_ms
 		flush_interval_ms:  settings.flush_interval_ms
 		pending_rpcs:       map[int]PendingRpc{}
-		stream_map:         map[string][]CodexTarget{}
+		reply_sessions: &conversation_binding.SessionManager[CodexTarget]{}
 		thread_stream_map:  map[string]string{}
 	}
 }

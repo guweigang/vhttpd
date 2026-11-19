@@ -1,0 +1,113 @@
+{
+  "status": "One old/new independent package pair completed; business unchanged; resident-memory acceptance still open",
+  "before_sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9",
+  "after_sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+  "same_gc_object_sha256": "7592c15d86847012199c9db03df624ab85d20b9e23e274a614a8f9be08c6e36c",
+  "allocation_rate_reduction_percent": {
+    "http": 8.081449337736801,
+    "paseo": 1.0680904344492204,
+    "mixed": 6.547983283943159
+  },
+  "http_per_completed_request_reduction_percent": 7.133103999131518,
+  "counts": {
+    "http_ok": 28849,
+    "http_errors": 0,
+    "paseo_ok": 176,
+    "paseo_errors": 0
+  },
+  "snapshots_and_normalized_counts": {
+    "01-before": {
+      "role": "f6144d09 prior response-handoff candidate; writer allocated per request",
+      "sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9",
+      "http_interval": {
+        "start_s": 30.657,
+        "end_s": 86.26,
+        "completed_http_requests": 4429,
+        "gc_allocated_bytes": 494741200,
+        "gc_bytes_per_completed_request": 111704.94468277264
+      },
+      "maps": {
+        "baseline": {
+          "utc": "2026-11-10T05:51:27.768852+00:00",
+          "exact": true,
+          "gc_anon_mib": 35.74609375,
+          "outside_gc_anon_mib": 16.71875,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        },
+        "http": {
+          "utc": "2026-11-10T05:52:28.371514+00:00",
+          "exact": true,
+          "gc_anon_mib": 22.3359375,
+          "outside_gc_anon_mib": 17.16015625,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        },
+        "mixed": {
+          "utc": "2026-11-10T05:55:29.169913+00:00",
+          "exact": true,
+          "gc_anon_mib": 21.31640625,
+          "outside_gc_anon_mib": 17.24609375,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        },
+        "cooldown": {
+          "utc": "2026-11-10T05:58:29.477023+00:00",
+          "exact": true,
+          "gc_anon_mib": 10.73046875,
+          "outside_gc_anon_mib": 17.109375,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        }
+      }
+    },
+    "02-after": {
+      "role": "same vhttpd source plus per-worker private writer slot",
+      "sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+      "http_interval": {
+        "start_s": 30.725,
+        "end_s": 86.407,
+        "completed_http_requests": 4390,
+        "gc_allocated_bytes": 455405056,
+        "gc_bytes_per_completed_request": 103736.91480637813
+      },
+      "maps": {
+        "baseline": {
+          "utc": "2026-11-10T06:05:17.179174+00:00",
+          "exact": true,
+          "gc_anon_mib": 51.265625,
+          "outside_gc_anon_mib": 15.2421875,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        },
+        "http": {
+          "utc": "2026-11-10T06:06:17.865896+00:00",
+          "exact": true,
+          "gc_anon_mib": 37.6953125,
+          "outside_gc_anon_mib": 15.734375,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        },
+        "mixed": {
+          "utc": "2026-11-10T06:09:18.377043+00:00",
+          "exact": true,
+          "gc_anon_mib": 36.11328125,
+          "outside_gc_anon_mib": 15.85546875,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        },
+        "cooldown": {
+          "utc": "2026-11-10T06:12:18.761075+00:00",
+          "exact": true,
+          "gc_anon_mib": 12.82421875,
+          "outside_gc_anon_mib": 15.73046875,
+          "probe_error": null,
+          "region_snapshot": "One point near phase end, not tail median"
+        }
+      }
+    }
+  },
+  "resident_conclusion": "Candidate had larger starting GC region and higher pressure anonymous/RSS in this pair. Cold tails are close, not an established RSS improvement. Exact phase snapshots localize the pressure difference primarily to GC-managed residency; exterior residency did not grow. This is a region attribution, not a proven root cause or proof of regression caused by pooling. GC startup variability previously occurred with the same binary.",
+  "scope": "Same frozen main source,SDK/scanner/compiler/GC/native helpers. Only veb private writer state path changed. Natural30s baseline+60HTTP+60Paseo+120mixed+180cool. Extra read-only region/PTE snapshots can perturb timing; HTTP allocation also normalized by completions over matching counter interval. Single pair, synthetic topology, not business replay; no Windows/full24h acceptance. Baseline after warmup is not settled idle.",
+  "next": "Keep tested allocation reduction as candidate; do not switch business on these RSS results alone. Repeat with controlled startup and examine marked blocks/roots if attributing retained GC pages. No GC policy adjustment."
+}

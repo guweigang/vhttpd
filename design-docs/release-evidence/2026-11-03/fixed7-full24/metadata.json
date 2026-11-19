@@ -1,0 +1,42 @@
+{
+  "status": "running",
+  "started_utc": "2026-11-03T08:10:17.405896+00:00",
+  "binary_sha256": "aaa1475c97b9bd003986c8d4f81ae10f7315ec3c544580085139f990151bf4a6",
+  "build_info": {
+    "gc": "boehm",
+    "gc_enabled": true,
+    "version": "0.9.0"
+  },
+  "original_identities": {
+    "697847": {
+      "start_ticks": 9646788,
+      "exe": "/root/vhttpd-release-tests/20261103-fixed6/package/vhttpd"
+    },
+    "9303": {
+      "start_ticks": 601054,
+      "exe": "/root/.local/share/vhttpd-workbench/runtimes/sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159/vhttpd"
+    }
+  },
+  "baseline_seconds": 600,
+  "pressure_seconds": 86400,
+  "cooldown_seconds": 600,
+  "memory_max_mib": 256,
+  "cpu_quota_percent": 30,
+  "host_available_floor_kib": 524288,
+  "asset_sha256": {
+    "remote_soak.py": "1badeb8a7e0746a80fb1b2efdee730a3184eef84e1198804e0759cbc7efb4104",
+    "ws_client.py": "08ebd66512e24d6c174513597919ff57cf04133e8dba3b6b211a506c7633ccc8",
+    "paseo.mts": "f8d431d53e3a1f02a85e910bab1922529d7cf352783f2f0a283ea81886f3f0b6",
+    "paseo-component.toml": "2e67ee169a67d6aa68141a2d83df052a8b0d168992736956cacaf3a282e0a829",
+    "run.py": "14bb1fad9d199e95c3e4329ffd39a37c28584ade930007a5e68c721ad1c931ee"
+  },
+  "note": "Independent new runtime; never stop or replace original soak. Results remain scoped to mixed HTTP/Paseo on shared host.",
+  "unit": "vhttpd-soak-fixed7-independent-24h-20261103",
+  "runtime_pid": 1037583,
+  "runtime_identity": {
+    "start_ticks": 11632512,
+    "exe": "/root/vhttpd-release-tests/20261103-fixed7-full24/package/vhttpd"
+  },
+  "original_identities_unchanged": true,
+  "estimated_complete_utc": "2026-11-04T08:30:37.539952+00:00"
+}

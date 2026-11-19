@@ -1,0 +1,33 @@
+diff --git a/thirdparty/libgc/gc.c b/thirdparty/libgc/gc.c
+index 978f68beec..37826e5565 100644
+--- a/thirdparty/libgc/gc.c
++++ b/thirdparty/libgc/gc.c
+@@ -16,6 +16,19 @@
+  * modified is included with the above copyright notice.
+  */
+ 
++/*
++ * Keep this guard when refreshing the amalgamation.  Concurrent collection
++ * and detached-thread churn retain small UNCOLLECTABLE blocks with GCC -O3;
++ * the same workload reclaims them with -O2.  Restrict this workaround to this
++ * translation unit, leaving generated V code and other native helpers alone.
++ */
++#if defined(__GNUC__) && !defined(__clang__) && defined(__OPTIMIZE__)
++#  define V_BDWGC_RESTORE_GCC_OPTIONS
++#  pragma GCC push_options
++#  pragma GCC optimize ("O2")
++#endif
++
++
+ /*
+  * This file could be used for the following purposes:
+  *   - get the complete collector as a single link object file (module);
+@@ -45930,3 +45943,8 @@ GC_pthread_start_inner(struct GC_stack_base *sb, void *arg)
+ #endif
+ 
+ /* Note: the files from `extra` folder are not included. */
++
++#ifdef V_BDWGC_RESTORE_GCC_OPTIONS
++#  pragma GCC pop_options
++#  undef V_BDWGC_RESTORE_GCC_OPTIONS
++#endif

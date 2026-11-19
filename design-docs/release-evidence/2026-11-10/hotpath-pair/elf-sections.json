@@ -1,0 +1,24 @@
+{
+  "before": {
+    "file_bytes": 17231873,
+    "sections": {
+      ".text": 12209984,
+      ".rodata": 2445440,
+      ".data": 4392,
+      ".bss": 324456,
+      ".symtab": 472800,
+      ".strtab": 604288
+    }
+  },
+  "after": {
+    "file_bytes": 17227777,
+    "sections": {
+      ".text": 12212800,
+      ".rodata": 2436512,
+      ".data": 4392,
+      ".bss": 324456,
+      ".symtab": 472872,
+      ".strtab": 604359
+    }
+  }
+}

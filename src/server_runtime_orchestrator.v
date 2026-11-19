@@ -1,6 +1,7 @@
 module main
 
 import log
+import memidle
 import net
 import net.openssl
 import os
@@ -9,7 +10,7 @@ import veb
 import server_lifecycle
 
 fn preflight_bind_addr(addr string) ! {
-	mut listener := net.listen_tcp(.ip, addr) or {
+	mut listener := net.listen_tcp(if addr.starts_with('[') { .ip6 } else { .ip }, addr) or {
 		return error('bind preflight failed for ${addr}: ${err.msg()}')
 	}
 	listener.close() or {}
@@ -49,7 +50,12 @@ fn preflight_server_bind_addrs(host string, port int) []string {
 	if host.trim_space() == '' {
 		return ['0.0.0.0:${port}']
 	}
-	return ['${host.trim_space()}:${port}']
+	normalized := host.trim_space()
+	return [if normalized.contains(':') && !normalized.starts_with('[') {
+		'[${normalized}]:${port}'
+	} else {
+		'${normalized}:${port}'
+	}]
 }
 
 fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
@@ -57,6 +63,9 @@ fn start_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 }
 
 fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecycle.ServerRuntimeConfig) {
+	memidle.begin()
+	defer { memidle.end() }
+	memidle.start()
 	if !lifecycle.shutdown.begin_start() { return }
 	defer { lifecycle.shutdown.end_start() }
 	log.debug('[vhttpd] start_server_runtime: initializing app runtime site=${runtime_cfg.site_id}')
@@ -87,6 +96,10 @@ fn (mut lifecycle ProcessLifecycle) start(mut app App, runtime_cfg server_lifecy
 		runtime_cfg.admin_host, runtime_cfg.admin_port, runtime_cfg.admin_token)
 	log.debug('[vhttpd] start_server_runtime: starting upstream providers')
 	ProviderStartupRuntime.start_upstreams(mut app)
+	remote_control_note_startup()
+	app.mu.@lock()
+	lifecycle.startup_ready = !app.engines.startup_failed
+	app.mu.unlock()
 	log_runtime_endpoints(app, scheme, runtime_cfg.host, runtime_cfg.port)
 }
 
@@ -113,7 +126,7 @@ fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 		veb.run_at[App, Context](mut app,
 			host:                 runtime_cfg.host
 			port:                 runtime_cfg.port
-			family:               .ip
+			family:               if runtime_cfg.host.contains(':') { .ip6 } else { .ip }
 			nr_workers:           runtime.nr_jobs()
 			show_startup_message: false
 			ssl_config:           openssl.SSLConnectConfig{
@@ -130,7 +143,7 @@ fn serve_server_runtime(mut app App, runtime_cfg server_lifecycle.ServerRuntimeC
 		veb.run_at[App, Context](mut app,
 			host:                 runtime_cfg.host
 			port:                 runtime_cfg.port
-			family:               .ip
+			family:               if runtime_cfg.host.contains(':') { .ip6 } else { .ip }
 			nr_workers:           runtime.nr_jobs()
 			show_startup_message: false
 		) or { report_server_runtime_failure(mut app, err.msg()) }

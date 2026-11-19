@@ -1,0 +1,162 @@
+{
+  "status": "this_batch_accepted",
+  "compiler": "current V; v_old forbidden; Desktop fallback disabled",
+  "network_configuration_changed": false,
+  "client_acceptance": {
+    "dsh_skill": {
+      "conversation": "验证vhttpd部署与调试Skill的实际调用",
+      "time": "2026-11-08 19:33 Asia/Shanghai",
+      "tool": "skill(name=\"vhttpd-debug\")",
+      "result": "loaded updated auth_ref, TLS trust, IPv6 and replay guidance"
+    },
+    "workbuddy_protocol_tools": "actual installed Desktop, local Streamable HTTP, WorkBuddy dialogue; local and existing remote target probes accepted",
+    "workbuddy_local": {
+      "time": "2026-11-08 20:10 Asia/Shanghai",
+      "binding_revision": 1,
+      "runtime_pid": 71321,
+      "result": "six actual application_protocol_probe calls passed expected success/rejection; runtime stopped pid 0",
+      "cases": [
+        "IPv6 without auth -> authentication / 401",
+        "IPv6 dedicated auth -> 200 expected body",
+        "IPv6 TLS system trust -> untrusted self-signed rejected",
+        "IPv6 TLS explicit listener_certificate + localhost -> verified 200",
+        "IPv6 TLS wrong identity -> rejected",
+        "IPv4 TLS + dedicated auth -> verified 200"
+      ],
+      "content_type": "text/plain",
+      "sse_acceptance": false
+    },
+    "workbuddy_remote": {
+      "time": "2026-11-08 21:20 Asia/Shanghai",
+      "target_id": "4d9ea135d2b70f160ff47641",
+      "instance": "existing release-qa",
+      "cases": [
+        "IPv6 without auth -> authentication / 401",
+        "IPv6 dedicated auth -> 200 expected body",
+        "IPv6 TLS system trust -> untrusted self-signed rejected",
+        "IPv6 TLS explicit listener_certificate + localhost -> verified 200",
+        "IPv6 TLS wrong identity -> rejected",
+        "IPv4 TLS + dedicated auth -> verified 200"
+      ],
+      "result": "six actual target_protocol_probe calls matched expected result",
+      "content_type": "text/plain",
+      "sse_acceptance": false
+    },
+    "dsh_final_skill": {
+      "time": "2026-11-08 21:24 Asia/Shanghai",
+      "tool": "skill(name=\"vhttpd-debug\")",
+      "result": "latest installed Skill loaded; discovery, dedicated Bearer and literal remote TLS/credential contracts correctly identified"
+    },
+    "catalog": {
+      "enabled_tools": 109,
+      "actual_discovery": [
+        "context_get",
+        "guidance_get",
+        "application_probe_options_get",
+        "targets_list",
+        "target_status",
+        "target_probe_options_get"
+      ]
+    },
+    "revocation": {
+      "time": "2026-11-08 21:21 Asia/Shanghai",
+      "tool": "context_get",
+      "calls": 1,
+      "result": "old endpoint failed transport POST; no context returned; not claimed HTTP 401"
+    },
+    "final_installed_desktop": {
+      "positive_remote_tls": "IPv6, tls_verified=true, authentication configured, status200, expected text/plain body",
+      "credential_variable_negative": "remote_probe_credential_requires_literal_value; discovery omits unusable auth_ref",
+      "certificate_variable_negative": "remote_probe_tls_trust_requires_literal_path; discovery marks explicit trust unavailable",
+      "restored_positive": "21:28, IPv6 verified TLS200 expected body",
+      "revoked": "21:29, one context_get transport failure, no context; no HTTP401 claim",
+      "temporary_connector_removed": true,
+      "existing_miora_retained": true
+    }
+  },
+  "credentials_recorded": false,
+  "tests": {
+    "native-tests.log": [
+      "Summary for all V _test.v files: 2 passed, 2 total. Elapsed time: 165776 ms, on 2 parallel jobs. Comptime: 328332 ms. Runtime: 1594 ms."
+    ],
+    "native-tls-tests.log": [
+      "Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 60559 ms, on 1 job. Comptime: 59935 ms. Runtime: 620 ms."
+    ],
+    "native-mbedtls-tests.log": [
+      "Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 209991 ms, on 1 job. Comptime: 208576 ms. Runtime: 1400 ms."
+    ],
+    "python-tests.log": [
+      "Ran 6 tests in 9.420s",
+      "OK"
+    ],
+    "final-python-tests.log": [
+      "Ran 6 tests in 15.131s",
+      "OK"
+    ],
+    "tool_catalog": "macOS current V: passed 121-tool initial catalog, explicit cursor, unauthorized request and revoked grant",
+    "authenticated_tls_transport_matrix": "7 Python tests passed including IPv4/IPv6 TLS stream and WebSocket authenticated data",
+    "linux_tool_catalog": "passed with explicit -new-compiler and V_MACOS_V3_NO_FALLBACK=1; 121 tools, cursor, authentication and revocation",
+    "credential_source_guards": "passed on macOS and Ubuntu with current V -new-compiler, fallback forbidden",
+    "standard_guard_final_package": "passed all standard macOS package release checks"
+  },
+  "catalog_diagnostic": {
+    "first_page": 50,
+    "cursor": "50",
+    "second_page": 50,
+    "targets_list_in_first": false,
+    "targets_list_in_second": true
+  },
+  "date": "2026-11-08",
+  "build": {
+    "compiler": "current V, -new-compiler",
+    "fallback_forbidden": true,
+    "v_old_used": false,
+    "desktop_gc": "Boehm",
+    "bundled_runtime_version": "0.9.0",
+    "package_checks": "standard macOS archive, strict signatures, minimum macOS15, fresh HOME/system-only PATH/denied developer tree and compiler smoke passed",
+    "installed_sha256": {
+      "Contents/MacOS/vhttpd-workbench": "3f7adb526c271425655a3a4eb90fdafa63034908ef7a53acac0fdecde3d8b2bc",
+      "Contents/Resources/runtime/vhttpd": "567841c4f198b1a5e0233bc3f4e3cdd3c4f1d770e2b93a8ed9a710b9efb83518",
+      "Contents/Resources/runtime/skills/vhttpd-debug/SKILL.md": "2a52811c599cdda56d0878152f559b676a74fc1d8b6930b33c6be5a79fc25298"
+    },
+    "artifact": "/private/tmp/vhttpd-secure-probe-qa/build-root-guard-final/desktop/bin/vhttpd-workbench-macos-arm64-0.1.0.zip",
+    "archive_sha256": "d540a97912e806be787d3b8971766b8fb9319b6d1d3d36ab123106047ded923a"
+  },
+  "cleanup": {
+    "local": {
+      "original_desktop_environment_restored": true,
+      "final_binary_retained": true,
+      "strict_signature": true,
+      "ports_closed": {
+        "63710": true,
+        "63711": true,
+        "63712": true,
+        "63713": true,
+        "63714": true,
+        "52566": true
+      }
+    },
+    "remote": {
+      "original_config_restored": true,
+      "config_sha256": "bcf1d19224489e1da6d37654463cf7cdb10ea94f6f0dacd3f54f040f99501c67",
+      "instance_id": "4d9ea135d2b70f160ff47641",
+      "runtime_id": "legacy",
+      "owned_process_stopped": true,
+      "ports_63610_through_63614_closed": true,
+      "new_fixture_retired": true
+    },
+    "actual_desktop_original_ipv6_qa_data_restored": true,
+    "actual_desktop_running": true,
+    "runtime_stopped": true,
+    "mcp_off": true
+  },
+  "scope_limits": [
+    "dedicated Bearer only; non-Bearer authentication remains",
+    "remote environment secrets and variable certificate references intentionally rejected; resolver remains",
+    "text/plain client matrix is not SSE continuous/WSS/business MCP client acceptance",
+    "no Windows, real clean Mac15 device, Gatekeeper notarization claim",
+    "Ubuntu runtime was a temporary current-V Boehm QA build in existing release-qa; runtime package selection and identity unchanged",
+    "client MCP transport was local Streamable HTTP; remote target execution used existing host SSH, no SSH forwarding",
+    "system network/proxy/routes/OrbStack configuration unchanged"
+  ]
+}

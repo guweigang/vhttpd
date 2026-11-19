@@ -1,3 +1,4 @@
+import { cardCallbackResponse } from "../feishu/callback.mjs";
 import { parseCodexServerRequest } from "./codex.mts";
 
 function json(value) {
@@ -357,6 +358,20 @@ export function createCodexApprovalRouter(deps) {
       };
     }
     const parentStream = state.parentStreamId ? await deps.getStreamState(state.parentStreamId) : undefined;
+    // An interrupted/completed turn cannot accept a later click on its old card.
+    // The parent turn ID prevents a reused conversation from resolving another run.
+    const endedTurn = parentStream?.lastEvent === "turn/completed"
+      && parentStream?.turnId && parentStream.turnId === state.turnId;
+    if (endedTurn && state.status === "pending") {
+      await deps.upsertApprovalRequestState(requestId, { status: "resolved", decision: state.decision || "cancel" });
+      if (state.approvalStreamId) await deps.updateStreamState(state.approvalStreamId, {
+        status: "approval_resolved", lastEvent: "turn/completed", completedAt: Date.now(),
+      });
+      return { handled: true, commands: [], response: {
+        status: 200, headers: { "content-type": "application/json" },
+        body: cardCallbackResponse(buildApprovalStatusCard({ ...state, status: "resolved", decision: state.decision || "cancel" }, parentStream, { status: "resolved" })),
+      } };
+    }
     if (state.status === "resolved" || state.status === "decided") {
       const responseCard = state.approvalStreamId
         ? buildApprovalStatusCard(state, parentStream, { status: state.status })
@@ -369,7 +384,7 @@ export function createCodexApprovalRouter(deps) {
           headers: {
             "content-type": "application/json",
           },
-          body: responseCard,
+          body: cardCallbackResponse(responseCard),
         },
       };
     }
@@ -396,14 +411,14 @@ export function createCodexApprovalRouter(deps) {
         headers: {
           "content-type": "application/json",
         },
-        body: buildApprovalStatusCard({
+        body: cardCallbackResponse(buildApprovalStatusCard({
           ...state,
           decision: decisionKey,
           status: "decided",
         }, parentStream, {
           decision,
           status: "decided",
-        }),
+        })),
       },
     };
   }

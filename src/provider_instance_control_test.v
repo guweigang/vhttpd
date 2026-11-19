@@ -199,3 +199,50 @@ fn test_shutdown_rejects_new_provider_control_writes_but_allows_snapshots() {
 	app.lifecycle.shutdown.wait_started()
 	app.lifecycle.shutdown.finish('')
 }
+
+fn test_application_owned_instances_bootstrap_handlers_without_global_config() {
+	mut first := &App{}
+	mut second := &App{}
+	defer {
+		first.stop_all_providers()
+		second.stop_all_providers()
+	}
+	assert first.get_provider_spec('codex') == none
+	first.configure_provider_instance(provider.ProviderInstanceSpec{
+		provider: 'codex'
+		instance: 'main'
+		config_json: '{"url":"ws://first:4500","model":"first-model"}'
+	}) or { panic(err) }
+	second.configure_provider_instance(provider.ProviderInstanceSpec{
+		provider: 'codex'
+		instance: 'main'
+		config_json: '{"url":"ws://second:4500","model":"second-model"}'
+	}) or { panic(err) }
+	assert first.get_provider_spec('codex') != none
+	assert second.get_provider_spec('codex') != none
+	assert first.providers.codex.snapshot('main').url == 'ws://first:4500'
+	assert second.providers.codex.snapshot('main').url == 'ws://second:4500'
+	first.configure_provider_instance(provider.ProviderInstanceSpec{
+		provider: 'feishu'
+		instance: 'main'
+		config_json: '{"app_id":"first-id","app_secret":"first-secret"}'
+	}) or { panic(err) }
+	assert first.get_provider_spec('feishu') != none
+	assert second.get_provider_spec('feishu') == none
+	assert first.providers.feishu.apps['main'].app_id == 'first-id'
+}
+
+fn test_application_message_mode_is_opt_in_and_survives_partial_instance_updates() {
+	mut app := &App{}
+	assert !app.providers.codex.snapshot('main').application_messages
+	prepared := prepare_provider_instance(provider.ProviderInstanceSpec{provider:'codex', instance:'main', config_json:'{"application_messages":true}'}) or { panic(err) }
+	app.apply_provider_instance_unlocked(prepared)
+	assert app.providers.codex.snapshot('main').application_messages
+	partial := prepare_provider_instance(provider.ProviderInstanceSpec{provider:'codex', instance:'main', config_json:'{"model":"another-model"}'}) or { panic(err) }
+	app.apply_provider_instance_unlocked(partial)
+	assert app.providers.codex.snapshot('main').application_messages
+	assert app.providers.codex.snapshot('other').application_messages
+	feishu_spec := prepare_provider_instance(provider.ProviderInstanceSpec{provider:'feishu', instance:'bot', config_json:'{"application_messages":true,"app_id":"synthetic"}'}) or { panic(err) }
+	app.apply_provider_instance_unlocked(feishu_spec)
+	assert app.providers.feishu.application_message_mode('bot')
+}

@@ -1,0 +1,4 @@
+---- Testing... ----------------------------------------------------------------
+OK      26.624 ms /vlang-input/vlib/v/tests/concurrency/shared_gc_memory_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 9092 ms, on 1 job. Comptime: 9056 ms. Runtime: 26 ms.

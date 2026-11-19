@@ -1,6 +1,7 @@
 module connection_runtime
 
 import net
+import socket_runtime
 import net.unix
 import time
 
@@ -19,8 +20,7 @@ pub fn dial_unix(path string) !&unix.StreamConn {
 	}
 	mut transferred := false
 	defer { if !transferred { net.close(fd) or {} } }
-	net.socket_error_message(C.fcntl(i32(fd), C.F_SETFD, C.FD_CLOEXEC),
-		'setting Unix connection close-on-exec failed')!
+	socket_runtime.protect(fd)!
 	$if net_nonblocking_sockets ? {
 		net.set_blocking(fd, false)!
 	}

@@ -1,0 +1,100 @@
+{
+  "utc": "2026-11-09T12:17:54Z",
+  "pid": 3730524,
+  "start_ticks": 39645663,
+  "binary_sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+  "status_kib_or_count": {
+    "VmRSS": 138364,
+    "RssAnon": 129344,
+    "VmSwap": 0,
+    "Threads": 29
+  },
+  "host_mem_available_kib": 900256,
+  "health": [
+    {
+      "port": 19887,
+      "status": 200
+    },
+    {
+      "port": 19901,
+      "status": 200
+    },
+    {
+      "port": 19987,
+      "status": 200
+    }
+  ],
+  "units": {
+    "vhttpd-gc-http-factorial-20261109.service": {
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "MemoryPeak": "[not set]",
+      "CPUQuotaPerSecUSec": "infinity",
+      "MemoryMax": "infinity",
+      "MemorySwapMax": "infinity",
+      "TasksMax": "1890",
+      "Nice": "0",
+      "PrivateNetwork": "no",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "vhttpd-gc-http-factorial-repeat-20261109.service": {
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "MemoryPeak": "[not set]",
+      "CPUQuotaPerSecUSec": "infinity",
+      "MemoryMax": "infinity",
+      "MemorySwapMax": "infinity",
+      "TasksMax": "1890",
+      "Nice": "0",
+      "PrivateNetwork": "no",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "vhttpd-bodytest-memory-observer-20261108.service": {
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "MemoryPeak": "9629696",
+      "CPUQuotaPerSecUSec": "10ms",
+      "MemoryMax": "50331648",
+      "MemorySwapMax": "infinity",
+      "TasksMax": "1890",
+      "Nice": "19",
+      "PrivateNetwork": "no",
+      "ActiveState": "active",
+      "SubState": "running"
+    }
+  },
+  "diagnostic_runs": {
+    "01-g0h0": {
+      "status": "completed",
+      "pid": 1126918,
+      "pid_exists_after_completion": false
+    },
+    "02-g1h1": {
+      "status": "completed",
+      "pid": 1138251,
+      "pid_exists_after_completion": false
+    },
+    "03-g0h1": {
+      "status": "completed",
+      "pid": 1149477,
+      "pid_exists_after_completion": false
+    },
+    "04-g1h0": {
+      "status": "completed",
+      "pid": 1160677,
+      "pid_exists_after_completion": false
+    },
+    "05-g1h1-repeat": {
+      "status": "completed",
+      "pid": 1172304,
+      "pid_exists_after_completion": false
+    }
+  },
+  "scope": "Read-only identity/process/health checks; no business configuration, executable, lifecycle or GC intervention.",
+  "unit_property_caveat": "Diagnostic transient units are unloaded after natural exit. Their inactive show output can contain default infinity limits, and must not be interpreted as the active run configuration. Active repeat-unit-start.txt records MemoryMax=268435456, swap=0, CPU=300ms/s, PrivateNetwork=yes; original start.py records identical systemd-run arguments. Per-sample cgroup usage/events are retained."
+}

@@ -85,6 +85,8 @@ pub fn (mut s FeishuState) append_stream_command(command StreamCommand, text str
 		}
 		linked = next
 	}
+	queued := if linked.sealed { linked.rollover_content.len } else { linked.content.len }
+	if text.len > buffer_content_limit - queued { return error('feishu_buffer_content_limit') }
 	return StreamAppendResult{ rollover: s.append_buffer_patch_unlocked(buf.message_id, buf.app, text) }
 }
 

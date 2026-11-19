@@ -1,0 +1,8 @@
+{
+  "diagnostic_only": true,
+  "acceptance_run": false,
+  "untouched_soak_pid": 697847,
+  "memory_max_mib": 256,
+  "cpu_percent": 30,
+  "method": "Separate runtime; read-only GC hist at baseline/load/cooldown; exact same fixed6 package."
+}

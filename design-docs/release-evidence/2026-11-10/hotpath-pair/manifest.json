@@ -1,0 +1,37 @@
+{
+  "run_order": [
+    [
+      "01-before",
+      "before"
+    ],
+    [
+      "02-after",
+      "after"
+    ],
+    [
+      "03-after",
+      "after"
+    ],
+    [
+      "04-before",
+      "before"
+    ]
+  ],
+  "baseline": 30,
+  "load": 240,
+  "cooldown": 180,
+  "load_split_seconds": {
+    "http": 60,
+    "paseo": 60,
+    "mixed": 120
+  },
+  "scope": "Frozen g1h1 baseline vs Context reference plus bounded getter cache. ABBA serial repeats. Four warmed runtimes, two synthetic source roots; no business dependency or traffic replay. Natural cooldown only; no debugger or forced GC. Exact original toolchain, SDK, collector and scanner retained.",
+  "limits": {
+    "MemoryMax": "256M",
+    "MemorySwapMax": 0,
+    "CPUQuota": "30%",
+    "start_gate_mib": 640,
+    "host_guard_mib": 512
+  },
+  "before_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469"
+}

@@ -1,0 +1,31 @@
+{
+  "evidence_kind": "observed local test output summary; raw terminal output retained in chat tool results",
+  "test": "websocket_payload_memory_test.v",
+  "v_compiler": "V 0.5.2 d13ccdd",
+  "before": {
+    "base_factory_commit": "d260cecd415a8640fb655819efd52caee32e5fc2",
+    "exit_code": 1,
+    "native_before_bytes": 401408,
+    "native_after_bytes": 5394432,
+    "frames": 1024,
+    "runtime_identity_test": false
+  },
+  "after": {
+    "exit_code": 0,
+    "passed_test_files": 1,
+    "test_functions": 2,
+    "runtime_identity_test": true,
+    "native_retention_bounded_within_bytes": 1048576
+  },
+  "minimal_facade_probe": {
+    "batches": 6,
+    "requests_per_batch": 1000,
+    "native_retained_bytes": 299008,
+    "quickjs_retained_bytes": 326409,
+    "quickjs_objects": 216,
+    "stable_across_batches": true
+  },
+  "tested_file_sha256": "218bff91d542de8e708bf0a1e19c034ec95f8570d8d9dd2f68e2bd792f579c09",
+  "current_formatted_file_sha256": "fff743907484a1aa86aafe9139a9f3d38a92e72cfc908a1be467744db05f316f",
+  "formatting_only_since_test": true
+}

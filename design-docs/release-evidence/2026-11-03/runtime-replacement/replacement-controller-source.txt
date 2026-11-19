@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Smoke a verified candidate, replace only the old test unit, then validate/soak."""
+from pathlib import Path
+import datetime
+import hashlib
+import json
+import shutil
+import subprocess
+import time
+
+ROOT = Path(__file__).resolve().parent
+OLD = Path('/root/vhttpd-release-tests/20261102-fixed5/full24')
+OLD_UNIT = 'vhttpd-soak-fixed5-24h-20261102.service'
+OLD_PID = 108824
+OLD_START = '5375404'
+OLD_SHA = '36884c13ad7c03ea66d70e8a561e5a865986e6b34df8dcbaa85ac1ced0ec0080'
+FULL_UNIT = 'vhttpd-soak-fixed6-24h-20261103'
+ASSETS = ['remote_soak.py', 'ws_client.py', 'paseo.mts', 'paseo-component.toml']
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+def save(path, data):
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(data, indent=2) + '\n')
+    tmp.replace(path)
+
+def start_ticks(pid):
+    return Path('/proc', str(pid), 'stat').read_text().rpartition(') ')[2].split()[19]
+
+def main():
+    binary = ROOT / 'package/vhttpd'
+    report = {'status': 'smoke_running', 'started_utc': now(),
+              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+              'old_unit': OLD_UNIT, 'old_pid': OLD_PID, 'old_stopped': False,
+              'authorization': 'Maintainer explicitly requested replacing old long-soak runtime with fixed version; restart 24h from zero.'}
+    save(ROOT/'replacement.json', report)
+    try:
+        assert start_ticks(9303) == '601054', 'Production observer identity changed'
+        smoke = ROOT/'smoke'
+        smoke.mkdir(mode=0o700)
+        for name in ASSETS:
+            shutil.copy2(ROOT/name, smoke/name)
+        result = subprocess.run(['/usr/bin/python3', str(smoke/'remote_soak.py'),
+                                 '--binary', str(binary), '--observe-pid', '9303',
+                                 '--workload', 'mixed', '--signature-mode', 'isolated',
+                                 '--duration', '60'])
+        outcome = json.loads((smoke/'result.json').read_text())
+        assert result.returncode == 0 and outcome['status'] == 'completed', 'New candidate smoke failed'
+        assert outcome['http_ok'] and outcome['paseo_ok'], 'Smoke produced no verified traffic'
+        assert not outcome['http_errors'] and not outcome['paseo_errors'], 'Smoke reported errors'
+        report.update(status='smoke_passed', smoke=outcome)
+        save(ROOT/'replacement.json', report)
+        assert start_ticks(9303) == '601054', 'Production observer identity changed'
+        save(ROOT/'old-before-stop-state.json', json.loads((OLD/'state.json').read_text()))
+        active = subprocess.run(['systemctl','is-active',OLD_UNIT], capture_output=True, text=True).stdout.strip()
+        if active == 'active':
+            assert start_ticks(OLD_PID) == OLD_START, 'Old test PID was reused'
+            old_binary = OLD.parent/'package/vhttpd'
+            assert Path('/proc',str(OLD_PID),'exe').resolve() == old_binary, 'Old test executable mismatch'
+            assert hashlib.sha256(old_binary.read_bytes()).hexdigest() == OLD_SHA
+            cgroup = Path('/proc',str(OLD_PID),'cgroup').read_text()
+            assert '/'+OLD_UNIT in cgroup, 'Old PID is not in the expected test unit'
+            main_pid = subprocess.check_output(['systemctl','show',OLD_UNIT,'--value','-p','MainPID'],text=True).strip()
+            assert str(OLD/'remote_soak.py').encode() in Path('/proc',main_pid,'cmdline').read_bytes()
+            report.update(status='stopping_old', stop_requested_utc=now())
+            save(ROOT/'replacement.json', report)
+            subprocess.run(['systemctl','stop',OLD_UNIT],check=True,timeout=60)
+            assert not Path('/proc',str(OLD_PID)).exists(), 'Old test runtime is still alive'
+            report.update(old_stopped=True, old_stopped_utc=now())
+        elif active not in ['inactive','failed','unknown']:
+            raise RuntimeError('Unexpected old unit state: '+active)
+        report['old_unit_initial_state'] = active
+        report['old_run_disposition'] = 'Operator replacement; unfinished old run does not count toward the new 24h acceptance.'
+        save(OLD.parent/'replacement-intervention.json', report)
+        if (OLD/'result.json').exists():
+            shutil.copy2(OLD/'result.json',ROOT/'old-after-stop-result.json')
+        report['status'] = 'validating'
+        save(ROOT/'replacement.json', report)
+        subprocess.run(['/usr/bin/python3',str(ROOT/'remote_soak_sequence.py'),
+                        '--binary',str(binary),'--observe-pid','9303',
+                        '--full-unit',FULL_UNIT],check=True)
+        sequence=json.loads((ROOT/'sequence.json').read_text())
+        assert sequence['status']=='full_soak_running'
+        state=json.loads((ROOT/'full24/state.json').read_text())
+        assert state['status']=='running' and state['binary_sha256']==report['binary_sha256']
+        assert start_ticks(9303)=='601054'
+        report.update(status='full_soak_running',full_unit=FULL_UNIT,
+                      new_runtime_pid=state['runtime_pid'],new_started_utc=state['started_utc'])
+        save(ROOT/'replacement.json',report)
+    except Exception as error:
+        report.update(status='failed',failure=f'{type(error).__name__}: {error}',ended_utc=now())
+        save(ROOT/'replacement.json',report)
+        raise
+
+if __name__=='__main__':
+    main()

@@ -1,0 +1,31 @@
+--- a/thirdparty/libgc/gc.c
++++ b/thirdparty/libgc/gc.c
+@@ -155,7 +155,9 @@
+ #define GC_ATOMIC_UNCOLLECTABLE 1
+ 
+ /* Use GCC atomic intrinsics instead of `libatomic_ops` primitives. */
++#ifndef _MSC_VER
+ #define GC_BUILTIN_ATOMIC 1
++#endif
+ 
+ /* Define to build dynamic libraries with only API symbols exposed. */
+ /* #undef GC_DLL */
+--- a/vlib/net/openssl/openssl.c.v
++++ b/vlib/net/openssl/openssl.c.v
+@@ -16,12 +16,12 @@
+ #flag freebsd -L/usr/local/lib
+ 
+ // Installed through choco:
+-#flag windows -IC:/Program Files/OpenSSL-Win64/include
+-#flag windows -LC:/Program Files/OpenSSL-Win64/lib/VC/x64/MD
++#flag windows -I "C:/Program Files/OpenSSL-Win64/include"
++#flag windows -L "C:/Program Files/OpenSSL-Win64/lib/VC/x64/MD"
+ 
+ // Installed on the CI:
+-#flag windows -IC:/Program Files/OpenSSL/include
+-#flag windows -LC:/Program Files/OpenSSL/lib/VC/x64/MD
++#flag windows -I "C:/Program Files/OpenSSL/include"
++#flag windows -L "C:/Program Files/OpenSSL/lib/VC/x64/MD"
+ 
+ $if $pkgconfig('openssl') {
+ 	#pkgconfig --cflags --libs openssl

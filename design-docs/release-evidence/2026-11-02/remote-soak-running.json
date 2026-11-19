@@ -1,0 +1,55 @@
+{
+  "state": {
+    "status": "running",
+    "started_utc": "2026-11-02T08:11:18Z",
+    "duration_seconds": 87600,
+    "build_info": {
+      "gc": "boehm",
+      "gc_enabled": true,
+      "version": "0.9.0"
+    },
+    "binary": "/root/.local/share/vhttpd-workbench/runtimes/sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159/vhttpd",
+    "binary_sha256": "f35c819beee5d426695603d38404548b4fc3bbc20190c3f3aab7c5afa4e8e720",
+    "scope": "isolated HTTP JSON and Paseo reconnect/text/binary; no DB/providers/production traffic",
+    "http_target_rps": 40,
+    "http_concurrency": 4,
+    "paseo_cycle_interval_seconds": 2,
+    "sample_seconds": 10,
+    "host_available_min_kib": 262144,
+    "cgroup_required_memory_max_bytes": 536870912,
+    "http_port": 35317,
+    "ws_port": 54709,
+    "observed_pid": 9303,
+    "http_ok": 0,
+    "http_errors": 0,
+    "paseo_ok": 0,
+    "paseo_errors": 0,
+    "latency_buckets_ms": {
+      "10": 0,
+      "50": 0,
+      "100": 0,
+      "500": 0,
+      "1000": 0,
+      "over1000": 0
+    },
+    "max_latency_ms": 0,
+    "recent_errors": [],
+    "samples": 6,
+    "log_rotation_count": 0,
+    "cgroup": "/sys/fs/cgroup/system.slice/vhttpd-soak-24h-20261102.service",
+    "baseline_seconds": 600,
+    "cooldown_seconds": 600,
+    "load_duration_seconds": 86400,
+    "runtime_pid": 29230,
+    "phase": "baseline",
+    "elapsed_seconds": 50.01
+  },
+  "asset_hashes": {
+    "remote_soak.py": "2cf3d9988b7224fbf4417b667d83206a8c765ee2f75bae988c6a4233bf4a9da3",
+    "ws_client.py": "08ebd66512e24d6c174513597919ff57cf04133e8dba3b6b211a506c7633ccc8",
+    "paseo.mts": "f8d431d53e3a1f02a85e910bab1922529d7cf352783f2f0a283ea81886f3f0b6",
+    "paseo-component.toml": "2e67ee169a67d6aa68141a2d83df052a8b0d168992736956cacaf3a282e0a829"
+  },
+  "source_commit": "d260cecd415a8640fb655819efd52caee32e5fc2",
+  "systemd": "Result=success\nMemoryCurrent=56373248\nCPUQuotaPerSecUSec=1s\nMemoryMax=536870912\nTasksMax=128\nActiveState=active\nSubState=running\n"
+}

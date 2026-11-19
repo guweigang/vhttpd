@@ -1,0 +1,29 @@
+{
+  "branch": "feature/desktop-workbench",
+  "tested_commit": "2214ed9b76724a7353f4e8f7578d75f7efd3ed52",
+  "working_changes": true,
+  "tests": {
+    "macos_probe": "8 passed, including real Hub and certificate rejection",
+    "ubuntu_probe": "8 passed, including real Hub and certificate rejection",
+    "macos_ui_catalog": "passed, including unsaved remote command routing, disconnected/wrong/busy host rejection and parameter-scoped results",
+    "macos_typecheck": "passed",
+    "localized_pages_typecheck": "passed",
+    "macos_native_ui": "passed: Relay-only entry; no duplicate services; unsaved WebSocket probe succeeded; source host displayed; changed address invalidated result; return preserved environment and Relay tab; no saved connection written",
+    "macos_package": "passed: final production build, extraction, bundled dependencies, system-only PATH, denied developer trees, cross-include publication/restart/effectiveness"
+  },
+  "linux": {
+    "machine": "ubuntu",
+    "access": "OrbStack CLI",
+    "python": "3.14.4",
+    "v_version": "0.5.2 d13ccdd",
+    "v_branch": "local-dev",
+    "vjsx": "7178327",
+    "v_changes": "pre-existing; unchanged",
+    "gc": "not applicable: Python stdlib probe; existing runtime fixture used"
+  },
+  "limits": [
+    "Real Desktop SSH click flow has not been validated; Ubuntu validation used OrbStack execution.",
+    "Full Linux service build and CI not run; no service source modified in this task."
+  ],
+  "qa_app": "/var/folders/ck/vq9ch5jj5gj52vjg5z4kl6th0000gn/T/vhttpd-relay-drafts-qa.rx6ik63_/Workbench Relay Draft QA.app"
+}

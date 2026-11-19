@@ -1,5 +1,9 @@
 module codex
 
+import time
+
+import conversation_binding
+
 // ── ProviderRuntime Instance Helpers ──
 
 // normalize_instance normalizes an instance string to its canonical name.
@@ -17,6 +21,7 @@ pub fn ProviderRuntime.normalize_instance(instance string) string {
 pub fn (base ProviderRuntime) for_instance(instance string) ProviderRuntime {
 	resolved := ProviderRuntime.normalize_instance(instance)
 	return ProviderRuntime{
+		application_messages: base.application_messages
 		instance:           resolved
 		enabled:            base.enabled
 		url:                base.url
@@ -27,7 +32,7 @@ pub fn (base ProviderRuntime) for_instance(instance string) ProviderRuntime {
 		sandbox:            base.sandbox
 		reconnect_delay_ms: base.reconnect_delay_ms
 		flush_interval_ms:  base.flush_interval_ms
-		stream_map:         map[string][]CodexTarget{}
+		reply_sessions: &conversation_binding.SessionManager[CodexTarget]{}
 		pending_rpcs:       map[int]PendingRpc{}
 		thread_stream_map:  map[string]string{}
 		read_fallbacks:     map[string]ReadFallback{}
@@ -37,11 +42,9 @@ pub fn (base ProviderRuntime) for_instance(instance string) ProviderRuntime {
 // Runtime snapshots own their mutable containers; native connection references
 // remain observations managed by the existing connection/session owner.
 pub fn (rt &ProviderRuntime) snapshot_copy() ProviderRuntime {
-	mut targets := map[string][]CodexTarget{}
-	for stream, entries in rt.stream_map { targets[stream] = entries.clone() }
 	return ProviderRuntime{
 		...rt
-		stream_map:        targets
+		reply_sessions: rt.reply_sessions.snapshot()
 		pending_rpcs:      rt.pending_rpcs.clone()
 		thread_stream_map: rt.thread_stream_map.clone()
 		read_fallbacks:    rt.read_fallbacks.clone()
@@ -80,6 +83,7 @@ pub fn (mut s CodexState) update(instance string, rt ProviderRuntime) {
 	next := if current.configuration_generation > rt.configuration_generation {
 		ProviderRuntime{
 			...rt
+			application_messages: current.application_messages
 			configuration_generation: current.configuration_generation
 			enabled:                  current.enabled
 			url:                      current.url
@@ -137,7 +141,7 @@ pub fn (registration RpcRegistration) is_pending() bool {
 		s.instances[registration.instance] or { return false }
 	}
 	pending := rt.pending_rpcs[registration.id] or { return false }
-	if pending.routing_retired { return false }
+	if pending.routing_retired || (pending.expires_at_ms > 0 && pending.expires_at_ms <= time.now().unix_milli()) { return false }
 	identity := pending.registration or { return false }
 	return voidptr(identity) == voidptr(registration.identity)
 }

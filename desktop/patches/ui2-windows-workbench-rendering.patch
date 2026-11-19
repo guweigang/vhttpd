@@ -1,0 +1,673 @@
+--- a/windows/ui_windows.v
++++ b/windows/ui_windows.v
+@@ -1,6 +1,9 @@
+ // vfmt off
+ // Keep Win32 declarations out of opt-in custom-renderer builds.
+ module ui2
++
++import os
++import stbi
+ 
+ $if !ui2_custom_rendering ? {
+ 
+@@ -290,7 +293,7 @@
+ 	}
+ }
+ 
+-fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64)
++fn C.ui2_win_paint_transparent_button(hwnd voidptr, foreground u32, radius f64, border_color u32, border_left f64, border_top f64, border_right f64, border_bottom f64, checkbox int, background u32)
+ 
+ fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
+ 
+@@ -301,6 +304,8 @@
+ fn C.ui2_win_set_bitmap(hwnd voidptr, path &u16, width int, height int) voidptr
+ 
+ fn C.ui2_win_clear_bitmap(hwnd voidptr)
++
++fn C.ui2_win_set_alpha_bitmap(hwnd voidptr, rgba &u8, width int, height int) voidptr
+ 
+ fn C.ui2_win_set_scroll(hwnd voidptr, content int, position int, horizontal int) int
+ 
+@@ -400,6 +405,13 @@
+ @[heap]
+ struct WindowsState {
+ mut:
++	building_screen bool
++	menu_update_pending bool
++	polling_refresh bool
++	has_declared_tree bool
++	last_declared_tree Element
++	poll_skipped u64
++	rendered_frames u64
+ 	symbol_font_attempted bool
+ 	hover_bindings        map[u64]string // window handle -> action of a hoverable element
+ 	hovered               []string       // hovered actions, outermost first
+@@ -596,7 +608,7 @@
+ }
+ 
+ fn windows_uses_transparent_button_paint(kind Kind, box BoxStyle) bool {
+-	return box.transparent && kind in [.button, .toggle_button]
++	return kind == .checkbox || (box.transparent && kind in [.button, .toggle_button])
+ }
+ 
+ // Whether a window leaves the background behind it alone. A label paints none of its
+@@ -754,16 +766,27 @@
+ 
+ pub fn refresh() {
+ 	mut st := windows_state()
+-	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
+-		return
+-	}
++	if st.root == unsafe { nil } || st.rendering || st.building_screen || voidptr(st.build_screen) == unsafe { nil } {
++		return
++	}
++	st.building_screen = true
+ 	declared := st.build_screen()
++	st.building_screen = false
++	// Unchanged timer polls still consume host results and install pending menu states.
++	if st.polling_refresh && st.has_declared_tree && declared == st.last_declared_tree {
++		st.poll_skipped++
++		st.rendering = true
++		windows_install_pending_menu()
++		st.rendering = false
++		return
++	}
+ 	root := windows_symbol_images_as_labels(apply_widget_animations(declared))
+ 	validate_element_tree(root) or {
+ 		eprintln('ui2: ${err}')
+ 		return
+ 	}
+ 	st.rendering = true
++	st.rendered_frames++
+ 	st.views = map[string]voidptr{}
+ 	st.view_keys = map[string]string{}
+ 	st.view_kinds = map[string]Kind{}
+@@ -784,17 +807,104 @@
+ 	st.toggle_views = map[u64]voidptr{}
+ 	mut active := map[string]bool{}
+ 	if root.kind == .screen {
+-		st.node_boxes[''] = root.box
++		windows_update_root_box(root.box)
+ 		windows_render_children(st.root, root.children, '', 0, 0, mut active)
+ 	} else {
+-		st.node_boxes[''] = BoxStyle{}
++		windows_update_root_box(BoxStyle{})
+ 		windows_render_element(st.root, root, reconciliation_child_key('', 0, root), '', 0, 0, mut active)
+ 	}
+ 	windows_remove_stale(active)
++	windows_install_pending_menu()
++	if st.has_declared_tree && declared != st.last_declared_tree {
++		windows_redraw_changed_regions(st.root, st.last_declared_tree, declared)
++	}
++	st.last_declared_tree = declared
++	st.has_declared_tree = true
+ 	st.rendering = false
+-	C.ui2_win_invalidate(st.root)
+ 	// Content can move under a cursor that stays put.
+ 	windows_update_hover()
++}
++
++fn windows_install_pending_menu() {
++	mut st := windows_state()
++	if st.menu_update_pending {
++		st.menu_update_pending = false
++		menu_win32_set_menu_bar(menu_bar())
++	}
++}
++
++fn windows_update_root_box(box BoxStyle) {
++	mut st := windows_state()
++	if previous := st.node_boxes[''] {
++		if previous == box { return }
++	}
++	st.node_boxes[''] = box
++	C.ui2_win_redraw_subtree(st.root)
++}
++
++fn C.ui2_win_redraw_subtree(voidptr)
++
++fn C.ui2_win_redraw_region(hwnd voidptr, left int, top int, right int, bottom int)
++
++fn windows_structure_changed(previous Element, current Element) bool {
++	if previous.id != current.id || previous.key != current.key || previous.kind != current.kind
++		|| previous.hidden != current.hidden || previous.children.len != current.children.len {
++		return true
++	}
++	for i, child in previous.children {
++		if windows_structure_changed(child, current.children[i]) {
++			return true
++		}
++	}
++	return false
++}
++
++fn windows_redraw_region(hwnd voidptr, frame Rect) {
++	C.ui2_win_redraw_region(hwnd, int(frame.x), int(frame.y), int(frame.x + frame.width),
++		int(frame.y + frame.height))
++}
++
++fn windows_redraw_changed_regions(hwnd voidptr, previous Element, current Element) {
++	// Theme changes already invalidate the entire tree in windows_update_root_box.
++	if previous.box != current.box {
++		return
++	}
++	if previous.kind != .screen || current.kind != .screen {
++		if windows_structure_changed(previous, current) {
++			windows_redraw_region(hwnd, previous.frame)
++			windows_redraw_region(hwnd, current.frame)
++		}
++		return
++	}
++	// A replaced page can expose previously covered pixels. Repaint its old
++	// and new client rectangles after native layout, leaving the sidebar alone.
++	for i, child in previous.children {
++		if i >= current.children.len {
++			windows_redraw_region(hwnd, child.frame)
++		} else if windows_structure_changed(child, current.children[i]) {
++			windows_redraw_region(hwnd, child.frame)
++			if child.frame != current.children[i].frame {
++				windows_redraw_region(hwnd, current.children[i].frame)
++			}
++		}
++	}
++	for i in previous.children.len .. current.children.len {
++		windows_redraw_region(hwnd, current.children[i].frame)
++	}
++}
++
++// Host status polls are distinct from input, scrolling and animation refreshes.
++pub fn request_poll_refresh() {
++	st := windows_state()
++	if st.root != unsafe { nil } { C.ui2_win_post_poll_refresh(st.root) }
++}
++
++fn C.ui2_win_post_poll_refresh(voidptr)
++
++// Diagnostics used by the native build regression probe.
++pub fn windows_poll_refresh_stats() (u64, u64) {
++ st := windows_state()
++ return st.rendered_frames, st.poll_skipped
+ }
+ 
+ pub fn request_refresh() {
+@@ -1236,11 +1346,16 @@
+ 	} else {
+ 		el.text_style
+ 	}
++	mut paint_changed := must_create || (st.node_boxes[key] or { BoxStyle{} }) != visual_box
++		|| (st.node_text_styles[key] or { TextStyle{} }) != visual_text_style
+ 	st.node_boxes[key] = visual_box
+ 	if el.kind == .view && element_has_shape(el) {
+-		st.node_shapes[key] = windows_pack_shape(el)
++		packed_shape := windows_pack_shape(el)
++		if (st.node_shapes[key] or { WindowsShape{} }) != packed_shape { paint_changed = true }
++		st.node_shapes[key] = packed_shape
+ 	} else if key in st.node_shapes {
+ 		st.node_shapes.delete(key)
++		paint_changed = true
+ 	}
+ 	st.node_text_styles[key] = visual_text_style
+ 	st.node_ids[key] = el.id
+@@ -1267,7 +1382,7 @@
+ 		...el
+ 		box: visual_box
+ 		text_style: visual_text_style
+-	}, x_offset, y_offset, must_create)
++	}, x_offset, y_offset, must_create, paint_changed)
+ 	if el.kind == .label {
+ 		windows_place_label(key, hwnd, Element{
+ 			...el
+@@ -1463,9 +1578,12 @@
+ 	return label.replace('&', '&&')
+ }
+ 
+-fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_offset int, created bool) {
+-	mut st := windows_state()
+-	C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(el.frame.x) + x_offset, int(el.frame.y) + y_offset, int(el.frame.width), int(el.frame.height))
++fn windows_update_element(key string, hwnd voidptr, el Element, x_offset int, y_offset int, created bool, paint_changed bool) {
++	mut st := windows_state()
++	// Label placement below already applies its final measured frame.
++	if el.kind != .label {
++		C.ui2_win_set_widget_frame(hwnd, windows_widget_kind(el.kind), int(el.frame.x) + x_offset, int(el.frame.y) + y_offset, int(el.frame.width), int(el.frame.height))
++	}
+ 	C.ui2_win_show(hwnd, windows_bool(!el.hidden))
+ 	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
+ 	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
+@@ -1479,7 +1597,8 @@
+ 			if declared_changed || windows_native_text(text_hwnd) != el.text {
+ 				windows_set_native_text(text_hwnd, el.text)
+ 			}
+-			if el.kind in [.checkbox, .switch_control, .toggle_button] {
++			if el.kind in [.checkbox, .switch_control, .toggle_button]
++				&& C.ui2_win_get_checked(hwnd) != windows_bool(el.checked) {
+ 				C.ui2_win_set_checked(hwnd, windows_bool(el.checked))
+ 			}
+ 		}
+@@ -1509,19 +1628,22 @@
+ 			unsafe { free(wide_placeholder) }
+ 		}
+ 		.image {
+-			image_sig := '${el.image_path.bytes().hex()}:${int(el.frame.width)}:${int(el.frame.height)}'
++			image_sig := if el.image_path.to_lower().ends_with('.png') {
++				el.image_path
++			} else {
++				'${el.image_path.bytes().hex()}:${int(el.frame.width)}:${int(el.frame.height)}'
++			}
+ 			if created || (st.node_image_path[key] or { '' }) != image_sig {
+-				wide_path := el.image_path.to_wide()
+-				bitmap := C.ui2_win_set_bitmap(hwnd, wide_path, int(el.frame.width), int(el.frame.height))
+-				if bitmap == unsafe { nil } && el.image_path.len > 0 {
+-					eprintln('ui2: Windows native images currently require a BMP file: ${el.image_path}')
++				bitmap := windows_load_image(hwnd, el.image_path, el.frame) or {
++					C.ui2_win_clear_bitmap(hwnd)
++					eprintln('ui2: ${err}')
++					voidptr(unsafe { nil })
+ 				}
+ 				if bitmap == unsafe { nil } {
+ 					st.images.delete(key)
+ 				} else {
+ 					st.images[key] = bitmap
+ 				}
+-				unsafe { free(wide_path) }
+ 				st.node_image_path[key] = image_sig
+ 			}
+ 		}
+@@ -1536,11 +1658,34 @@
+ 	// The tooltip goes on the outer window, which is the declared frame, and on the
+ 	// control inside it, which is what the pointer actually lands on.
+ 	windows_update_tooltip(key, hwnd, text_hwnd, el.tooltip)
+-	if el.kind == .label {
++	if el.kind == .label && (paint_changed || declared_changed) {
++		// Transparent glyphs share their parent's background.
+ 		C.ui2_win_invalidate_parent(hwnd)
+ 		C.ui2_win_invalidate(text_hwnd)
+-	}
+-	C.ui2_win_invalidate(hwnd)
++	} else if paint_changed {
++		C.ui2_win_redraw_subtree(hwnd)
++	}
++}
++
++fn windows_load_image(hwnd voidptr, path string, frame Rect) !voidptr {
++	if path.to_lower().ends_with('.png') {
++		// Use V's file APIs so that Windows paths with Unicode characters work.
++		data := os.read_bytes(path)!
++		decoded := stbi.load_from_memory(data.data, data.len, desired_channels: 4)!
++		defer { decoded.free() }
++		bitmap := C.ui2_win_set_alpha_bitmap(hwnd, decoded.data, decoded.width, decoded.height)
++		if bitmap == unsafe { nil } {
++			return error('could not create an alpha bitmap for ${path}')
++		}
++		return bitmap
++	}
++	wide_path := path.to_wide()
++	defer { unsafe { free(wide_path) } }
++	bitmap := C.ui2_win_set_bitmap(hwnd, wide_path, int(frame.width), int(frame.height))
++	if bitmap == unsafe { nil } && path != '' {
++		return error('could not load Windows bitmap: ${path}')
++	}
++	return bitmap
+ }
+ 
+ fn windows_update_tooltip(key string, hwnd voidptr, text_hwnd voidptr, tooltip string) {
+@@ -2339,6 +2484,12 @@
+ 			}
+ 			return 0
+ 		}
++		u32(0x8000 + 88) {
++			st.polling_refresh = true
++			refresh()
++			st.polling_refresh = false
++			return 0
++		}
+ 		win_wm_refresh {
+ 			refresh()
+ 			return 0
+@@ -2404,7 +2555,7 @@
+ 	}
+ 	style := st.node_text_styles[key] or { TextStyle{} }
+ 	C.ui2_win_paint_transparent_button(hwnd, style.color, box.radius, box.border_color,
+-		box.border_left, box.border_top, box.border_right, box.border_bottom)
++		box.border_left, box.border_top, box.border_right, box.border_bottom, windows_bool(kind == .checkbox), box.bg)
+ 	return 1
+ }
+ 
+--- a/windows/native_helpers_windows.h
++++ b/windows/native_helpers_windows.h
+@@ -222,6 +222,10 @@
+ 	} else {
+ 		RemovePropW(hwnd, ui2_win_accessible_button_property());
+ 	}
++	// Present focus and the button's transparent captions together.
++	LONG_PTR extended = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
++	LONG_PTR next_extended = active ? extended | WS_EX_COMPOSITED : extended & ~((LONG_PTR)WS_EX_COMPOSITED);
++	if (extended != next_extended) SetWindowLongPtrW(hwnd, GWL_EXSTYLE, next_extended);
+ 	LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+ 	LONG_PTR next_style = active ? style | WS_TABSTOP : style & ~((LONG_PTR)WS_TABSTOP);
+ 	if (style != next_style) {
+@@ -330,6 +334,10 @@
+ 	return current;
+ }
+ 
++static const wchar_t ui2_win_alpha_bitmap_property[] = L"UI2AlphaBitmap";
++
++static inline void ui2_win_paint_alpha_bitmap(HWND hwnd, HDC dc, HBITMAP bitmap);
++
+ static LRESULT CALLBACK ui2_win_control_subclass(HWND hwnd, UINT message, WPARAM wparam,
+ 		LPARAM lparam, UINT_PTR subclass_id, DWORD_PTR reference_data) {
+ 	(void)subclass_id;
+@@ -361,6 +369,21 @@
+ 	}
+ 	if (message == WM_ERASEBKGND && ui2_windows_is_transparent_button(hwnd)) {
+ 		return 1;
++	}
++	if (message == WM_PAINT || message == WM_PRINTCLIENT || message == WM_ERASEBKGND) {
++		HBITMAP bitmap = (HBITMAP)GetPropW(hwnd, ui2_win_alpha_bitmap_property);
++		if (bitmap != NULL) {
++			if (message == WM_ERASEBKGND) return 1;
++			if (message == WM_PRINTCLIENT) {
++				ui2_win_paint_alpha_bitmap(hwnd, (HDC)wparam, bitmap);
++			} else {
++				PAINTSTRUCT ps;
++				HDC dc = BeginPaint(hwnd, &ps);
++				if (dc != NULL) ui2_win_paint_alpha_bitmap(hwnd, dc, bitmap);
++				EndPaint(hwnd, &ps);
++			}
++			return 0;
++		}
+ 	}
+ 	if (message == WM_PAINT) {
+ 		if (ui2_windows_paint_transparent_button(hwnd)) return 0;
+@@ -414,7 +437,9 @@
+ 	}
+ 	if ((message == WM_SETFOCUS || message == WM_KILLFOCUS)
+ 		&& ui2_win_is_accessible_button(hwnd)) {
+-		InvalidateRect(hwnd, NULL, FALSE);
++		// The caption/badges are transparent STATIC children. Invalidating only
++		// their parent clears their glyphs until a later declaration refresh.
++		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
+ 	}
+ 	if ((message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
+ 		&& (GetWindowLongPtrW(hwnd, GWL_STYLE) & ui2_win_wheel_scroll_style(message, wparam)) == 0
+@@ -812,6 +837,10 @@
+ 	PostQuitMessage(code);
+ }
+ 
++static inline void ui2_win_post_poll_refresh(void *hwnd) {
++ if (hwnd != NULL) PostMessageW((HWND)hwnd, WM_APP + 88, 0, 0);
++}
++
+ static inline void ui2_win_post_refresh(void *hwnd) {
+ 	if (hwnd != NULL) PostMessageW((HWND)hwnd, UI2_WM_REFRESH, 0, 0);
+ }
+@@ -842,6 +871,12 @@
+ 
+ static inline void ui2_win_set_frame(void *hwnd, int x, int y, int width, int height) {
+ 	if (hwnd != NULL) {
++		RECT current;
++		if (GetWindowRect((HWND)hwnd, &current)) {
++			POINT origin = {current.left, current.top};
++			MapWindowPoints(NULL, GetParent((HWND)hwnd), &origin, 1);
++			if (origin.x == x && origin.y == y && current.right-current.left == width && current.bottom-current.top == height) return;
++		}
+ 		SetWindowPos((HWND)hwnd, NULL, x, y, width, height,
+ 			SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+ 	}
+@@ -857,20 +892,26 @@
+ 
+ static inline void ui2_win_place_after(void *hwnd, void *previous) {
+ 	if (hwnd == NULL) return;
+-	(void)previous;
+-	// Rendering visits siblings from back to front. Moving each visited child to
+-	// the top gives later declarative siblings the same stacking priority used
+-	// by the other backends.
+-	SetWindowPos((HWND)hwnd, HWND_TOP,
++	HWND child = (HWND)hwnd;
++	HWND below = (HWND)previous;
++	// The renderer visits siblings from back to front. Move only a child whose
++	// neighbour is wrong, preserving the z-order of unchanged controls.
++	if (GetWindow(child, GW_HWNDNEXT) == below) return;
++	HWND above = below ? GetWindow(below, GW_HWNDPREV) : HWND_BOTTOM;
++	SetWindowPos(child, above,
+ 		0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+ }
+ 
+ static inline void ui2_win_show(void *hwnd, int visible) {
+-	if (hwnd != NULL) ShowWindow((HWND)hwnd, visible ? SW_SHOWNA : SW_HIDE);
++	if (hwnd != NULL && ((GetWindowLongPtrW((HWND)hwnd, GWL_STYLE) & WS_VISIBLE) != 0) != (visible != 0)) {
++		ShowWindow((HWND)hwnd, visible ? SW_SHOWNA : SW_HIDE);
++	}
+ }
+ 
+ static inline void ui2_win_enable(void *hwnd, int enabled) {
+-	if (hwnd != NULL) EnableWindow((HWND)hwnd, enabled);
++	if (hwnd != NULL && (IsWindowEnabled((HWND)hwnd) != 0) != (enabled != 0)) {
++		EnableWindow((HWND)hwnd, enabled);
++	}
+ }
+ 
+ typedef struct ui2_win_tooltip_binding {
+@@ -992,16 +1033,22 @@
+ static inline void ui2_win_set_edit_options(void *hwnd, const wchar_t *placeholder,
+ 		int readonly, int padding_left) {
+ 	if (hwnd == NULL) return;
+-	SendMessageW((HWND)hwnd, EM_SETREADONLY, readonly ? TRUE : FALSE, 0);
++	HWND edit = (HWND)hwnd;
++	int margin = padding_left < 0 ? 0 : padding_left;
++	int current_readonly = (GetWindowLongPtrW(edit, GWL_STYLE) & ES_READONLY) != 0;
++	if (current_readonly != (readonly != 0)) SendMessageW(edit, EM_SETREADONLY, readonly != 0, 0);
++	if (LOWORD(SendMessageW(edit, EM_GETMARGINS, 0, 0)) != margin) {
++		SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(margin, 0));
++	}
++	const wchar_t *old = (const wchar_t *)GetPropW(edit, ui2_win_placeholder_property());
++	if (wcscmp(old ? old : L"", placeholder ? placeholder : L"") == 0) return;
+ #ifdef EM_SETCUEBANNER
+ 	// Draw cue text in the control subclass. This remains reliable under Wine,
+ 	// where EM_SETCUEBANNER may report support without painting anything.
+ 	SendMessageW((HWND)hwnd, EM_SETCUEBANNER, TRUE, (LPARAM)L"");
+ #endif
+-	ui2_win_store_placeholder((HWND)hwnd, placeholder);
+-	SendMessageW((HWND)hwnd, EM_SETMARGINS, EC_LEFTMARGIN,
+-		MAKELPARAM(padding_left < 0 ? 0 : padding_left, 0));
+-	InvalidateRect((HWND)hwnd, NULL, TRUE);
++	ui2_win_store_placeholder(edit, placeholder);
++	InvalidateRect(edit, NULL, FALSE);
+ }
+ 
+ static inline int ui2_win_placeholder_matches(void *hwnd, const wchar_t *expected) {
+@@ -1856,15 +1903,20 @@
+ static inline void ui2_win_paint_transparent_button(void *hwnd_ptr,
+ 		unsigned int foreground, double radius, unsigned int border_color,
+ 		double border_left, double border_top, double border_right,
+-		double border_bottom) {
++		double border_bottom, int checkbox, unsigned int background) {
+ 	HWND hwnd = (HWND)hwnd_ptr;
+ 	if (hwnd == NULL) return;
+ 	PAINTSTRUCT paint;
+ 	HDC dc = BeginPaint(hwnd, &paint);
+ 	if (dc != NULL) {
+-		ui2_win_paint_parent_background(hwnd, dc);
+ 		RECT rect;
+ 		GetClientRect(hwnd, &rect);
++		if (checkbox) {
++			// The row shares the form color. Only paint inside the checkbox HWND.
++			ui2_win_fill_background(dc, &rect, background, 0.0);
++		} else {
++			ui2_win_paint_parent_background(hwnd, dc);
++		}
+ 		HRGN clip = NULL;
+ 		if (radius > 0.5) {
+ 			int diameter = (int)(radius * 2.0 + 0.5);
+@@ -1887,14 +1939,40 @@
+ 			HFONT font = (HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0);
+ 			HGDIOBJ old_font = font == NULL ? NULL : SelectObject(dc, font);
+ 			int old_mode = SetBkMode(dc, TRANSPARENT);
+-			COLORREF old_color = SetTextColor(dc, IsWindowEnabled(hwnd)
+-				? ui2_win_color(foreground) : GetSysColor(COLOR_GRAYTEXT));
++			COLORREF color = IsWindowEnabled(hwnd)
++				? ui2_win_color(foreground) : GetSysColor(COLOR_GRAYTEXT);
++			COLORREF old_color = SetTextColor(dc, color);
+ 			RECT text_rect = rect;
+-			if ((SendMessageW(hwnd, BM_GETSTATE, 0, 0) & BST_PUSHED) != 0) {
++			LRESULT state = SendMessageW(hwnd, BM_GETSTATE, 0, 0);
++			if (checkbox) {
++				TEXTMETRICW metrics;
++				int size = GetTextMetricsW(dc, &metrics) ? metrics.tmHeight - 2 : 13;
++				if (size < 11) size = 11;
++				int y = (rect.bottom - size) / 2;
++				RECT mark = {1, y, 1 + size, y + size};
++				HBRUSH stroke = CreateSolidBrush(color);
++				if (stroke != NULL) {
++					FrameRect(dc, &mark, stroke);
++					DeleteObject(stroke);
++				}
++				if (state & BST_CHECKED) {
++					HPEN pen = CreatePen(PS_SOLID, size >= 16 ? 2 : 1, color);
++					if (pen != NULL) {
++						HGDIOBJ old_pen = SelectObject(dc, pen);
++						POINT tick[] = {{mark.left + size / 4, y + size / 2},
++							{mark.left + size * 2 / 5, y + size * 7 / 10},
++							{mark.left + size * 4 / 5, y + size / 4}};
++						Polyline(dc, tick, 3);
++						SelectObject(dc, old_pen);
++						DeleteObject(pen);
++					}
++				}
++				text_rect.left = mark.right + size / 2;
++			} else if (state & BST_PUSHED) {
+ 				OffsetRect(&text_rect, 1, 1);
+ 			}
+-			DrawTextW(dc, text, length, &text_rect, DT_CENTER | DT_VCENTER
+-				| DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
++			DrawTextW(dc, text, length, &text_rect, (checkbox ? DT_LEFT : DT_CENTER)
++				| DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+ 			SetTextColor(dc, old_color);
+ 			SetBkMode(dc, old_mode);
+ 			if (old_font != NULL) SelectObject(dc, old_font);
+@@ -1913,11 +1991,44 @@
+ 	if (hwnd != NULL) InvalidateRect((HWND)hwnd, NULL, TRUE);
+ }
+ 
++static inline void ui2_win_redraw_subtree(void *hwnd) {
++	if (hwnd != NULL) RedrawWindow((HWND)hwnd, NULL, NULL,
++		RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
++}
++
++static inline void ui2_win_redraw_region(void *window, int left, int top, int right, int bottom) {
++	HWND hwnd = (HWND)window;
++	if (!IsWindowVisible(hwnd) || IsIconic(hwnd) || right <= left || bottom <= top) return;
++	RECT region = {left, top, right, bottom};
++	RedrawWindow(hwnd, &region, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
++}
++
+ static inline void ui2_win_invalidate_parent(void *hwnd) {
+ 	if (hwnd != NULL) {
+-		HWND parent = GetParent((HWND)hwnd);
+-		if (parent != NULL) InvalidateRect(parent, NULL, TRUE);
+-	}
++		HWND child = (HWND)hwnd;
++		HWND parent = GetParent(child);
++		RECT region;
++		if (parent && GetWindowRect(child, &region)) {
++			MapWindowPoints(NULL, parent, (POINT *)&region, 2);
++			RedrawWindow(parent, &region, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_NOERASE);
++		}
++	}
++}
++
++static inline void ui2_win_paint_alpha_bitmap(HWND hwnd, HDC dc, HBITMAP bitmap) {
++	ui2_win_paint_parent_background(hwnd, dc);
++	RECT client;
++	BITMAP info;
++	if (!GetClientRect(hwnd, &client) || client.right <= 0 || client.bottom <= 0
++		|| !GetObjectW(bitmap, sizeof(info), &info)) return;
++	HDC source = CreateCompatibleDC(dc);
++	if (source == NULL) return;
++	HGDIOBJ previous = SelectObject(source, bitmap);
++	BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
++	AlphaBlend(dc, 0, 0, client.right, client.bottom,
++		source, 0, 0, info.bmWidth, info.bmHeight, blend);
++	SelectObject(source, previous);
++	DeleteDC(source);
+ }
+ 
+ static inline void *ui2_win_set_bitmap(void *hwnd_ptr, const wchar_t *path,
+@@ -1930,16 +2041,47 @@
+ 			width > 0 ? width : 0, height > 0 ? height : 0,
+ 			LR_LOADFROMFILE | LR_CREATEDIBSECTION);
+ 	}
++	HBITMAP old_alpha = (HBITMAP)RemovePropW(hwnd, ui2_win_alpha_bitmap_property);
++	if (old_alpha != NULL) DeleteObject(old_alpha);
+ 	HBITMAP old = (HBITMAP)SendMessageW(hwnd, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)image);
+ 	if (old != NULL && old != image) DeleteObject(old);
++	InvalidateRect(hwnd, NULL, FALSE);
+ 	return image;
+ }
+ 
+ static inline void ui2_win_clear_bitmap(void *hwnd_ptr) {
+ 	HWND hwnd = (HWND)hwnd_ptr;
+ 	if (hwnd == NULL) return;
+-	HBITMAP old = (HBITMAP)SendMessageW(hwnd, STM_SETIMAGE, IMAGE_BITMAP, 0);
+-	if (old != NULL) DeleteObject(old);
++	ui2_win_set_bitmap(hwnd, NULL, 0, 0);
++}
++
++static inline void *ui2_win_set_alpha_bitmap(void *window, const BYTE *rgba, int width, int height) {
++	HWND hwnd = (HWND)window;
++	BITMAPINFO info = {0};
++	info.bmiHeader.biSize = sizeof(info.bmiHeader);
++	info.bmiHeader.biWidth = width;
++	info.bmiHeader.biHeight = -height;
++	info.bmiHeader.biPlanes = 1;
++	info.bmiHeader.biBitCount = 32;
++	info.bmiHeader.biCompression = BI_RGB;
++	void *pixels = NULL;
++	HBITMAP bitmap = CreateDIBSection(NULL, &info, DIB_RGB_COLORS, &pixels, NULL, 0);
++	if (bitmap == NULL) return NULL;
++	BYTE *bgra = (BYTE *)pixels;
++	for (size_t i = 0; i < (size_t)width * height; i++, rgba += 4, bgra += 4) {
++		unsigned int alpha = rgba[3];
++		bgra[0] = (BYTE)((rgba[2] * alpha + 127) / 255);
++		bgra[1] = (BYTE)((rgba[1] * alpha + 127) / 255);
++		bgra[2] = (BYTE)((rgba[0] * alpha + 127) / 255);
++		bgra[3] = (BYTE)alpha;
++	}
++	ui2_win_clear_bitmap(hwnd);
++	if (!SetPropW(hwnd, ui2_win_alpha_bitmap_property, bitmap)) {
++		DeleteObject(bitmap);
++		return NULL;
++	}
++	InvalidateRect(hwnd, NULL, FALSE);
++	return bitmap;
+ }
+ 
+ // Each axis of a Scroll element is kept on a standard scroll bar of its window, which
+@@ -1957,7 +2099,11 @@
+ 	info.nMax = content > 0 ? content - 1 : 0;
+ 	info.nPage = (UINT)(page > 0 ? page : 0);
+ 	info.nPos = position;
+-	SetScrollInfo(hwnd, bar, &info, TRUE);
++	SCROLLINFO previous = info;
++	if (!GetScrollInfo(hwnd, bar, &previous) || previous.nMin != info.nMin
++		|| previous.nMax != info.nMax || previous.nPage != info.nPage || previous.nPos != info.nPos) {
++		SetScrollInfo(hwnd, bar, &info, TRUE);
++	}
+ 	info.fMask = SIF_POS;
+ 	GetScrollInfo(hwnd, bar, &info);
+ 	return info.nPos;
+--- a/windows/menu_windows.v
++++ b/windows/menu_windows.v
+@@ -52,6 +52,13 @@
+ }
+ 
+ fn menu_win32_set_menu_bar(menus []Menu) {
++	mut window := windows_state()
++	if window.building_screen {
++		// DrawMenuBar can synchronously send WM_SIZE. Apply it after the native
++		// controls match the declaration and the refresh is protected from re-entry.
++		window.menu_update_pending = true
++		return
++	}
+ 	mut st := windows_menu_state()
+ 	st.bar_commands = map[u32]string{}
+ 	root := menu_window()

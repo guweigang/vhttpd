@@ -1,0 +1,54 @@
+void veb__Context__preserve_for_response_writer(veb__Context* ctx, veb__Context* user_context) {
+	if (!veb__response_body_can_share_gc_buffer()) {
+		veb__Context__copy_for_response_writer(ctx, *user_context);
+		return;
+	}
+	bool share_body = (user_context->owned_response_body != NULL) && (user_context->owned_response_body == user_context->res.body.str);
+	{
+		*ctx = *user_context;
+	}
+	if (share_body) {
+		ctx->shared_response_body = true;
+	} else {
+		ctx->res.body = string__clone(user_context->res.body);
+		ctx->shared_response_body = false;
+	}
+	ctx->owned_response_body = NULL;
+	user_context->owned_response_body = NULL;
+	ctx->res.header = veb__clone_response_writer_header(user_context->res.header);
+	ctx->res.status_msg = string__clone(user_context->res.status_msg);
+	ctx->res.http_version = string__clone(user_context->res.http_version);
+	ctx->req.header = veb__clone_response_writer_header(user_context->req.header);
+	ctx->return_file = string__clone(user_context->return_file);
+}
+
+void veb__Context__copy_for_response_writer(veb__Context* ctx, veb__Context user_context) {
+	{
+		*ctx = user_context;
+	}
+	ctx->res.body = string__clone(user_context.res.body);
+	ctx->res.header = veb__clone_response_writer_header(user_context.res.header);
+	ctx->res.status_msg = string__clone(user_context.res.status_msg);
+	ctx->res.http_version = string__clone(user_context.res.http_version);
+	ctx->req.header = veb__clone_response_writer_header(user_context.req.header);
+	ctx->return_file = string__clone(user_context.return_file);
+	ctx->owned_response_body = NULL;
+	ctx->shared_response_body = false;
+}
+
+void veb__Context__release_response_body(veb__Context* ctx) {
+	ctx->owned_response_body = NULL;
+	if ((ctx->res.body.len > 0) && !ctx->shared_response_body) {
+		{
+			string__free(&ctx->res.body);
+		}
+	}
+	ctx->res.body = _str_46;
+	ctx->shared_response_body = false;
+}
+
+bool veb__response_body_can_share_gc_buffer(void) {
+	{
+		return true;
+	}
+}

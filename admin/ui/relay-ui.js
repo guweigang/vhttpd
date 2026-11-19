@@ -10,6 +10,10 @@
     $('relayLoad').disabled = busy;
     $('relaySource').disabled = busy;
     for (const id of [...ids, 'relaySelect']) $(id).disabled = busy || !!draft?.published;
+    if (draft?.databaseFiles) {
+      for (const id of [...ids, 'relaySelect', 'relaySource']) $(id).disabled = true;
+      return;
+    }
     if (!busy && !draft?.published) {
       $('relayId').readOnly = $('relaySelect').value !== '';
       const agent = $('relayMode').value === 'agent';
@@ -112,6 +116,7 @@
     $('relayResult').textContent = ''; $('relayToml').textContent = ''; $('relayChangePaths').textContent = '';
   }
   function candidate() {
+    if (draft.databaseFiles) return {...workspace, changes:draft.databaseFiles};
     const r = {id:$('relayId').value.trim(), mode:$('relayMode').value, carrier:'websocket', node_id:$('relayNode').value.trim(),
       url:$('relayUrl').value.trim(), listener:$('relayListener').value, path:$('relayPath').value.trim(), token:$('relayToken').value,
       autostart:$('relayAutostart').value === 'true', reconnect_delay_ms:Number($('relayReconnect').value),
@@ -194,8 +199,18 @@
     selectView('relay');
     await run(async () => {
       const id = new URLSearchParams(hash.split('?')[1]).get('id');
-      if (!/^shared-relay-[a-f0-9]{24}$/.test(id || '')) throw new Error('共享连接草稿编号无效。');
+      if (!/^(shared-relay|relay-database)-[a-f0-9]{24}$/.test(id || '')) throw new Error('共享连接草稿编号无效。');
       const bundle = await apiRequest('/admin/config/changesets/' + encodeURIComponent(id));
+      if (id.startsWith('relay-database-')) {
+        if (!bundle.files?.length || bundle.files.length > 64) throw new Error('数据库绑定草稿格式无效。');
+        sharedImport = null;
+        await load(bundle.config_path);
+        if (bundle.config_path !== workspace.config_path || bundle.files.some(file => !workspace.files.some(f => f.source.path === file.path && f.value === file.original))) throw new Error('项目配置已变化，请从工作台重新生成数据库绑定。');
+        draft.id = id;
+        draft.databaseFiles = bundle.files;
+        stage('远端数据库绑定草稿已载入。请校验、审阅差异并发布，然后返回 Desktop 重启本地项目。');
+        return;
+      }
       if (bundle.files?.length !== 1) throw new Error('共享连接草稿格式无效。');
       const file = bundle.files[0];
       sharedImport = null;

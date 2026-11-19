@@ -1,0 +1,151 @@
+{
+  "status": "failed",
+  "started_utc": "2026-11-02T08:11:18Z",
+  "duration_seconds": 87600,
+  "build_info": {
+    "gc": "boehm",
+    "gc_enabled": true,
+    "version": "0.9.0"
+  },
+  "binary": "/root/.local/share/vhttpd-workbench/runtimes/sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159/vhttpd",
+  "binary_sha256": "f35c819beee5d426695603d38404548b4fc3bbc20190c3f3aab7c5afa4e8e720",
+  "scope": "isolated HTTP JSON and Paseo reconnect/text/binary; no DB/providers/production traffic",
+  "http_target_rps": 40,
+  "http_concurrency": 4,
+  "paseo_cycle_interval_seconds": 2,
+  "sample_seconds": 10,
+  "host_available_min_kib": 262144,
+  "cgroup_required_memory_max_bytes": 536870912,
+  "http_port": 35317,
+  "ws_port": 54709,
+  "observed_pid": 9303,
+  "http_ok": 18500,
+  "http_errors": 4,
+  "paseo_ok": 223,
+  "paseo_errors": 1,
+  "latency_buckets_ms": {
+    "10": 17975,
+    "50": 162,
+    "100": 70,
+    "500": 64,
+    "1000": 3,
+    "over1000": 226
+  },
+  "max_latency_ms": 4725.535,
+  "recent_errors": [
+    "closed during upgrade",
+    "[Errno 104] Connection reset by peer",
+    "[Errno 104] Connection reset by peer",
+    "Remote end closed connection without response",
+    "Remote end closed connection without response"
+  ],
+  "samples": 117,
+  "log_rotation_count": 0,
+  "cgroup": "/sys/fs/cgroup/system.slice/vhttpd-soak-24h-20261102.service",
+  "baseline_seconds": 600,
+  "cooldown_seconds": 600,
+  "load_duration_seconds": 86400,
+  "runtime_pid": 29230,
+  "phase": "load",
+  "elapsed_seconds": 1170.17,
+  "failure": "Workload errors or no successful traffic; inspect counters",
+  "interrupted_signals": [
+    15
+  ],
+  "ended_utc": "2026-11-02T08:30:53Z",
+  "last_samples": [
+    {
+      "elapsed_seconds": 1140.16,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 526308,
+        "VmRSS": 349016,
+        "RssAnon": 323712,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 21720,
+        "start_ticks": 2998579
+      },
+      "host_available_kib": 549216,
+      "cgroup_memory_bytes": 355577856,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 6\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 274892,
+        "RssAnon": 248492,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 247988,
+        "start_ticks": 601054
+      },
+      "http_ok": 17845,
+      "http_errors": 0,
+      "paseo_ok": 215,
+      "paseo_errors": 0
+    },
+    {
+      "elapsed_seconds": 1150.16,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 534028,
+        "VmRSS": 354632,
+        "RssAnon": 329336,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 22088,
+        "start_ticks": 2998579
+      },
+      "host_available_kib": 558876,
+      "cgroup_memory_bytes": 353804288,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 57\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 274892,
+        "RssAnon": 248492,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 248097,
+        "start_ticks": 601054
+      },
+      "http_ok": 18166,
+      "http_errors": 0,
+      "paseo_ok": 219,
+      "paseo_errors": 0
+    },
+    {
+      "elapsed_seconds": 1160.17,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 534028,
+        "VmRSS": 358544,
+        "RssAnon": 333248,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 23,
+        "cpu_ticks": 22449,
+        "start_ticks": 2998579
+      },
+      "host_available_kib": 546404,
+      "cgroup_memory_bytes": 357986304,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 57\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 274892,
+        "RssAnon": 248492,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 248207,
+        "start_ticks": 601054
+      },
+      "http_ok": 18497,
+      "http_errors": 0,
+      "paseo_ok": 223,
+      "paseo_errors": 0
+    }
+  ]
+}

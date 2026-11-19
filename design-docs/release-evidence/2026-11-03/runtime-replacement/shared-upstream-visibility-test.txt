@@ -1,0 +1,4 @@
+---- Testing... ----------------------------------------------------------------
+OK    1187.830 ms vlib/v/tests/concurrency/shared_elem_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 5029 ms, on 1 job. Comptime: 3834 ms. Runtime: 1187 ms.

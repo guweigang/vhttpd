@@ -1,0 +1,5 @@
+2026-11-02T16:11:18+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: Started vhttpd-soak-24h-20261102.service - /usr/bin/python3 /root/vhttpd-release-tests/20261102-soak/remote_soak.py --duration 87600 --observe-pid 9303 --binary /root/.local/share/vhttpd-workbench/runtimes/sha256-f4b10b11fb3e562a78cfbcb309137804639256bf3b53bff6385e535fa13aa159/vhttpd.
+2026-11-02T16:30:45+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: vhttpd-soak-24h-20261102.service: A process of this unit has been killed by the OOM killer.
+2026-11-02T16:30:53+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: vhttpd-soak-24h-20261102.service: Main process exited, code=exited, status=1/FAILURE
+2026-11-02T16:30:53+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: vhttpd-soak-24h-20261102.service: Failed with result 'oom-kill'.
+2026-11-02T16:30:53+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: vhttpd-soak-24h-20261102.service: Consumed 3min 57.341s CPU time, 126.1M memory peak, 0B memory swap peak.

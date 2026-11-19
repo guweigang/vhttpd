@@ -42,10 +42,15 @@ fn (mut app App) codex_provider_on_connecting(instance string) {
 
 fn (mut hub ProviderRuntimeHub) codex_provider_on_connected(instance string, ws_url string) {
 	log.info('[codex] ✅ connected instance=${codex.ProviderRuntime.normalize_instance(instance)} to ${ws_url}')
-	hub.codex_runtime_mutate[bool](instance, fn [ws_url] (mut rt codex.ProviderRuntime) bool {
-		rt.note_connected(ws_url)
-		return true
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	hub.codex.mu.@lock()
+	mut rt := hub.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		hub.codex_runtime_store_unlocked(resolved_instance, rt)
+		hub.codex.mu.unlock()
+	}
+	rt.note_connected(ws_url)
 }
 
 fn (mut app App) codex_provider_on_connected(instance string, ws_url string) {
@@ -54,10 +59,15 @@ fn (mut app App) codex_provider_on_connected(instance string, ws_url string) {
 
 fn (mut hub ProviderRuntimeHub) codex_provider_on_disconnected(instance string, reason string) {
 	log.error('[codex] ❌ disconnected instance=${codex.ProviderRuntime.normalize_instance(instance)}: ${reason}')
-	hub.codex_runtime_mutate[bool](instance, fn [reason] (mut rt codex.ProviderRuntime) bool {
-		rt.note_disconnected(reason)
-		return true
-	})
+	resolved_instance := codex.ProviderRuntime.normalize_instance(instance)
+	hub.codex.mu.@lock()
+	mut rt := hub.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		hub.codex_runtime_store_unlocked(resolved_instance, rt)
+		hub.codex.mu.unlock()
+	}
+	rt.note_disconnected(reason)
 
 	// Connections will be cleaned up by PHP as needed or timed out
 }
@@ -87,6 +97,7 @@ fn (mut app App) codex_runtime_state_view(instance string) codex.RuntimeStateVie
 fn (mut hub ProviderRuntimeHub) admin_codex_snapshot(db_transport_enabled bool) codex.AdminRuntimeSnapshot {
 	rt := hub.codex_runtime_state_view('main')
 	return codex.AdminRuntimeSnapshot{
+		protocol: rt.protocol
 		enabled:            hub.codex_provider_enabled(db_transport_enabled)
 		connected:          rt.connected
 		initialized:        rt.initialized

@@ -1,0 +1,108 @@
+{
+  "timestamp": "2026-11-05T15:11:14.456564+00:00",
+  "registered_tools": 105,
+  "new_tools": [
+    "shared_config_get",
+    "shared_config_edit_prepare",
+    "shared_config_edit_preflight",
+    "shared_config_edit_apply",
+    "shared_config_edit_restore",
+    "shared_config_operation_get",
+    "config_history_list",
+    "config_history_capture",
+    "config_history_restore_prepare",
+    "config_history_restore_preflight",
+    "config_history_restore_apply",
+    "config_history_restore_undo"
+  ],
+  "phase1": {
+    "localBaseline": {
+      "persisted": true,
+      "source_revision": "4d6b75cd02981543ba057b0dda770f92cb968e218f702857e736ed75dc9dfd9c",
+      "version_id": "d344675e7d11dc6b760d977b"
+    },
+    "remoteBaseline": {
+      "persisted": true,
+      "source_revision": "8649f82724ebb0e1d45beb4251a0a717c9c7c01fa10a082b8ccc8be923395b55",
+      "version_id": "7af3a0a6f18d388220354c92"
+    },
+    "guiVersion": "desktop-a179e22d65a806997101f2cd14a27af1",
+    "localPlan": "347d81096c5ad9ce5cbde51e",
+    "remotePlan": "5f34f7b7dd7ddcf165e384c7",
+    "rejected": 15
+  },
+  "phase2": {
+    "phase": "restored",
+    "client": "installed DSH Streamable HTTP connector",
+    "tools": 105,
+    "existing_instance": "mcp-shared-config-qa",
+    "shared_edit": "multi-file path, method, response and optional field deletion",
+    "history": "persisted across actual Desktop restart; existing GUI version restored locally; captured manual version restored remotely",
+    "undo": "both stopped managed runtimes restored preceding configuration",
+    "business": "old/new paths and GET/HEAD confirmed, HTTP 200 expected bodies",
+    "conflict": "stale plan rejected, temporary 201 preserved",
+    "rejected": 16,
+    "exact_source_revisions": true,
+    "final_local_runtime": "stopped",
+    "final_remote_runtime": "stopped"
+  },
+  "client": "installed DSH Streamable HTTP connector; actual UI-issued Desktop connection",
+  "skills": "actual DSH model reloaded vhttpd-deploy and vhttpd-debug, turn 17, no MCP writes from model",
+  "desktop_sha256": "c6437dad5805e6c6f58c3268a059ee7efed836340df5f89584503448c83065d0",
+  "desktop_backup": "Workbench Before Shared Config History.app",
+  "runtime_reuse": {
+    "local": "bundled 0.9.0 unchanged",
+    "remote": "existing mcp-shared-config-qa, 0.9.1 unchanged",
+    "new_instance_or_vm": false,
+    "bodytest_changed": false
+  },
+  "checks": {
+    "mac_editor": "passed",
+    "mac_http_mcp": "passed",
+    "linux_editor_and_history": "passed GCC gc none nocache",
+    "linux_relay_and_existing_gui_recovery": "passed",
+    "secret_resource_regression": "passed Mac and Ubuntu",
+    "skills_format": "both passed",
+    "scoped_dead_links": [],
+    "markdown_lint_ran": [],
+    "markdown_lint_note": "No configured checks ran; not claimed as lint coverage"
+  },
+  "limits": [
+    "existing components and source membership only",
+    "no raw TOML or source path input",
+    "credentials, secret resources, executable/storage paths, control identity and app configuration require Desktop workflow",
+    "new history preparation requires running effective configuration; guarded undo supports stopped managed runtime",
+    "history held on this Desktop; 20 snapshots/16 MiB per environment archive; existing GUI history also listed"
+  ],
+  "workspace_head": "ee5b2a9a5d784d023ba52df304e1a45b7ae03e8a",
+  "timestamp_completed": "2026-11-05T15:21:37.704147+00:00",
+  "restored_source_sha256": {
+    "local": {
+      "routes.toml": "cdb905349d9ff1cbe894dcb72d6a0e66ef67d007fc60368391245d8c83bddbff",
+      "response.toml": "6ff23a083d08028c1097875724b3c6c48c73f1e3223357f9f961bd0f30527f22"
+    },
+    "remote": {
+      "routes.toml": "1ab5f9593c516253ae0a1426f175be78c703d65bc88b15634017ed1b14f025ef",
+      "response.toml": "6ff23a083d08028c1097875724b3c6c48c73f1e3223357f9f961bd0f30527f22"
+    }
+  },
+  "attempts": {
+    "confirmation_expirations": 2,
+    "reason": "management_request_expired while awaiting Desktop UI confirmation; state inspected before continuation",
+    "final_result": "passed"
+  },
+  "cleanup": {
+    "isolated_runtimes": "stopped",
+    "root_configs": "original bytes restored locally and remotely",
+    "temporary_includes": "removed",
+    "temporary_ssh": "listener stopped and temporary authorized key cleared",
+    "mcp_ports_closed": {
+      "62474": true,
+      "56273": true
+    },
+    "private_connection_file_removed": true,
+    "control_credentials_in_responses": false,
+    "original_desktop_environment": "default running, UI verified",
+    "default_pid": 57738
+  }
+}

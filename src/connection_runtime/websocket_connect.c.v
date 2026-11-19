@@ -1,20 +1,13 @@
 module connection_runtime
 
 import net
+import socket_runtime
 import net.websocket
 import time
 
-#include <poll.h>
+$if !windows {
 #include <netinet/tcp.h>
-
-struct C.pollfd {
-	fd      i32
-	events  i16
-	revents i16
 }
-
-fn C.poll(&C.pollfd, u64, i32) i32
-fn C.getsockopt(i32, i32, i32, voidptr, &u32) i32
 
 // Attach cancellation before allocating a candidate. Only the connect caller
 // touches native client/TLS state; stop shuts down its retained socket alias.
@@ -49,12 +42,8 @@ fn (mut session Session) retain_native(fd int) ! {
 	defer { session.mu.unlock() }
 	if session.stopping { return error('websocket_connect_cancelled') }
 	if session.interrupt != none { return error('websocket_socket_already_retained') }
-	duplicate := C.fcntl(i32(fd), C.F_DUPFD_CLOEXEC, 0)
-	if duplicate < 0 { return error('websocket_interrupt_dup_failed') }
-	flags := C.fcntl(i32(fd), C.F_GETFD, 0)
-	if flags < 0 || C.fcntl(i32(fd), C.F_SETFD, flags | C.FD_CLOEXEC) < 0 {
-		net.close(duplicate) or {}
-		return error('websocket_native_cloexec_failed')
+	duplicate := socket_runtime.retain(fd) or {
+		return error(if err.msg() == 'socket_interrupt_dup_failed' { 'websocket_interrupt_dup_failed' } else { 'websocket_native_cloexec_failed' })
 	}
 	session.interrupt = duplicate
 }
@@ -111,7 +100,7 @@ fn (mut session Session) dial_address(address net.Addr) !&net.TcpConn {
 	result := C.connect(i32(fd), voidptr(&address), address.len())
 	if result < 0 {
 		code := net.error_code()
-		if code !in [C.EINPROGRESS, C.EAGAIN, C.EINTR] {
+		if !socket_runtime.connect_pending(code) {
 			return error_with_code('websocket_tcp_connect_failed:${code}', code)
 		}
 		session.wait_connected(fd)!
@@ -137,17 +126,10 @@ fn (mut session Session) wait_connected(fd int) ! {
 	for {
 		if session.stopped() { return error('websocket_connect_cancelled') }
 		if time.now() >= deadline { return error('websocket_tcp_connect_timeout') }
-		mut event := C.pollfd{ fd: i32(fd), events: C.POLLOUT }
-		result := C.poll(&event, 1, 20)
-		if result < 0 {
-			if net.error_code() == C.EINTR { continue }
-			return error('websocket_tcp_poll_failed')
-		}
-		if result == 0 { continue }
+		ready := socket_runtime.wait_writable(fd, 20) or { return error('websocket_tcp_poll_failed') }
+		if !ready { continue }
 		if session.stopped() { return error('websocket_connect_cancelled') }
-		mut socket_error := i32(0)
-		mut size := u32(sizeof(socket_error))
-		net.socket_error(C.getsockopt(i32(fd), C.SOL_SOCKET, C.SO_ERROR, &socket_error, &size))!
+		socket_error := socket_runtime.connect_error(fd)!
 		if socket_error != 0 {
 			return error_with_code('websocket_tcp_connect_failed:${socket_error}', socket_error)
 		}
