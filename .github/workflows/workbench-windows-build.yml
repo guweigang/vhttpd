@@ -91,7 +91,6 @@ jobs:
           ./desktop/ci/prepare_windows_toolchain.ps1 2>&1 | Tee-Object "$output/toolchain-build.log"
       - name: Build and launch native ui2 window
         id: ui2
-        continue-on-error: true
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$env:WORKBENCH_WINDOWS_MODULES|@vlib|@vmodules"
@@ -129,7 +128,6 @@ jobs:
       - name: Build and launch full Desktop
         id: desktop
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
-        continue-on-error: true
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
