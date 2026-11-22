@@ -2,6 +2,8 @@ name: vhttpd Windows MSVC acceptance
 
 # Explicit pre-release validation; no tag, public release or automatic push.
 on:
+  push:
+    branches: ['codex/windows-workbench-sdk-20261122']
   workflow_dispatch:
   workflow_call:
 permissions:
