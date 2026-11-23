@@ -10,7 +10,7 @@
  
  $if !ui2_custom_rendering ? {
  
-@@ -290,7 +293,7 @@
+@@ -300,7 +303,7 @@
  	}
  }
  
@@ -19,7 +19,7 @@
  
  fn C.ui2_win_paint_control_border(hwnd voidptr, color u32, radius f64, left f64, top f64, right f64, bottom f64)
  
-@@ -301,6 +304,8 @@
+@@ -311,6 +314,8 @@
  fn C.ui2_win_set_bitmap(hwnd voidptr, path &u16, width int, height int) voidptr
  
  fn C.ui2_win_clear_bitmap(hwnd voidptr)
@@ -28,7 +28,7 @@
  
  fn C.ui2_win_set_scroll(hwnd voidptr, content int, position int, horizontal int) int
  
-@@ -400,6 +405,13 @@
+@@ -410,6 +415,13 @@
  @[heap]
  struct WindowsState {
  mut:
@@ -42,7 +42,7 @@
  	symbol_font_attempted bool
  	hover_bindings        map[u64]string // window handle -> action of a hoverable element
  	hovered               []string       // hovered actions, outermost first
-@@ -596,7 +608,7 @@
+@@ -606,7 +618,7 @@
  }
  
  fn windows_uses_transparent_button_paint(kind Kind, box BoxStyle) bool {
@@ -51,18 +51,19 @@
  }
  
  // Whether a window leaves the background behind it alone. A label paints none of its
-@@ -754,16 +766,27 @@
+@@ -764,16 +776,27 @@
  
  pub fn refresh() {
  	mut st := windows_state()
 -	if st.root == unsafe { nil } || st.rendering || voidptr(st.build_screen) == unsafe { nil } {
++	if st.root == unsafe { nil } || st.rendering || st.building_screen || voidptr(st.build_screen) == unsafe { nil } {
 -		return
 -	}
-+	if st.root == unsafe { nil } || st.rendering || st.building_screen || voidptr(st.build_screen) == unsafe { nil } {
+-	declared := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_windows_env())
 +		return
 +	}
 +	st.building_screen = true
- 	declared := st.build_screen()
++	declared := stylesheet_apply_frame(stylesheet_frame_build(st.build_screen), stylesheet_windows_env())
 +	st.building_screen = false
 +	// Unchanged timer polls still consume host results and install pending menu states.
 +	if st.polling_refresh && st.has_declared_tree && declared == st.last_declared_tree {
@@ -82,7 +83,7 @@
  	st.views = map[string]voidptr{}
  	st.view_keys = map[string]string{}
  	st.view_kinds = map[string]Kind{}
-@@ -784,17 +807,104 @@
+@@ -794,17 +817,104 @@
  	st.toggle_views = map[u64]voidptr{}
  	mut active := map[string]bool{}
  	if root.kind == .screen {
@@ -190,7 +191,7 @@
  }
  
  pub fn request_refresh() {
-@@ -1236,11 +1346,16 @@
+@@ -1287,11 +1397,16 @@
  	} else {
  		el.text_style
  	}
@@ -208,7 +209,7 @@
  	}
  	st.node_text_styles[key] = visual_text_style
  	st.node_ids[key] = el.id
-@@ -1267,7 +1382,7 @@
+@@ -1318,7 +1433,7 @@
  		...el
  		box: visual_box
  		text_style: visual_text_style
@@ -217,7 +218,7 @@
  	if el.kind == .label {
  		windows_place_label(key, hwnd, Element{
  			...el
-@@ -1463,9 +1578,12 @@
+@@ -1515,9 +1630,12 @@
  	return label.replace('&', '&&')
  }
  
@@ -233,7 +234,7 @@
  	C.ui2_win_show(hwnd, windows_bool(!el.hidden))
  	C.ui2_win_enable(hwnd, windows_bool(el.enabled))
  	declared_changed := (st.node_declared_text[key] or { '' }) != el.text
-@@ -1479,7 +1597,8 @@
+@@ -1531,7 +1649,8 @@
  			if declared_changed || windows_native_text(text_hwnd) != el.text {
  				windows_set_native_text(text_hwnd, el.text)
  			}
@@ -243,7 +244,7 @@
  				C.ui2_win_set_checked(hwnd, windows_bool(el.checked))
  			}
  		}
-@@ -1509,19 +1628,22 @@
+@@ -1561,19 +1680,22 @@
  			unsafe { free(wide_placeholder) }
  		}
  		.image {
@@ -272,7 +273,7 @@
  				st.node_image_path[key] = image_sig
  			}
  		}
-@@ -1536,11 +1658,34 @@
+@@ -1588,11 +1710,34 @@
  	// The tooltip goes on the outer window, which is the declared frame, and on the
  	// control inside it, which is what the pointer actually lands on.
  	windows_update_tooltip(key, hwnd, text_hwnd, el.tooltip)
@@ -310,7 +311,7 @@
  }
  
  fn windows_update_tooltip(key string, hwnd voidptr, text_hwnd voidptr, tooltip string) {
-@@ -2339,6 +2484,12 @@
+@@ -2391,6 +2536,12 @@
  			}
  			return 0
  		}
@@ -323,7 +324,7 @@
  		win_wm_refresh {
  			refresh()
  			return 0
-@@ -2404,7 +2555,7 @@
+@@ -2456,7 +2607,7 @@
  	}
  	style := st.node_text_styles[key] or { TextStyle{} }
  	C.ui2_win_paint_transparent_button(hwnd, style.color, box.radius, box.border_color,

@@ -72,7 +72,7 @@ shasum -a 256 -c vhttpd-workbench-macos-arm64-1.2.3-SHA256SUMS.txt --ignore-miss
 ./desktop/run.sh
 ```
 
-ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。已有依赖 checkout 的版本不符或含源码修改时，构建会拒绝覆盖。构建先完成新包，再替换旧包，不原地截断正在运行的可执行文件。
+ui2 固定到 [ui2.commit](./ui2.commit) 中的版本。当前为上游 `d602412`，包含文本选区保留、Linux 鼠标选择和小数缩放裁剪修复。Linux 剪贴板沿用上游的同步完成与输出重定向实现，构建补丁保留私有临时目录、编译器导入兼容和表单快捷键适配；Windows 渲染补丁兼容上游样式处理，并继续保留防闪烁和透明图片处理。已有依赖 checkout 的版本不符或含源码修改时，构建会拒绝覆盖。构建先完成新包，再替换旧包，不原地截断正在运行的可执行文件。
 
 [兼容依赖锁](./macos-dependencies.json)记录 macOS 15 arm64 的官方 Homebrew bottle URL 与 SHA256；[隔离依赖工具](./macos_dependencies.py)下载、核验到项目 `.deps/macos-sequoia`，不会安装、升级或替换系统 Homebrew。构建首次需要联网，后续复用校验通过的缓存。编译器显式设置部署目标并重定向依赖搜索路径；生产包仍带齐所需动态库，用户无需执行这些开发步骤。
 
