@@ -441,9 +441,12 @@ if ($autoStart -eq [IntPtr]::Zero) {throw 'Automatic startup checkbox is missing
 Start-Sleep -Milliseconds 300
 Invoke-WorkbenchButton '创建项目'
 $config = Join-Path $env:VHTTPD_DESKTOP_DATA_DIR 'my-vhttpd/vhttpd.toml'
-$deadline=(Get-Date).AddSeconds(8)
-while (!(Test-Path $config) -and (Get-Date) -lt $deadline) {Start-Sleep -Milliseconds 100}
+# The worker writes the config before the UI consumes its registration result.
+# Wait for both the file and the selected workspace rather than racing a disabled menu.
+$deadline=(Get-Date).AddSeconds(15)
+while ((!(Test-Path $config) -or !(Menu-Enabled (Menu-At 3) 'Relay')) -and (Get-Date) -lt $deadline) {Start-Sleep -Milliseconds 100}
 if (!(Test-Path $config)) {throw 'Relay acceptance environment was not created'}
+if (!(Menu-Enabled (Menu-At 3) 'Relay')) {throw 'Created environment did not become the selected workspace'}
 Menu-Invoke (Menu-At 3) 'Relay'
 Invoke-WorkbenchButton '从已保存连接选择…'
 Invoke-WorkbenchButton '+ 新建连接'
