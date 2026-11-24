@@ -1,8 +1,10 @@
 module worker
 
+import io
 import net
 import strings
 import upstream.transport
+import veb.sse
 
 pub struct WorkerHttpStreamWriter {}
 
@@ -31,7 +33,7 @@ pub fn WorkerHttpStreamWriter.status_reason_phrase(status int) string {
 	}
 }
 
-pub fn WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool, close_conn bool) ! {
+pub fn WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn io.Writer, status int, content_type string, extra_headers map[string]string, chunked bool, close_conn bool) ! {
 	mut code := status
 	if code <= 0 {
 		code = 200
@@ -57,41 +59,51 @@ pub fn WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn net.TcpConn
 		sb.write_string('${name}: ${value}\r\n')
 	}
 	sb.write_string('\r\n')
-	conn.write_string(sb.str())!
+	io.write_string(mut conn, sb.str())!
 }
 
-pub fn WorkerHttpStreamWriter.write_headers_conn(mut conn net.TcpConn, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
+pub fn WorkerHttpStreamWriter.write_headers_conn(mut conn io.Writer, status int, content_type string, extra_headers map[string]string, chunked bool) ! {
 	WorkerHttpStreamWriter.write_headers_conn_with_close(mut conn, status, content_type,
 		extra_headers, chunked, true)!
 }
 
-pub fn WorkerHttpStreamWriter.write_chunk(mut conn net.TcpConn, data string) ! {
+pub fn WorkerHttpStreamWriter.write_chunk(mut conn io.Writer, data string) ! {
 	if data.len == 0 {
 		return
 	}
-	conn.write_string('${data.len:x}\r\n')!
-	conn.write_string(data)!
-	conn.write_string('\r\n')!
+	io.write_string(mut conn, '${data.len:x}\r\n')!
+	io.write_string(mut conn, data)!
+	io.write_string(mut conn, '\r\n')!
 }
 
-pub fn WorkerHttpStreamWriter.write_final_chunk(mut conn net.TcpConn) ! {
-	conn.write_string('0\r\n\r\n')!
+pub fn WorkerHttpStreamWriter.write_final_chunk(mut conn io.Writer) ! {
+	io.write_string(mut conn, '0\r\n\r\n')!
+}
+
+fn sse_message(frame transport.WorkerStreamFrame) sse.SSEMessage {
+	return sse.SSEMessage{
+		id:    frame.sse_id
+		event: frame.sse_event
+		data:  frame.data
+		retry: frame.sse_retry
+	}
 }
 
 pub fn WorkerHttpStreamWriter.write_sse_message(mut conn net.TcpConn, frame transport.WorkerStreamFrame) ! {
-	mut sb := strings.new_builder(256)
-	if frame.sse_id != '' {
-		sb.write_string('id: ${frame.sse_id}\n')
+	mut stream := sse.SSEConnection{conn: conn}
+	stream.send_message(sse_message(frame))!
+}
+
+fn encode_sse_message[T](message T) !string {
+	$for method in T.methods {
+		$if method.name == 'encode' {
+			return message.$method()
+		}
 	}
-	if frame.sse_event != '' {
-		sb.write_string('event: ${frame.sse_event}\n')
-	}
-	if frame.data != '' {
-		sb.write_string('data: ${frame.data}\n')
-	}
-	if frame.sse_retry != 0 {
-		sb.write_string('retry: ${frame.sse_retry}\n')
-	}
-	sb.write_string('\n')
-	conn.write_string(sb.str())!
+	return error('SSE encoding for an arbitrary writer is unavailable in this V toolchain')
+}
+
+pub fn WorkerHttpStreamWriter.write_sse_message_to_writer(mut conn io.Writer, frame transport.WorkerStreamFrame) ! {
+	encoded := encode_sse_message(sse_message(frame))!
+	io.write_string(mut conn, encoded)!
 }

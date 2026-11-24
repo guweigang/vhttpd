@@ -3,13 +3,12 @@ module ws
 import memidle
 import encoding.base64
 import log
-import net
 import upstream.transport
 import net.websocket
 
 // ── Dispatch Session Lifecycle ──
 
-pub fn handle_dispatch_session(rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame, lifecycle &DispatchConnState) {
+pub fn handle_dispatch_session(rt RuntimeContext, mut client_conn IngressConnection, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame, lifecycle &DispatchConnState) {
 	mut ws_server, captured := managed_server()
 	mut state := &DispatchBridgeState{
 		lifecycle:     lifecycle
@@ -31,7 +30,7 @@ pub fn handle_dispatch_session(rt RuntimeContext, mut client_conn net.TcpConn, k
 	defer {
 		dispatch_session_finalize(state)
 	}
-	managed_handshake(mut ws_server, mut client_conn, key, captured) or { return }
+	managed_ingress_handshake(mut ws_server, mut client_conn, key, captured) or { return }
 }
 
 fn dispatch_session_attached_cb(mut sc websocket.ServerClient, ref voidptr) ! {
@@ -201,7 +200,7 @@ fn dispatch_session_close_cb(mut _ws_client websocket.Client, reported_code int,
 	dispatch_session_finalize_with_details(state, reported_code, reported_reason)
 }
 
-pub fn run_dispatch_session(mut run IngressRun, rt RuntimeContext, mut client_conn net.TcpConn, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame, lifecycle &DispatchConnState) {
+pub fn run_dispatch_session(mut run IngressRun, rt RuntimeContext, mut client_conn IngressConnection, key string, method string, path string, query map[string]string, headers map[string]string, remote_addr string, req_id string, trace_id string, start_ms i64, open_commands []transport.WorkerWebSocketFrame, lifecycle &DispatchConnState) {
 	defer { run.finish() }
 	if run.stopped() {
 		client_conn.close() or {}

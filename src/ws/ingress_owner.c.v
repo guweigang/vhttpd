@@ -37,6 +37,7 @@ mut:
 	stopping bool
 	done     bool
 	handles  []int
+	tls      bool
 }
 
 pub fn (mut owner IngressOwner) reserve() ?&IngressRun {
@@ -50,11 +51,20 @@ pub fn (mut owner IngressOwner) reserve() ?&IngressRun {
 }
 
 pub fn (mut run IngressRun) attach(fd int) bool {
+	return run.attach_socket(fd, false)
+}
+
+pub fn (mut run IngressRun) attach_tls(fd int) bool {
+	return run.attach_socket(fd, true)
+}
+
+fn (mut run IngressRun) attach_socket(fd int, tls bool) bool {
 	run.mu.@lock()
 	defer { run.mu.unlock() }
 	if run.stopping || run.done { return false }
 	owned := socket_runtime.retain(fd) or { return false }
 	run.handles << owned
+	run.tls = run.tls || tls
 	return true
 }
 
@@ -62,7 +72,7 @@ pub fn (mut run IngressRun) child() ?&IngressRun {
 	mut owner := run.owner
 	mut task := owner.reserve() or { return none }
 	run.mu.@lock()
-	attached := !run.stopping && !run.done && run.handles.len > 0 && task.attach(run.handles[0])
+	attached := !run.stopping && !run.done && run.handles.len > 0 && task.attach_socket(run.handles[0], run.tls)
 	run.mu.unlock()
 	if !attached {
 		task.finish()
@@ -137,11 +147,11 @@ fn (run &IngressRun) writer_conn() &net.TcpConn {
 }
 
 fn (mut run IngressRun) write_client_close(client &websocket.Client, code int, reason string) {
-	if run.stopped() || client.is_ssl { return }
+	if run.stopped() || (client.is_ssl && !run.tls) { return }
 	// This immutable pre-listen snapshot retains the shared write lock/state and protocol role.
 	// Only the writer's TCP reference changes; it never closes the native Client.
 	mut writer := *client
-	writer.conn = run.writer_conn()
+	if !run.tls { writer.conn = run.writer_conn() }
 	text := if reason.len <= 123 { reason } else { '' }
 	mut payload := [u8(code >> 8), u8(code & 255)]
 	payload << text.bytes()
@@ -167,6 +177,11 @@ fn managed_capture_client(mut sc websocket.ServerClient) !bool {
 }
 
 pub fn managed_handshake(mut server websocket.Server, mut conn net.TcpConn, key string, captured &HandshakeClient) ! {
+	mut ingress := IngressConnection.tcp(conn)
+	managed_ingress_handshake(mut server, mut ingress, key, captured)!
+}
+
+pub fn managed_ingress_handshake(mut server websocket.Server, mut conn IngressConnection, key string, captured &HandshakeClient) ! {
 	previous := C.vhttpd_ws_handshake_get()
 	C.vhttpd_ws_handshake_set(voidptr(captured))
 	defer {
@@ -186,7 +201,7 @@ pub fn managed_handshake(mut server websocket.Server, mut conn net.TcpConn, key 
 			C.GC_reachable_here(voidptr(captured))
 		}
 	}
-	server.handle_handshake(mut conn, key)!
+	conn.handshake(mut server, key)!
 }
 
 @[heap]

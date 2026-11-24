@@ -1,7 +1,6 @@
 module main
 
 import upstream.transport
-import net
 import time
 import veb
 import worker
@@ -10,10 +9,10 @@ struct HttpStreamChunkWriter {}
 
 struct DispatchStreamSession {}
 
-fn HttpStreamChunkWriter.write_dispatch_chunks(mut conn net.TcpConn, stream_type string, chunks []transport.StreamDispatchChunk) ! {
+fn HttpStreamChunkWriter.write_dispatch_chunks(mut conn HttpStreamConnection, stream_type string, chunks []transport.StreamDispatchChunk) ! {
 	for chunk in chunks {
 		if stream_type == 'sse' {
-			worker.WorkerHttpStreamWriter.write_sse_message(mut conn, transport.WorkerStreamFrame{
+			conn.write_sse(transport.WorkerStreamFrame{
 				sse_id:    chunk.id
 				sse_event: chunk.event
 				sse_retry: chunk.retry
@@ -44,13 +43,17 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 		return none
 	}
 	delivery := stream_dispatch_open_delivery_outcome(open_resp)
-	ctx.takeover_conn()
+	mut conn := takeover_http_stream(mut ctx) or {
+		DispatchStreamSession.best_effort_close(rt, req_id, trace_id, open_resp.state,
+			'client_connection_unavailable')
+		return ctx.server_error(err.msg())
+	}
 	// Once open is handled, this scope owns both the logical stream and HTTP socket.
 	mut state := open_resp.state.clone()
 	mut close_reason := 'completed'
 	defer {
 		DispatchStreamSession.best_effort_close(rt, req_id, trace_id, state, close_reason)
-		ctx.conn.close() or {}
+		conn.close() or {}
 	}
 	status := 200
 	stream_type := delivery.metadata['stream_type'] or { 'sse' }
@@ -61,20 +64,20 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 	response_headers['x-vhttpd-stream-mode'] = 'dispatch'
 	if stream_type == 'sse' {
 		response_headers['x-accel-buffering'] = 'no'
-		worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
+		worker.WorkerHttpStreamWriter.write_headers_conn(mut conn, status, content_type,
 			response_headers, false) or {
 			close_reason = 'client_write_error'
 			return veb.no_result()
 		}
 	} else {
-		worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, content_type,
+		worker.WorkerHttpStreamWriter.write_headers_conn(mut conn, status, content_type,
 			response_headers, true) or {
 			close_reason = 'client_write_error'
 			return veb.no_result()
 		}
 	}
 	if method.to_upper() != 'HEAD' {
-		HttpStreamChunkWriter.write_dispatch_chunks(mut ctx.conn, stream_type, open_resp.chunks) or {
+		HttpStreamChunkWriter.write_dispatch_chunks(mut conn, stream_type, open_resp.chunks) or {
 			close_reason = 'client_write_error'
 			return veb.no_result()
 		}
@@ -111,14 +114,14 @@ fn HttpStreamRuntime.dispatch(rt StreamRuntimeContext, mut ctx Context, method s
 		state = next_resp.state.clone()
 		done = next_resp.done
 		if method.to_upper() != 'HEAD' {
-			HttpStreamChunkWriter.write_dispatch_chunks(mut ctx.conn, stream_type, next_resp.chunks) or {
+			HttpStreamChunkWriter.write_dispatch_chunks(mut conn, stream_type, next_resp.chunks) or {
 				close_reason = 'client_write_error'
 				return veb.no_result()
 			}
 		}
 	}
 	if stream_type != 'sse' && method.to_upper() != 'HEAD' {
-		worker.WorkerHttpStreamWriter.write_final_chunk(mut ctx.conn) or { close_reason = 'client_write_error' }
+		worker.WorkerHttpStreamWriter.write_final_chunk(mut conn) or { close_reason = 'client_write_error' }
 	}
 	rt.emit('http.request', {
 		'method':          method.to_upper()

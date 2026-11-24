@@ -20,9 +20,14 @@ struct UpstreamRuntimeContext {
 
 fn UpstreamIoBridge.build() upstream.Io {
 	return upstream.Io{
-		write_sse_message:              worker.WorkerHttpStreamWriter.write_sse_message
-		write_chunk:                    worker.WorkerHttpStreamWriter.write_chunk
-		write_http_stream_headers_conn: worker.WorkerHttpStreamWriter.write_headers_conn
+		write_sse_message: worker.WorkerHttpStreamWriter.write_sse_message
+		write_chunk: fn (mut conn net.TcpConn, chunk string) ! {
+			worker.WorkerHttpStreamWriter.write_chunk(mut conn, chunk)!
+		}
+		write_http_stream_headers_conn: fn (mut conn net.TcpConn, status int, content_type string, headers map[string]string, chunked bool) ! {
+			worker.WorkerHttpStreamWriter.write_headers_conn(mut conn, status, content_type, headers,
+				chunked)!
+		}
 	}
 }
 
