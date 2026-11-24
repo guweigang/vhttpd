@@ -204,7 +204,25 @@ final class Server
         return in_array($kind, ['http', 'websocket', 'stream'], true) ? $handler($payload, $context) : $handler($payload);
     }
 
+    private static function withStaticRequest(callable $dispatch): mixed
+    {
+        foreach (get_loaded_extensions() as $extension) {
+            $scope = 'vphp_' . $extension . '_with_static_request';
+            if (function_exists($scope)) {
+                $next = $dispatch;
+                $dispatch = static fn () => $scope($next);
+            }
+        }
+
+        return $dispatch();
+    }
+
     public function dispatchRequest(array $request): array
+    {
+        return self::withStaticRequest(fn (): array => $this->dispatchRequestInScope($request));
+    }
+
+    private function dispatchRequestInScope(array $request): array
     {
         $mode = (string) ($request['mode'] ?? '');
         if ($mode === 'websocket_dispatch') {
@@ -292,6 +310,7 @@ final class Server
     private function handleConnection($conn): void
     {
         $payload = [];
+        $streamType = null;
         try {
             do {
                 $payload = json_decode(self::readFrame($conn), true, 512, JSON_THROW_ON_ERROR);
@@ -300,7 +319,7 @@ final class Server
                 }
                 $mode = $payload['mode'] ?? '';
                 if ($mode === 'websocket') {
-                    $this->handleWebSocketFrame($conn, $payload);
+                    self::withStaticRequest(fn () => $this->handleWebSocketFrame($conn, $payload));
                 }
             } while ($mode === 'websocket' && ($payload['event'] ?? '') !== 'close');
             if ($mode === 'websocket') {
@@ -311,30 +330,25 @@ final class Server
                 self::writeJsonFrame($conn, $this->dispatchRequest($payload));
                 return;
             }
-            $result = $this->invoke($mode === 'stream' ? 'stream' : 'http', $payload, $payload);
-            if ($result instanceof Plan) {
-                self::writeJsonFrame($conn, $result->frame((string) ($payload['id'] ?? '')));
-                return;
-            }
-            if ($result instanceof \VSlim\Stream\Response) {
-                $result = new StreamResponse($result->chunks(), $result->status, $result->headers(),
-                    $result->streamType, $result->contentType);
-            }
-            if ($result instanceof StreamResponse) {
-                self::writeStreamResponse($conn, $payload, $result);
-                return;
-            }
-            $response = $mode === 'stream'
-                ? self::normalizeStreamDispatchResponse($payload, $result)
-                : self::normalizeResponse($payload, $result);
-            self::writeJsonFrame($conn, $response);
+            self::withStaticRequest(function () use ($conn, $payload, &$streamType): void {
+                $this->writeDispatchResponse($conn, $payload, $streamType);
+            });
         } catch (Throwable $e) {
-            if (str_contains($e->getMessage(), 'unexpected EOF')) {
+            if ($streamType === null && str_contains($e->getMessage(), 'unexpected EOF')) {
                 return;
             }
             try {
                 $mode = $payload['mode'] ?? '';
-                if ($mode === 'stream') {
+                if ($streamType !== null) {
+                    self::writeJsonFrame($conn, [
+                        'id' => (string) ($payload['id'] ?? ''),
+                        'mode' => 'stream',
+                        'event' => 'error',
+                        'stream_type' => $streamType,
+                        'error' => $e->getMessage(),
+                        'error_class' => $e::class,
+                    ]);
+                } elseif ($mode === 'stream') {
                     self::writeJsonFrame($conn, self::streamErrorResponse($payload, $e));
                 } elseif (in_array($mode, ['mcp', 'websocket_dispatch', 'websocket_upstream'], true)) {
                     self::writeJsonFrame($conn, [
@@ -353,6 +367,29 @@ final class Server
                 return;
             }
         }
+    }
+
+    /** @param \Socket $conn */
+    private function writeDispatchResponse($conn, array $payload, ?string &$streamType): void
+    {
+        $mode = $payload['mode'] ?? '';
+        $result = $this->invoke($mode === 'stream' ? 'stream' : 'http', $payload, $payload);
+        if ($result instanceof Plan) {
+            self::writeJsonFrame($conn, $result->frame((string) ($payload['id'] ?? '')));
+            return;
+        }
+        if ($result instanceof \VSlim\Stream\Response) {
+            $result = new StreamResponse($result->chunks(), $result->status, $result->headers(),
+                $result->streamType, $result->contentType);
+        }
+        if ($result instanceof StreamResponse) {
+            self::writeStreamResponse($conn, $payload, $result, $streamType);
+            return;
+        }
+        $response = $mode === 'stream'
+            ? self::normalizeStreamDispatchResponse($payload, $result)
+            : self::normalizeResponse($payload, $result);
+        self::writeJsonFrame($conn, $response);
     }
 
     /** @param \Socket $conn */
@@ -503,7 +540,7 @@ final class Server
      * @param \Socket $conn
      * @param array<string,mixed> $request
      */
-    private static function writeStreamResponse($conn, array $request, StreamResponse $response): void
+    private static function writeStreamResponse($conn, array $request, StreamResponse $response, ?string &$streamType): void
     {
         $headers = self::normalizeHeaders($response->headers);
         if (!isset($headers['content-type'])) {
@@ -520,6 +557,7 @@ final class Server
             'headers' => $headers,
         ]);
 
+        $streamType = $response->streamType;
         foreach ($response->chunks as $chunk) {
             self::writeJsonFrame($conn, self::streamChunkFrame($request, $response, $chunk));
         }
