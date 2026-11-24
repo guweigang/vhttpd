@@ -1,5 +1,7 @@
 module main
 
+import acme
+
 import admin
 import config
 import logging
@@ -55,6 +57,8 @@ mut:
 	http                     &http_runtime.Owner   = &http_runtime.Owner{}
 	admin_http               &http_runtime.Owner   = &http_runtime.Owner{}
 	internal_admin           &InternalAdminRuntime = &InternalAdminRuntime{}
+	tls_certificates         &TlsCertificateRuntime = &TlsCertificateRuntime{}
+	acme_runtime             ?&acme.Runtime
 	started_at_unix          i64
 	data_plane_scheme        string = 'http'
 }

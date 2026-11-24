@@ -165,3 +165,14 @@ fn server_runtime_scheme(runtime_cfg server_lifecycle.ServerRuntimeConfig) strin
 	}
 	return 'http'
 }
+
+fn supports_acme_tls_reload() bool {
+	return has_tls_reload[openssl.SSLListener]()
+}
+
+fn has_tls_reload[T]() bool {
+	$for method in T.methods {
+		$if method.name == 'reload_certificate' { return true }
+	}
+	return false
+}

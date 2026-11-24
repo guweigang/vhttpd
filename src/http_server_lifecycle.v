@@ -36,6 +36,7 @@ struct HttpIngressStop {
 }
 
 fn (mut app App) request_http_ingress_stop() HttpIngressStop {
+	if mut runtime := app.lifecycle.acme_runtime { runtime.stop() }
 	app.websocket.state.ingress.request_stop()
 	app.lifecycle.http.request_stop()
 	app.lifecycle.admin_http.request_stop()

@@ -1,5 +1,7 @@
 module main
 
+import acme
+
 // ═══════════════════════════════════════════════════════════════════════
 // Lock Hierarchy (acquire in this order; NEVER acquire a lower lock while holding a higher one)
 //
@@ -187,6 +189,13 @@ const known_long_flags = [
 	'--port',
 	'--ssl-cert',
 	'--ssl-key',
+	'--acme-domain',
+	'--acme-state-dir',
+	'--acme-directory',
+	'--acme-email',
+	'--acme-ca-file',
+	'--acme-http-port',
+	'--acme-renew-before-seconds',
 	'--event-log',
 	'--pid-file',
 	'--worker-read-timeout-ms',
@@ -262,6 +271,13 @@ fn print_vhttpd_help() {
 	println('  --port <port>                Data plane port')
 	println('  --ssl-cert <path>            Enable HTTPS with this certificate')
 	println('  --ssl-key <path>             Private key for --ssl-cert')
+	println('  --acme-domain <hostname>     Enable built-in ACME HTTP-01 for one DNS name')
+	println('  --acme-state-dir <path>      Private directory for ACME keys and certificates')
+	println('  --acme-directory <url>       ACME directory (default: Let’s Encrypt staging)')
+	println('  --acme-email <address>       Optional contact for the ACME account')
+	println('  --acme-ca-file <path>        Optional CA root for a local ACME test server')
+	println('  --acme-http-port <port>       HTTP-01 listener port (default: 80)')
+	println('  --acme-renew-before-seconds <seconds>  Maximum renewal window')
 	println('  --admin-host <host>          Admin plane host')
 	println('  --admin-port <port>          Admin plane port')
 	println('  --admin-token <token>        Admin API token')
@@ -325,23 +341,33 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) ! {
 		log.error('server runtime config resolve failed: ${err}')
 		return err
 	}
-	run_single_server_with_config(cfg, runtime_cfg)!
+	run_single_server_with_config(cfg, runtime_cfg, args)!
 }
 
-fn run_single_server_with_config(cfg config.VhttpdConfig, runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
+fn run_single_server_with_config(cfg config.VhttpdConfig, initial_cfg server_lifecycle.ServerRuntimeConfig, args []string) ! {
+	mut runtime_cfg := initial_cfg
 	mut transferred := false
 	defer { if !transferred { runtime_cfg.executor_plan.executor.close() } }
-	preflight_server_bind(runtime_cfg) or {
-		log.error('[vhttpd] ${err.msg()}')
-		return err
+	settings := acme.Settings.resolve(args)!
+	mut acme_runtime := ?&acme.Runtime(none)
+	mut pid_files := [runtime_cfg.pid_file]
+	if settings.domain != '' {
+		runtime := new_acme_runtime(runtime_cfg, settings)!
+		acme_runtime = runtime
+		pid_files << runtime.instance_pid_path()
 	}
-	process_runtime.acquire_pid_files([runtime_cfg.pid_file]) or {
-		log.error('[vhttpd] ${err.msg()}')
-		return err
-	}
+	preflight_server_bind(runtime_cfg)!
+	process_runtime.acquire_pid_files(pid_files)!
 	defer { process_runtime.close_pid_files() }
+	defer {
+		if mut runtime := acme_runtime { runtime.stop() }
+	}
+	if mut runtime := acme_runtime {
+		runtime_cfg = start_acme_runtime(mut runtime, runtime_cfg)!
+	}
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
 		runtime_cfg.plan, runtime_cfg.app_build_cfg)
+	app.lifecycle.acme_runtime = acme_runtime
 	transferred = true
 	register_active_runtime(app, runtime_cfg)
 	defer {
@@ -473,7 +499,10 @@ fn main() {
 		exit(2)
 	}
 	remote_control_initialize(args, manual_restart) or { eprintln('workbench_metadata_unavailable') }
-	run_server(args) or { exit(1) }
+	run_server(args) or {
+		log.error('[vhttpd] startup failed: ${err.msg()}')
+		exit(1)
+	}
 }
 
 // HTTP shutdown makes serving return before the signal worker finishes cleanup.

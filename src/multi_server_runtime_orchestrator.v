@@ -1,5 +1,7 @@
 module main
 
+import acme
+
 import config
 import server_lifecycle
 import log
@@ -58,28 +60,60 @@ fn run_multi_server(args []string, cfg config.VhttpdConfig) ! {
 	}
 	if runtime_cfg.single_mode {
 		log.debug('[vhttpd] run_multi_server: fallback to single mode')
-		run_single_server_with_config(cfg, runtime_cfg.listeners[0].runtime_cfg)!
+		run_single_server_with_config(cfg, runtime_cfg.listeners[0].runtime_cfg, args)!
 		return
 	}
 	mut transferred := false
 	defer { if !transferred { runtime_cfg.close_untransferred_executors() } }
+	acme_settings := acme.Settings.resolve(args)!
 	if runtime_cfg.listeners.len == 0 {
 		msg := 'multi server runtime start failed: no listeners configured'
 		log.error(msg)
 		return error(msg)
 	}
-	for binding in runtime_cfg.listeners {
-		preflight_server_bind(binding.runtime_cfg) or {
-			log.error('[vhttpd] ${err.msg()}')
-			return err
+	mut effective_cfg := runtime_cfg
+	mut acme_index := -1
+	mut acme_runtime := ?&acme.Runtime(none)
+	mut pid_files := runtime_cfg.listeners.map(it.runtime_cfg.pid_file)
+	for index, binding in runtime_cfg.listeners {
+		preflight_server_bind(binding.runtime_cfg)!
+		if acme_settings.domain == '' { continue }
+		if binding.runtime_cfg.port == acme_settings.http_port {
+			return error('The ACME HTTP-01 port must differ from configured listener ports')
+		}
+		if binding.runtime_cfg.serve_data_plane {
+			if acme_index >= 0 { return error('ACME currently requires a single data listener') }
+			acme_index = index
 		}
 	}
-	process_runtime.acquire_pid_files(runtime_cfg.listeners.map(it.runtime_cfg.pid_file)) or {
-		log.error('[vhttpd] ${err.msg()}')
-		return err
+	if acme_settings.domain != '' {
+		if acme_index < 0 { return error('ACME requires a data listener') }
+		runtime := new_acme_runtime(runtime_cfg.listeners[acme_index].runtime_cfg, acme_settings)!
+		acme_runtime = runtime
+		pid_files << runtime.instance_pid_path()
 	}
+	process_runtime.acquire_pid_files(pid_files)!
 	defer { process_runtime.close_pid_files() }
-	mut apps := build_multi_server_apps(runtime_cfg)
+	defer {
+		if mut runtime := acme_runtime { runtime.stop() }
+	}
+	if mut runtime := acme_runtime {
+		mut listeners := effective_cfg.listeners.clone()
+		binding := listeners[acme_index]
+		listeners[acme_index] = server_lifecycle.ListenerRuntimeBinding{
+			...binding
+			runtime_cfg: start_acme_runtime(mut runtime, binding.runtime_cfg)!
+		}
+		effective_cfg = server_lifecycle.MultiServerRuntimeConfig{
+			...effective_cfg
+			listeners: listeners
+		}
+	}
+	mut apps := build_multi_server_apps(effective_cfg)
+	if acme_index >= 0 {
+		mut owner := apps[acme_index].app
+		owner.lifecycle.acme_runtime = acme_runtime
+	}
 	transferred = true
 	log.debug('[vhttpd] run_multi_server: apps built count=${apps.len}')
 	for i in 0 .. apps.len {
