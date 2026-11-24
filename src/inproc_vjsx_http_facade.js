@@ -107,6 +107,13 @@ globalThis.__vhttpd_database_api = function(host, meta = {}) {
   });
 };
 
+const __vhttpd_job_registrations = new WeakMap();
+globalThis.__vhttpd_take_job_registrations = function(runtime) {
+  const jobs = __vhttpd_job_registrations.get(runtime);
+  __vhttpd_job_registrations.delete(runtime);
+  return jobs ? Array.from(jobs.values()) : [];
+};
+
 globalThis.__vhttpd_create_runtime = function(meta) {
   meta = meta && typeof meta === "object" ? meta : {};
   const freezeValue = (value) => {
@@ -578,6 +585,23 @@ globalThis.__vhttpd_create_runtime = function(meta) {
         };
       }
     };
+    if (dispatchKind === "app_startup") {
+      __vhttpd_job_registrations.set(runtime, new Map());
+      runtime.schedule = (name, intervalSeconds, handler) => {
+        const jobs = __vhttpd_job_registrations.get(runtime);
+        if (!jobs) throw new Error("job registration has closed");
+        if (typeof name !== "string" || !name.trim()) {
+          throw new TypeError("job name must be a nonempty string");
+        }
+        if (!Number.isInteger(intervalSeconds) || intervalSeconds < 1 || intervalSeconds > 2147483647) {
+          throw new RangeError("job interval must be a positive whole number of seconds");
+        }
+        if (typeof handler !== "string" || typeof globalThis.__vhttpd_job_handlers?.get(handler) !== "function") {
+          throw new TypeError("job handler must name a function exported in jobs");
+        }
+        jobs.set(name, { name, interval_seconds: intervalSeconds, handler });
+      };
+    }
     return freezeValue(runtime);
   } catch (err) {
     const errorMessage = err && typeof err === "object" && "stack" in err && err.stack
@@ -1814,7 +1838,23 @@ globalThis.__vhttpd_invoke_websocket_handle = function(frame) {
   const handler = globalThis.__vhttpd_websocket_handle;
   return globalThis.__vhttpd_invoke_wrapped_handler("websocket", handler, frame);
 };
+globalThis.__vhttpd_scheduled_handle = function(runtime, job) {
+  const handler = globalThis.__vhttpd_job_handlers?.get(job.handler);
+  if (typeof handler !== "function") throw new Error("missing scheduled handler: " + job.handler);
+  return handler(runtime, job.name);
+};
+
 globalThis.__vhttpd_bind_handlers = function(exportsValue) {
+  if (exportsValue && typeof exportsValue === "object") {
+    const jobs = exportsValue.jobs ?? exportsValue.default?.jobs;
+    globalThis.__vhttpd_job_handlers = new Map();
+    if (jobs && typeof jobs === "object") {
+      for (const name of Object.keys(jobs)) {
+        const handler = globalThis.__vhttpd_bind_method(jobs, name);
+        if (handler) globalThis.__vhttpd_job_handlers.set(name, handler);
+      }
+    }
+  }
   const httpHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "http");
   const websocketHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket");
   const websocketUpstreamHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket_upstream");

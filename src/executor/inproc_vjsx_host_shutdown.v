@@ -33,6 +33,7 @@ pub fn (e InProcVjsxExecutor) close() {
 		}
 	}
 	state.stopping = true
+	state.job_schedule = none
 	state.signature_refresh_stop = true
 	for _, owner in state.lane_wakeup_owners {
 		mut retiring := unsafe { owner }
@@ -62,7 +63,7 @@ pub fn (e InProcVjsxExecutor) close() {
 	// Direct HTTP/plugin calls and schedulers also hold lanes outside worker threads.
 	for {
 		state.mu.@lock()
-		mut busy := state.mailbox_schedulers > 0 || state.host_builders > 0 || state.lane_wakeup_workers > 0
+		mut busy := state.mailbox_schedulers > 0 || state.host_builders > 0 || state.lane_wakeup_workers > 0 || state.running_jobs.len > 0
 		for lane in state.lanes { busy = busy || lane.inflight > 0 }
 		state.mu.unlock()
 		if !busy { break }

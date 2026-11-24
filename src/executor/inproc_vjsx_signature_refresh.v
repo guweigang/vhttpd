@@ -4,7 +4,8 @@ import time
 
 struct InProcVjsxSignatureRefresh {}
 
-fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
+fn InProcVjsxSignatureRefresh.loop(e InProcVjsxExecutor) {
+	mut state := e.state
 	state.mu.@lock()
 	config := state.facade.config
 	state.mu.unlock()
@@ -78,6 +79,7 @@ fn InProcVjsxSignatureRefresh.loop(mut state VjsxExecutorState) {
 		// Allocator maintenance can take libc locks. Keep it outside state.mu
 		// and off dispatch threads; the native helper rate-limits all engines.
 		if needs_full_refresh { maintain_inproc_vjsx_allocator(allocator_busy) }
+		e.tick_scheduled_jobs()
 		time.sleep(time.millisecond * inproc_vjsx_signature_probe_poll_ms)
 	}
 }

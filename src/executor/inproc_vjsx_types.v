@@ -105,6 +105,8 @@ mut:
 	warmup_completed                        bool
 	warmup_last_error                       string
 	app_startup_source_signature            string
+	job_schedule                            ?&VjsxJobSchedule
+	running_jobs                            map[string]bool
 	app_startup_running                     bool
 	app_startup_completed                   bool
 	app_startup_last_error                  string
