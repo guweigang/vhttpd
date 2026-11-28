@@ -18,7 +18,7 @@ struct FocusTarget {
 fn collect_focus_targets(element ui2.Element, scroll string, x f64, y f64, mut targets []FocusTarget) {
 	if !element.enabled || element.hidden { return }
 	start := targets.len
-	if (element.kind in [.text_field, .text_area, .dropdown, .button, .checkbox] || (element.kind == .view && element.button_behavior)) && element.id != '' {
+	if (element.id == sidebar_resize_id || element.kind in [.text_field, .text_area, .dropdown, .button, .checkbox] || (element.kind == .view && element.button_behavior)) && element.id != '' {
 		targets << FocusTarget{id: element.id, action: if element.action_id != '' { element.action_id } else { element.id }, choices: if element.kind == .dropdown { element.menu.map(it.title) } else { []string{} }, value: element.text, kind: if element.button_behavior { ui2.Kind.button } else { element.kind }, scroll: scroll, frame: ui2.rect(x + element.frame.x, y + element.frame.y, element.frame.width, element.frame.height)}
 	}
 	// Source declarations can put footer actions before header actions. Walk
@@ -178,6 +178,7 @@ fn focus_workbench_target(target FocusTarget) {
 fn workbench_physical_key(event ui2.KeyEvent) {
 	$if macos { if event.code == .escape && C.vhttpd_workbench_menu_tracking() != 0 { return } }
 	mut app := unsafe { workshop }
+	if app.sidebar_resize_key(event) { ui2.consume_key(); return }
 	if app.environment_menu.open {
 		if step := ui2.dropdown_menu_key(app.environment_menu_items(), app.environment_menu, event) {
 			if step.chosen { app.reload_remote_profiles() }

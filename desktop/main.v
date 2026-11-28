@@ -15,6 +15,7 @@ fn C.atexit(fn ()) int
 struct Workshop {
 mut:
 	keyboard_navigation_focus string
+	sidebar_resize SidebarResize
 	about_open bool
 	desktop_update_open bool
 	desktop_update_busy bool
@@ -272,6 +273,7 @@ fn main() {
 	app.owner_pid = os.getpid()
 	initialize_language()
 	initialize_appearance()
+	app.sidebar_resize.width = load_sidebar_width(sidebar_width_path())
 	configure_workbench_fonts() or { app.notice = err.msg() }
 	app.binary = host.selected_runtime(os.executable(), root) or {
 		app.notice = err.msg()
@@ -573,6 +575,7 @@ fn (mut app Workshop) launch_with_browser(open_browser bool) {
 
 fn handle_event(event string) {
 	mut navigation_app := unsafe { workshop }
+	if navigation_app.handle_sidebar_resize(event) { return }
 	navigation_app.keyboard_navigation_focus = ''
 	if event == 'tray:open' {
 		bring_workbench_forward()
@@ -1079,7 +1082,7 @@ fn build_window_tree() ui2.Element {
 		id:     'environment_menu'
 		state:  app.environment_menu
 		items:  app.environment_menu_items()
-		anchor: ui2.rect(16, 82, 180, 34)
+		anchor: ui2.rect(16, 82, app.sidebar_width() - 34, 34)
 		window: workbench_bounds()
 		width:  260
 		label:  '选择运行环境'
@@ -1106,7 +1109,8 @@ fn build_window_content() ui2.Element {
 			settings,
 		])
 	}
-	content_x := 242.0
+	sidebar_width := app.sidebar_width()
+	content_x := sidebar_width + 28
 	// Content keeps its inset; page scroll viewports extend to the window edge.
 	cw := w - content_x - 30
 	mut side := [
@@ -1132,7 +1136,7 @@ fn build_window_content() ui2.Element {
 				'运行中'
 			} else {
 				'配置入口'
-			}), ui2.rect(0, y, 190, 52), i == app.selected, !app.new_project && !app.creating && app.snapshot.sequence >= app.sequence)
+			}), ui2.rect(0, y, sidebar_width - 24, 52), i == app.selected, !app.new_project && !app.creating && app.snapshot.sequence >= app.sequence)
 		y += 59
 	}
 	} else {
@@ -1152,7 +1156,7 @@ fn build_window_content() ui2.Element {
 			} else {
 				'未连接'
 			}
-			project_rows << project_button('remote_select_${p.id}', p.name, environment_runtime_badge(app.remote_environment_version(p), badge), ui2.rect(0, y, 190, 52), p.id == app.remote_id && !app.show_servers, !app.remote_snapshot.busy && !app.server_busy)
+			project_rows << project_button('remote_select_${p.id}', p.name, environment_runtime_badge(app.remote_environment_version(p), badge), ui2.rect(0, y, sidebar_width - 24, 52), p.id == app.remote_id && !app.show_servers, !app.remote_snapshot.busy && !app.server_busy)
 			y += 59
 		}
 	}
@@ -1163,21 +1167,21 @@ fn build_window_content() ui2.Element {
 			'项目列表读取失败，请刷新重试'
 		} else {
 			'此位置暂无运行环境'
-		}, 10, 8, 170, 11, workbench_colors.muted)
+		}, 10, 8, sidebar_width - 44, 11, workbench_colors.muted)
 	}
-	side << ui2.scroll('project_list', ui2.rect(12, 225, 190, h - 396), workbench_colors.sidebar, project_rows)
+	side << ui2.scroll('project_list', ui2.rect(12, 225, sidebar_width - 24, h - 396), workbench_colors.sidebar, project_rows)
 	can_choose := app.can_new_or_import()
-	side << sidebar_button('new', '+ 新建', ui2.rect(16, 143, 85, 34), true, false, can_choose, .center)
-	side << sidebar_button('import', '导入…', ui2.rect(111, 143, 85, 34), false, false, can_choose, .center)
-	side << sidebar_button('server_home', '连接与服务器', ui2.rect(16, h - 125, 180, 34), false, app.show_remote, !app.creating, .left)
+	side << sidebar_button('new', '+ 新建', ui2.rect(16, 143, (sidebar_width - 44) / 2, 34), true, false, can_choose, .center)
+	side << sidebar_button('import', '导入…', ui2.rect(26 + (sidebar_width - 44) / 2, 143, (sidebar_width - 44) / 2, 34), false, false, can_choose, .center)
+	side << sidebar_button('server_home', '连接与服务器', ui2.rect(16, h - 125, sidebar_width - 34, 34), false, app.show_remote, !app.creating, .left)
 	side << sidebar_section_heading('env_label', '管理', h - 163)
-	side << sidebar_button('runtime', '运行包', ui2.rect(16, h - 83, 180, 34), false, app.show_runtime, !app.creating, .left)
-	side << label('binary_label', app.environment_version_label(), 22, h - 32, 170, 11, workbench_colors.muted)
-	mut children := [ui2.view('workbench_sidebar', ui2.rect(0, 0, 214, h), ui2.BoxStyle{
+	side << sidebar_button('runtime', '运行包', ui2.rect(16, h - 83, sidebar_width - 34, 34), false, app.show_runtime, !app.creating, .left)
+	side << label('binary_label', app.environment_version_label(), 22, h - 32, sidebar_width - 44, 11, workbench_colors.muted)
+	mut children := [ui2.view('workbench_sidebar', ui2.rect(0, 0, sidebar_width, h), ui2.BoxStyle{
 		bg:           workbench_colors.sidebar
 		border_color: workbench_colors.line
 		border_right: 1
-	}, side)]
+	}, side), app.sidebar_handle(sidebar_width, h)]
 	if app.show_development {
 		app.sync_development_apps()
 		children << ui2.scroll('development_mcp_page', ui2.rect(content_x, 0, cw + 30, h), workbench_colors.paper, development_mcp_view(app, cw))
