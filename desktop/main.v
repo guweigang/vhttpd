@@ -15,6 +15,7 @@ fn C.atexit(fn ()) int
 struct Workshop {
 mut:
 	keyboard_navigation_focus string
+	about_open bool
 	desktop_update_open bool
 	desktop_update_busy bool
 	desktop_update_checked bool
@@ -592,6 +593,7 @@ fn handle_event(event string) {
 		if handle_windows_field_event(event) { return }
 	}
 	mut app := unsafe { workshop }
+	if event == 'about_back' { app.about_open = false; ui2.refresh(); return }
 	if app.handle_desktop_update_event(event) { return }
 	if event == 'form_submit' {
 		submit_active_form()
@@ -1093,6 +1095,7 @@ fn build_window_content() ui2.Element {
 	b := workbench_bounds()
 	w := if b.width > 760 { b.width } else { 760.0 }
 	h := if b.height > 660 { b.height } else { 660.0 }
+	if app.about_open { return app.workbench_about_view(w) }
 	if app.desktop_update_open {
 		settings := ui2.settings(app.update_settings_config()) or {
 			label('desktop_update_error', '无法打开软件更新。', 24, 70, w - 48, 14, workbench_colors.ink)

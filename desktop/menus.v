@@ -218,6 +218,7 @@ fn handle_workbench_menu(event string) bool {
 		}
 		return true
 	}
+	if action != 'about' && action !in ['help', 'shortcuts', 'minimize', 'zoom', 'fullscreen'] && !action.starts_with('edit_') && !action.starts_with('language:') { app.about_open = false }
 	if app.desktop_update_open && action != 'desktop_updates'
 		&& action !in ['about', 'help', 'shortcuts', 'minimize', 'zoom', 'fullscreen']
 		&& !action.starts_with('language:') && !action.starts_with('edit_') {
@@ -239,7 +240,7 @@ fn handle_workbench_menu(event string) bool {
 		'config_diff', 'history_open' { app.menu_overview(); handle_event(action) }
 		'help' { ui_alert('使用说明', '选择本地或远端位置 → 选择 vhttpd 运行环境 → 查看应用、Relay、配置和日志。\n\n配置在 Admin UI 编辑、校验和发布；发布后回到工作台，重启并检查整个项目生效。\n\n远端服务器通过 SSH 连接，密码仅用于本次会话。一个运行环境可承载多个应用；启停和重启影响整个进程。运行包用于安装或升级 vhttpd。') }
 		'shortcuts' { ui_alert('快捷键说明', '⌘（macOS）/ Ctrl（Windows、Linux）\n\nN：新建运行环境    O：导入运行配置    ,：管理运行包\nX / C / V / A：剪切 / 复制 / 粘贴 / 全选\n\nTab / Shift+Tab：下一个 / 上一个控件\n⌘ / Ctrl+Return：提交当前表单\nEsc：返回或取消（主机指纹不会通过 Return 自动接受）') }
-		'about' { ui_alert('关于 vhttpd Workbench', app.workbench_about_text()) }
+		'about' { app.about_open = true; app.environment_menu = ui2.DropdownMenuState{}; ui2.refresh() }
 		'desktop_updates' {
 			app.desktop_update_open = true
 			app.environment_menu = ui2.DropdownMenuState{}

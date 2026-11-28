@@ -104,8 +104,9 @@ fn workbench_key(raw_key string) {
 		return
 	}
 	match key {
-		'cmd+enter', 'cmd+return' { if !app.desktop_update_open { submit_active_form() } }
+		'cmd+enter', 'cmd+return' { if !app.desktop_update_open && !app.about_open { submit_active_form() } }
 		'escape' {
+			if app.about_open { handle_event('about_back'); return }
 			if app.desktop_update_open { handle_event('desktop_update_back'); return }
 			if app.show_remote && app.show_servers && app.server_snapshot.host_key.id != '' { handle_event('server_disconnect'); return }
 			if app.show_remote && !app.show_servers && app.remote_snapshot.host_key.id != '' { handle_event('remote_disconnect'); return }
