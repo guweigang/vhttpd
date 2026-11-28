@@ -6,7 +6,7 @@ out="$(mktemp -d "${TMPDIR:-/tmp}/vhttpd-menu-escape.XXXXXX")"
 bash "$root/desktop/prepare-ui2.sh" "$out/modules/ui2" >/dev/null
 mkdir -p "$out/cocoa-menu-control.app/Contents/MacOS" "$out/ui2-menu-probe.app/Contents/MacOS"
 clang -mmacosx-version-min=15.0 -framework Cocoa "$source_dir/cocoa_control.m" -o "$out/cocoa-menu-control.app/Contents/MacOS/probe"
-V_MACOS_V3_NO_FALLBACK=1 v -new-compiler -gc none -enable-globals -w \
+V_MACOS_V3_NO_FALLBACK=1 v -gc none -enable-globals -w \
   -path "$out/modules|@vlib|@vmodules" \
   -o "$out/ui2-menu-probe.app/Contents/MacOS/probe" "$source_dir/ui2_probe.v"
 python3 - "$out" <<'PY'

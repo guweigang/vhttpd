@@ -17,7 +17,7 @@ New-Item -ItemType Directory -Force "$output/admin" | Out-Null
 Copy-Item "$root/admin/ui" "$output/admin/ui" -Recurse
 # Native headers use @VMODROOT/src; stage at the same relative path.
 $path = "$stage|$(Split-Path $env:VJSX_DIR)|@vlib|@vmodules"
-& v -prod -new-compiler -nocache -cc msvc -gc boehm -d link_quickjs -d use_openssl -d enable_db -w -enable-globals `
+& v -prod -nocache -cc msvc -gc boehm -d link_quickjs -d use_openssl -d enable_db -w -enable-globals `
  -path $path -o "$output/vhttpd.exe" $stage 2>&1 | Tee-Object "$output/build.log"
 if ($LASTEXITCODE -ne 0) { throw 'MSVC vhttpd production build failed' }
 # Copy SDK DLLs to probe the real build before resolving the package closure.

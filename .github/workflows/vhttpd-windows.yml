@@ -55,7 +55,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Windows runtime probe compilation failed' }
           & ./windows-runtime-probe.exe
           if ($LASTEXITCODE -ne 0) { throw 'Windows shutdown/socket ownership check failed' }
-          & v -new-compiler -cc msvc -gc boehm -w -enable-globals -path "$PWD/src|@vlib|@vmodules" -o "$env:RUNNER_TEMP/socket-tests.exe" src/socket_runtime/ownership_test.v
+          & v -cc msvc -gc boehm -w -enable-globals -path "$PWD/src|@vlib|@vmodules" -o "$env:RUNNER_TEMP/socket-tests.exe" src/socket_runtime/ownership_test.v
           if ($LASTEXITCODE -ne 0) { throw 'Socket V test compilation failed' }
           & "$env:RUNNER_TEMP/socket-tests.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Socket V ownership regression failed' }

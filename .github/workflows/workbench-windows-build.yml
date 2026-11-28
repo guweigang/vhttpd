@@ -95,7 +95,7 @@ jobs:
           $output = "$PWD/desktop/ci/results/windows-build"
           $path = "$env:WORKBENCH_WINDOWS_MODULES|@vlib|@vmodules"
           $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
-          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -w -enable-globals -path $path `
+          & v -prod -cc msvc -gc boehm -cflags $sdkCompatibility -w -enable-globals -path $path `
             -o "$output/ui2-windows-probe.exe" desktop/ci/windows_display_probe.v 2>&1 | Tee-Object "$output/ui2-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'ui2 native build failed' }
           $env:VHTTPD_WINDOWS_PROBE_READY = "$output/native-window-ready.txt"
@@ -112,7 +112,7 @@ jobs:
         id: storage
         run: |
           $output = "$PWD/desktop/ci/results/windows-build"
-          & v -new-compiler -cc msvc -gc boehm -w -enable-globals -path "$PWD/src|@vlib|@vmodules" -o "$output/storage-probe.exe" desktop/ci/windows_storage_probe.v 2>&1 | Tee-Object "$output/storage-build.log"
+          & v -cc msvc -gc boehm -w -enable-globals -path "$PWD/src|@vlib|@vmodules" -o "$output/storage-probe.exe" desktop/ci/windows_storage_probe.v 2>&1 | Tee-Object "$output/storage-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Windows storage build failed' }
           $storage = Start-Process "$output/storage-probe.exe" -PassThru -RedirectStandardOutput "$output/storage-check.log" -RedirectStandardError "$output/storage-stderr.log"
           try {
@@ -142,7 +142,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource compilation failed' }
           } finally { Pop-Location }
           $iconResource = '"' + "$output/workbench.res" + '"'
-          & v -prod -new-compiler -cc msvc -gc boehm -cflags $sdkCompatibility -ldflags $iconResource -subsystem console -d "vhttpd_desktop_version=$desktopVersion" -d link_quickjs -d use_openssl -w -enable-globals `
+          & v -prod -cc msvc -gc boehm -cflags $sdkCompatibility -ldflags $iconResource -subsystem console -d "vhttpd_desktop_version=$desktopVersion" -d link_quickjs -d use_openssl -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
           # Use the wide CRT entry point so redirected CLI output survives.
