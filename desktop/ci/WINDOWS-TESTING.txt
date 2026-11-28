@@ -1,7 +1,7 @@
-vhttpd Desktop · Windows x64 测试包
+vhttpd Desktop · Windows x64 安装与使用
 
 安装与打开
-1. 推荐下载 Actions 的 vhttpd-workbench-windows-amd64-test Artifact。
+1. 从 GitHub Releases 的 desktop-v 版本下载 Windows amd64 ZIP；Actions Artifact 用于开发验收。
    将下载的 ZIP 完整解压到普通目录（可包含空格和中文）。
 2. 可在解压目录打开 PowerShell，校验包内文件：
    powershell -NoProfile -ExecutionPolicy Bypass -File .\Verify-Package.ps1
@@ -19,10 +19,10 @@ Desktop 版本见 VERSION.txt、EXE 属性和“关于”；远端 vhttpd 版本
 
 首次使用
 数据保存在 %LOCALAPPDATA%\vhttpd-workbench；换包不会删除服务器登记。
-本测试包未签名。若 Windows 显示未知发布者，请先核对 CI 来源和 SHA256。
+Windows 包未签名。若 Windows 显示未知发布者，请先核对 CI 来源和 SHA256。
 只连接自己的测试服务器；以下重启操作会短暂中断目标实例，请使用测试项目。
 本包提供 Windows Desktop，通过 SSH 管理已经运行的 Linux vhttpd。
-尚未提供 Windows 本地 vhttpd 运行包，不把本机新建/启动作为本轮验收范围。
+需要本地运行时，可另行下载安装 vhttpd 的 Windows amd64 运行包；Desktop 不捆绑本地运行包。
 
 建议验收顺序
 1. 添加远端服务器：填写主机、SSH 用户、端口，选择密码认证。
@@ -47,6 +47,6 @@ build-info.json 中的构建编号、Windows 版本、卡住的步骤、脱敏�
 MSVC 构建、依赖闭包、ZIP 校验、带空格/中文目录解压、隔离 PATH 启动与退出、
 实际 GUI 程序的密码辅助进程、主机指纹确认、会话凭据撤销、远端 include 路径。
 实际服务器的 SSH 登录、浏览器、远端重启和业务生效由本次真机验收确认。
-Windows UI 仍处于测试阶段，可能存在字体、图片或布局细节差异。
+实际 Windows 桌面、浏览器和真实服务器的交互仍需用户验收，CI 不替代这些检查。
 
 字体：resources/fonts 内包含锁定版本的 Noto Sans CJK SC（常规 / 粗体）、Roboto Mono 及授权文件。工作台仅在自身进程内加载这些字体，不写入系统字体目录，无需安装。

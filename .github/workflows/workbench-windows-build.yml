@@ -1,6 +1,7 @@
 name: Workbench Windows Desktop Test Package
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: ['codex/windows-workbench-*']

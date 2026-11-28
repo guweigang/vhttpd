@@ -61,7 +61,7 @@ foreach ($entry in $manifest) {
 }
 Write-Host 'PASS: package files are complete and match SHA256.'
 '@ | Set-Content "$stage/Verify-Package.ps1" -Encoding utf8
-@{version=$desktopMetadata.version; bundle_version=$desktopMetadata.bundle_version; commit=$env:GITHUB_SHA; run=$env:GITHUB_RUN_ID; compiler='MSVC'; architecture='amd64'; channel='test'; openssh_tag=$pin.tag;
+@{version=$desktopMetadata.version; bundle_version=$desktopMetadata.bundle_version; commit=$env:GITHUB_SHA; run=$env:GITHUB_RUN_ID; compiler='MSVC'; architecture='amd64'; channel=$(if ($env:GITHUB_REF_TYPE -eq 'tag') { 'stable' } else { 'test' }); openssh_tag=$pin.tag;
  v=(Get-Content "$root/scripts/ci/toolchain.env" | Select-String '^V_COMMIT=').ToString().Split('=')[1];
  ui2=(Get-Content "$root/desktop/ui2.commit" -Raw).Trim(); windows_vhttpd_runtime=$false} | ConvertTo-Json | Set-Content "$stage/build-info.json" -Encoding utf8
 $files = @(Get-ChildItem $stage -File -Recurse | ForEach-Object {

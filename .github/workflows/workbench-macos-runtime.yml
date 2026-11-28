@@ -1,6 +1,7 @@
 name: Build and verify Mac workbench
 
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       release_mode:
@@ -14,7 +15,6 @@ on:
         required: false
   push:
     branches: [main, codex/mac-workbench-runtime-checks]
-    tags: ['v[0-9]*', '!v*-dev.g*', 'desktop-v[0-9]*', '!desktop-v*-dev.g*']
     paths:
       - .github/workflows/workbench-macos-runtime.yml
       - desktop/**
@@ -270,33 +270,6 @@ jobs:
         run: |
           python3 -m unittest discover -s desktop/ci -p 'test_development_release.py'
           python3 desktop/ci/development_release.py
-
-  publish-release:
-    name: Publish accepted unsigned Mac assets
-    if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [build, accepted-preview]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    concurrency:
-      group: mac-workbench-release-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: desktop
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/download-artifact@v4
-        with:
-          name: workbench-macos-arm64-unsigned-verified
-          path: download
-      - name: Prepare versioned assets, upload draft and publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 desktop/ci/macos_release.py publish download release-assets
 
   sign-and-notarize:
     name: Developer ID signing and Apple notarization

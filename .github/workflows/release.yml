@@ -1,0 +1,77 @@
+name: Publish stable packages
+
+on:
+  push:
+    tags: ['v[0-9]*', '!v*-*', 'desktop-v[0-9]*', '!desktop-v*-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      product: ${{ steps.version.outputs.product }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_publish_release.py
+          python3 scripts/ci/publish_release.py plan
+
+  runtime:
+    needs: plan
+    if: needs.plan.outputs.product == 'runtime'
+    uses: ./.github/workflows/vhttpd-binaries.yml
+    with:
+      validation: package
+
+  runtime-windows:
+    needs: plan
+    if: needs.plan.outputs.product == 'runtime'
+    uses: ./.github/workflows/vhttpd-windows.yml
+
+  desktop-macos:
+    permissions:
+      contents: write
+      actions: read
+    needs: plan
+    if: needs.plan.outputs.product == 'desktop'
+    uses: ./.github/workflows/workbench-macos-runtime.yml
+
+  desktop-linux:
+    needs: plan
+    if: needs.plan.outputs.product == 'desktop'
+    uses: ./.github/workflows/workbench-linux-runtime.yml
+
+  desktop-windows:
+    needs: plan
+    if: needs.plan.outputs.product == 'desktop'
+    uses: ./.github/workflows/workbench-windows-build.yml
+
+  publish:
+    needs: [plan, runtime, runtime-windows, desktop-macos, desktop-linux, desktop-windows]
+    if: >-
+      always() && !cancelled() && needs.plan.result == 'success' &&
+      ((needs.plan.outputs.product == 'runtime' && needs.runtime.result == 'success' && needs.runtime-windows.result == 'success') ||
+       (needs.plan.outputs.product == 'desktop' && needs.desktop-macos.result == 'success' && needs.desktop-linux.result == 'success' && needs.desktop-windows.result == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloads
+      - name: Validate all platform assets and publish the complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/publish_release.py publish downloads release-assets

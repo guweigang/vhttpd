@@ -1,6 +1,11 @@
 name: Build vhttpd binaries
 
 on:
+  workflow_call:
+    inputs:
+      validation:
+        type: string
+        default: pr
   workflow_dispatch:
     inputs:
       validation:
@@ -101,7 +106,7 @@ jobs:
         run: make lint-safety
 
       - name: Run fast unit tests
-        if: github.event_name != 'workflow_dispatch' || inputs.validation != 'package'
+        if: inputs.validation != 'package'
         shell: bash
         run: |
           set -euo pipefail
@@ -207,7 +212,7 @@ jobs:
           retention-days: 14
 
   test-inproc-fast:
-    if: github.event_name != 'workflow_dispatch' || inputs.validation == 'pr'
+    if: inputs.validation == '' || inputs.validation == 'pr'
     name: ${{ matrix.suite }} (${{ matrix.os }})
     strategy:
       fail-fast: false

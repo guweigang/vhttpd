@@ -1,4 +1,4 @@
-vhttpd · Windows x64 测试包（MSVC）
+vhttpd · Windows x64 运行包（MSVC）
 
 完整解压 ZIP，保留 EXE、DLL、admin 和 licenses，再运行：
   .\vhttpd.exe --version
@@ -12,7 +12,7 @@ vhttpd · Windows x64 测试包（MSVC）
 
 维护者可运行 Build vhttpd binaries，选择 validation=windows 构建并验收此包。
 
-本包用于 Windows 10/11 x64 验收，未经签名，不代表正式版本已通过验收。
+本包未经代码签名。首次运行若显示未知发布者，请核对 GitHub Releases 来源和 SHA256。
 目前重点验收：原生启动、HTTP/vjsx、Admin UI、跨 include 配置发布、
 正常退出后重启、整项目生效检查，以及无开发环境运行。
 SSH 远端管理仍针对 Linux 手工实例；systemd/Docker 不属于 Windows 服务功能。
