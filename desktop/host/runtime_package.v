@@ -153,7 +153,9 @@ pub fn inspect_runtime(path string, executable string, job RuntimeJob) RuntimeIn
 	if !os.is_executable(path) {
 		return RuntimeInfo{ path: path, source: source, message: '未找到可用运行包。可下载官方完整运行包，或选择本地 vhttpd。' }
 	}
-	raw := job.command(path, ['--version'], 5000) or { return RuntimeInfo{ path: path, source: source, message: '运行包无法执行或读取版本失败，请重新选择或下载。' } }
+	// A freshly extracted, signed Mac runtime can spend over five seconds in
+	// loader/signature checks. Keep this bounded and cancellable.
+	raw := job.command(path, ['--version'], 15000) or { return RuntimeInfo{ path: path, source: source, message: '运行包无法执行或读取版本失败，请重新选择或下载。' } }
 	version := runtime_version_text(raw) or { return RuntimeInfo{ path: path, source: source, message: err.msg() } }
 	return RuntimeInfo{ path: path, version: version, source: source, ready: true, message: '可启动项目；版本来自此运行程序的 --version。' }
 }
@@ -198,6 +200,20 @@ fn runtime_assets_for(release RuntimeRelease, allow_preview bool) !(RuntimeRelea
 	}
 	// Release tags identify vhttpd; a bundled Desktop ZIP has its own version.
 	_ := runtime_version_text(release.tag_name)!
+	// Prefer standalone packages; malformed standalone metadata must not fall back.
+	filename := 'vhttpd-macos-arm64.tar.gz'
+	archives := release.assets.filter(it.name == filename)
+	checksums := release.assets.filter(it.name == filename + '.sha256')
+	if archives.len > 0 || checksums.len > 0 {
+		if archives.len != 1 || checksums.len != 1 {
+			return error('Mac 独立运行包或 SHA256 校验文件缺失或存在多个候选。')
+		}
+		archive, sums := archives[0], checksums[0]
+		if archive.size < 1 || archive.size > 268435456 || sums.size < 1 || sums.size > 1048576 || !official_asset_url(archive.browser_download_url) || !official_asset_url(sums.browser_download_url) {
+			return error('Mac 独立运行包或 SHA256 校验文件无效。')
+		}
+		return archive, sums
+	}
 	prefix := 'vhttpd-workbench-macos-arm64-'
 	mut archive := RuntimeReleaseAsset{}
 	mut sums := RuntimeReleaseAsset{}
@@ -310,24 +326,36 @@ fn install_runtime_archive_mode(archive string, expected string, tag string, job
 		return error('SHA256 不一致，下载包未安装；请重新下载。')
 	}
 	job.stage('正在检查并解压运行包…')
-	names := job.command('/usr/bin/unzip', ['-Z1', archive], 30000)!
-	details := job.command('/usr/bin/unzip', ['-Z', '-l', archive], 30000)!
-	validate_archive_listing(names, details)!
+	standalone := archive.ends_with('.tar.gz')
+	if standalone {
+		names := job.command('/usr/bin/tar', ['-tzf', archive], 30000)!
+		details := job.command('/usr/bin/tar', ['-tvzf', archive], 30000)!
+		validate_macos_runtime_tar(names, details)!
+	} else {
+		names := job.command('/usr/bin/unzip', ['-Z1', archive], 30000)!
+		details := job.command('/usr/bin/unzip', ['-Z', '-l', archive], 30000)!
+		validate_archive_listing(names, details)!
+	}
 	root := os.join_path(workbench_data_dir(), 'runtimes')
 	os.mkdir_all(root)!
 	stage := os.join_path(root, '.install-' + rand.bytes(12)!.hex())
 	os.mkdir(stage)!
 	os.chmod(stage, 0o700)!
 	defer { os.rmdir_all(stage) or {} }
-	job.command('/usr/bin/ditto', ['-x', '-k', archive, stage], 60000)!
-	source := os.join_path(stage, 'vhttpd-workbench.app', 'Contents', 'Resources', 'runtime')
+	if standalone {
+		job.command('/usr/bin/tar', ['-xzf', archive, '-C', stage, '--no-same-owner', '--no-same-permissions'], 60000)!
+	} else {
+		job.command('/usr/bin/ditto', ['-x', '-k', archive, stage], 60000)!
+	}
+	source := if standalone { os.join_path(stage, 'vhttpd-macos-arm64') } else { os.join_path(stage, 'vhttpd-workbench.app', 'Contents', 'Resources', 'runtime') }
+	libraries := if standalone { os.join_path(source, 'runtime', 'libs') } else { os.join_path(source, 'lib') }
 	binary := os.join_path(source, 'vhttpd')
-	if !os.is_executable(binary) || !os.is_file(os.join_path(source, 'admin', 'ui', 'index.html')) || !os.is_dir(os.join_path(source, 'lib')) {
+	if !os.is_executable(binary) || !os.is_file(os.join_path(source, 'admin', 'ui', 'index.html')) || !os.is_dir(libraries) {
 		return error('运行包不完整，需要 vhttpd、Admin UI 和动态库。')
 	}
 	job.stage('正在检查架构、动态库和程序版本…')
 	mut binaries := [binary]
-	binaries << os.walk_ext(os.join_path(source, 'lib'), '.dylib')
+	binaries << os.walk_ext(libraries, '.dylib')
 	for item in binaries {
 		macho := inspect_runtime_macho(os.read_bytes(item)!)!
 		if item == binary && macho.filetype != 2 {
@@ -366,4 +394,34 @@ fn publish_runtime_package(source string, version string, tag string, select_pac
 		}
 	}
 	return installed
+}
+
+// macOS BSD tar reports file size in column five. Validate before extraction.
+fn validate_macos_runtime_tar(names string, details string) ! {
+	paths := names.split_into_lines()
+	root := 'vhttpd-macos-arm64'
+	if paths.len == 0 || paths.len > 20000 { return error('运行包文件数量无效。') }
+	mut seen := map[string]bool{}
+	for path in paths {
+		if path.len > 4096 || (path != root && !path.starts_with(root + '/')) || path.contains('\\') || path.split('/').any(it in ['..', '.']) || path.bytes().any(it < 32 || it == 127) || path in seen {
+			return error('运行包包含不安全或重复的路径。')
+		}
+		seen[path] = true
+	}
+	if root + '/vhttpd' !in seen || root + '/admin/ui/index.html' !in seen {
+		return error('运行包缺少 vhttpd 或 Admin UI。')
+	}
+	rows := details.split_into_lines()
+	if rows.len != paths.len { return error('无法检查运行包内容。') }
+	mut total := i64(0)
+	for row in rows {
+		fields := row.fields()
+		if row.len == 0 || row[0] !in [u8(`-`), `d`] || fields.len < 6 || fields[4] == '' || !fields[4].bytes().all(it.is_digit()) {
+			return error('运行包包含链接、特殊文件或无效大小。')
+		}
+		size := fields[4].i64()
+		if size < 0 || size > 536870912 { return error('运行包解压大小超出限制。') }
+		total += size
+		if total > 536870912 { return error('运行包解压大小超出限制。') }
+	}
 }

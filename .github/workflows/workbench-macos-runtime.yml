@@ -118,6 +118,10 @@ jobs:
             -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" \
             -o "$RUNNER_TEMP/runtime-catalog-test" desktop/host/runtime_catalog_test.v
           "$RUNNER_TEMP/runtime-catalog-test"
+          v -w -d build_quickjs -enable-globals \
+            -path "$PWD/desktop|$PWD/src|$PWD/.deps|@vlib|@vmodules" \
+            -o "$RUNNER_TEMP/runtime-package-test" desktop/host/runtime_package_test.v
+          "$RUNNER_TEMP/runtime-package-test"
       - name: Verify SSH manual-instance workflow
         shell: bash
         run: |

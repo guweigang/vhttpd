@@ -56,3 +56,27 @@ fn test_selected_release_provenance_survives_install_and_failed_checksum() ! {
 	}
 	assert false, 'corrupt package replaced the selection'
 }
+
+fn test_mac_catalog_prefers_standalone_runtime_and_rejects_incomplete_pairs() ! {
+	tag := 'v0.9.1'
+	base := 'https://github.com/guweigang/vhttpd/releases/download/${tag}/'
+	archive := RuntimeReleaseAsset{name: 'vhttpd-macos-arm64.tar.gz', size: 100, browser_download_url: base + 'vhttpd-macos-arm64.tar.gz'}
+	checks := RuntimeReleaseAsset{name: archive.name + '.sha256', size: 100, browser_download_url: base + archive.name + '.sha256'}
+	legacy := [RuntimeReleaseAsset{name: 'vhttpd-workbench-macos-arm64-0.2.0.zip', size: 100, browser_download_url: base + 'legacy.zip'},
+		RuntimeReleaseAsset{name: 'vhttpd-workbench-macos-arm64-0.2.0-SHA256SUMS.txt', size: 100, browser_download_url: base + 'legacy-checks.txt'}]
+	release := RuntimeRelease{tag_name: tag, assets: [archive, checks]}
+	for candidate in [release, RuntimeRelease{...release, assets: [archive, checks, ...legacy]}] {
+		choice := runtime_download_for(candidate, 'macos-arm64')!
+		assert choice.archive.name == archive.name && choice.checksums.name == checks.name
+		assert choice.channel == 'stable' && choice.tag == tag
+	}
+	for assets in [
+		[archive], [checks], [archive, archive, checks], [archive, checks, checks],
+		[archive, ...legacy], [RuntimeReleaseAsset{...archive, browser_download_url: 'https://attacker.invalid/package'}, checks],
+		[RuntimeReleaseAsset{...archive, size: 0}, checks],
+		[RuntimeReleaseAsset{...archive, name: 'vhttpd-macos-amd64.tar.gz'}, RuntimeReleaseAsset{...checks, name: 'vhttpd-macos-amd64.tar.gz.sha256'}],
+	] {
+		runtime_download_for(RuntimeRelease{...release, assets: assets}, 'macos-arm64') or { continue }
+		assert false, 'invalid standalone metadata accepted'
+	}
+}

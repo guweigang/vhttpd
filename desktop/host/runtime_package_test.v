@@ -101,3 +101,18 @@ fn test_runtime_selection_persists_and_inspection_is_bounded() ! {
 	}
 	assert false, 'cancelled child was left running'
 }
+
+fn test_standalone_mac_tar_rejects_unsafe_entries_before_extraction() ! {
+	names := 'vhttpd-macos-arm64/vhttpd\nvhttpd-macos-arm64/admin/ui/index.html'
+	row := '-rwxr-xr-x 0 runner staff 100 Nov 28 21:13 '
+	details := row + 'vhttpd-macos-arm64/vhttpd\n' + row + 'vhttpd-macos-arm64/admin/ui/index.html'
+	validate_macos_runtime_tar(names, details)!
+	for bad_path in ['../escape', 'vhttpd-macos-arm64/../escape', 'vhttpd-macos-arm64/./escape', 'other/file', 'vhttpd-macos-arm64/a\\b', 'vhttpd-macos-arm64/vhttpd'] {
+		validate_macos_runtime_tar(names + '\n' + bad_path, details + '\n' + row + bad_path) or { continue }
+		assert false, 'unsafe or duplicate archive path accepted'
+	}
+	for bad in [details.replace('-rwx', 'lrwx'), details.replace('-rwx', 'hrwx'), details.replace('staff 100', 'staff 999999999'), details.replace('staff 100', 'staff invalid')] {
+		validate_macos_runtime_tar(names, bad) or { continue }
+		assert false, 'unsafe archive entry accepted'
+	}
+}

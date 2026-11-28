@@ -58,6 +58,23 @@ fn run_runtime_smoke(root string) ! {
 		println('PASS Linux runtime install, checksum, version, persisted selection and both templates')
 		return
 	}
+	tag := os.getenv('VHTTPD_RUNTIME_TEST_TAG')
+	if tag != '' {
+		platform := host.local_runtime_platform()
+		releases := host.runtime_catalog(platform, 'stable', '', job)!
+		if !releases.any(it.tag == tag && it.platform == platform) {
+			return error('公开稳定版本列表缺少 Mac 独立运行包。')
+		}
+		path := host.download_runtime_release(tag, job)!
+		info := host.inspect_runtime(path, os.executable(), job)
+		if !info.ready || info.version != tag.trim_string_left('v') || !info.source.contains(tag) || host.selected_runtime(os.executable(), root)! != path {
+			return error('Mac 独立运行包版本、来源或默认选择未保存。')
+		}
+		os.setenv('VHTTPD_DESKTOP_BINARY', path, true)
+		run_smoke(root)!
+		println('PASS Mac public stable catalog, explicit version, standalone download, SHA256, signatures, portable libraries, persisted selection and both templates')
+		return
+	}
 	mut archive := os.getenv('VHTTPD_RUNTIME_TEST_ARCHIVE')
 	if archive == '' {
 		app := os.real_path(os.join_path(os.dir(os.executable()), '..', '..'))
