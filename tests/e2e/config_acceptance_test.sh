@@ -2110,7 +2110,8 @@ event_log = "${TMP_ROOT}/controlled-worker-queue.events.ndjson"
 
 [worker]
 autostart = true
-read_timeout_ms = 5000
+# Two sequential 2500 ms queue deadlines must not expire the held worker.
+read_timeout_ms = 20000
 pool_size = 1
 queue_capacity = 1
 queue_timeout_ms = ${queue_timeout_ms}
@@ -3100,7 +3101,7 @@ CERT
         "controlled timeout runtime serves baseline request"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/runtime" '"queue_timeout_ms":2500' \
         "controlled timeout runtime retains 2500 ms deadline"
-    curl -fsS --max-time 20 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-timeout-hold" >"$controlled_timeout_hold_body" 2>/dev/null &
+    curl -fsS --max-time 30 "${controlled_base_url}/hold?trace_id=e2e-worker-controlled-timeout-hold" >"$controlled_timeout_hold_body" 2>/dev/null &
     local controlled_timeout_hold_pid=$!
     wait_controlled_worker_holding "${controlled_socket}.holding"
     wait_http_contains "http://127.0.0.1:${controlled_admin_port}/admin/workers" '"inflight_requests":1' \
