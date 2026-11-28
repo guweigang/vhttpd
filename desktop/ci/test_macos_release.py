@@ -73,9 +73,9 @@ class ReleaseTests(unittest.TestCase):
 
     def test_runtime_release_tag_does_not_set_desktop_version(self):
         metadata = version_metadata({'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': 'v0.9.0'})
-        self.assertEqual(metadata['version'], '0.1.0')
+        self.assertEqual(metadata['version'], '0.2.0')
         self.assertEqual(metadata['tag'], 'v0.9.0')
-        self.assertEqual(metadata['archive'], 'vhttpd-workbench-macos-arm64-0.1.0.zip')
+        self.assertEqual(metadata['archive'], 'vhttpd-workbench-macos-arm64-0.2.0.zip')
 
     def test_windows_resource_carries_numeric_and_full_desktop_versions(self):
         metadata = version_metadata({'VHTTPD_WORKBENCH_VERSION': '0.1.0-dev.gaaaaaaaaaaaa'})

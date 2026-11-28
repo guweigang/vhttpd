@@ -141,14 +141,14 @@ class DevelopmentTests(unittest.TestCase):
         self.assertEqual(tag, 'v0.9.0-dev.g' + SHA[:12])
         manifest = json.loads(next(p for p in assets if p.name == 'runtime-release.json').read_text())
         self.assertEqual(manifest['runtime_version'], '0.9.0')
-        self.assertEqual(manifest['desktop_version'], '0.1.0-dev.g' + SHA[:12])
-        self.assertTrue(any(p.name == 'vhttpd-workbench-macos-arm64-0.1.0-dev.g' + SHA[:12] + '.zip' for p in assets))
+        self.assertEqual(manifest['desktop_version'], '0.2.0-dev.g' + SHA[:12])
+        self.assertTrue(any(p.name == 'vhttpd-workbench-macos-arm64-0.2.0-dev.g' + SHA[:12] + '.zip' for p in assets))
 
     def test_publisher_uses_accepted_versions_when_default_branch_has_moved(self):
         with patch('workbench_version.repository_version', return_value='9.8.7'):
             _, _, tag, assets = self.publisher()
         self.assertEqual(tag, 'v0.9.0-dev.g' + SHA[:12])
-        self.assertTrue(any(p.name.endswith('-0.1.0-dev.g' + SHA[:12] + '.zip') for p in assets))
+        self.assertTrue(any(p.name.endswith('-0.2.0-dev.g' + SHA[:12] + '.zip') for p in assets))
 
     def test_mixed_runtime_versions_cannot_be_published(self):
         with self.assertRaisesRegex(ValueError, 'Runtime versions differ'):
