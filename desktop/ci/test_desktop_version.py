@@ -43,4 +43,4 @@ fn main() { println(Workshop{}.workbench_about_text()) }
             executable = root / 'probe'
             subprocess.run(['v', '-gc', 'none', '-d', 'vhttpd_desktop_version=0.1.0',
                             '-o', str(executable), str(root)], check=True, capture_output=True, text=True)
-            self.assertEqual(subprocess.check_output([str(executable)], text=True).strip(), '0.9.0')
+            self.assertEqual(subprocess.check_output([str(executable)], text=True).strip(), '0.9.1')
