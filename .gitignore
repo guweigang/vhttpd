@@ -20,6 +20,7 @@ php/package/vendor/
 site/
 
 # Generated tool metadata
+/.openidea/
 /.qoder/
 
 # Python bytecode and cache
