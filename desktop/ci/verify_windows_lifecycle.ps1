@@ -5,6 +5,7 @@ if (-not ('WorkbenchLifecycle' -as [type])) {
 using System;
 using System.Runtime.InteropServices;
 public static class WorkbenchLifecycle {
+ [DllImport("kernel32.dll")] public static extern bool GetExitCodeProcess(IntPtr process, out uint code);
  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
  [DllImport("user32.dll")] public static extern IntPtr GetMenu(IntPtr hwnd);
@@ -16,6 +17,7 @@ public static class WorkbenchLifecycle {
 '@
 }
 $process = Get-Process -Id $DesktopProcessId
+$processHandle = $process.Handle
 $window = $process.MainWindowHandle
 if ($window -eq [IntPtr]::Zero) { throw 'Desktop window unavailable for lifecycle check' }
 $fileMenu = [WorkbenchLifecycle]::GetSubMenu([WorkbenchLifecycle]::GetMenu($window), 0)
@@ -30,4 +32,6 @@ if ([WorkbenchLifecycle]::IsWindowVisible($window)) { throw 'Window close did no
 if (![WorkbenchLifecycle]::IsWindowVisible($window)) { throw 'Desktop window could not be restored' }
 if (![WorkbenchLifecycle]::PostMessageW($window, 0x111, [IntPtr]$quitId, [IntPtr]::Zero)) { throw 'Desktop Quit command was not delivered' }
 if (!$process.WaitForExit(15000)) { throw 'Desktop Quit did not exit cleanly' }
-if ($process.ExitCode -ne 0) { throw "Desktop exited $($process.ExitCode)" }
+$exitCode = [uint32]0
+if (![WorkbenchLifecycle]::GetExitCodeProcess($processHandle, [ref]$exitCode)) { throw 'Desktop exit code unavailable' }
+if ($exitCode -ne 0) { throw "Desktop exited $exitCode" }
