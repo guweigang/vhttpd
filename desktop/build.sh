@@ -48,7 +48,9 @@ unset VHTTPD_GC_PROBE_LIBRARY_PATH
 app="$build_dir/vhttpd-workbench.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$root/desktop/assets/vhttpd-macos.icns" "$app/Contents/Resources/vhttpd-macos.icns"
-cp "$root/admin/ui/brand/mark.png" "$app/Contents/Resources/vhttpd-mark.png"
+cp "$root/desktop/assets/vhttpd-mark.png" "$app/Contents/Resources/vhttpd-mark.png"
+cp "$root/desktop/assets/vhttpd-logo.png" "$app/Contents/Resources/vhttpd-logo.png"
+cp "$root/desktop/assets/vhttpd-logo-light.png" "$app/Contents/Resources/vhttpd-logo-light.png"
 # The Relay probe imports the current relay protocol module and its vjsx types.
 # Compile that dependency using the same pinned QuickJS source as the runtime.
 if [[ -z "${VJS_QUICKJS_PATH:-}" ]]; then

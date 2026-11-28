@@ -22,7 +22,7 @@ pub fn workbench_binary(executable string, development_root string) string {
 pub fn workbench_brand_mark(executable string, development_root string) string {
 	bundled := os.join_path(workbench_resources(executable), 'vhttpd-mark.png')
 	if os.is_file(bundled) { return os.real_path(bundled) }
-	return os.join_path(development_root, 'admin', 'ui', 'brand', 'mark.png')
+	return os.join_path(development_root, 'desktop', 'assets', 'vhttpd-mark.png')
 }
 
 fn default_workbench_data_dir() string {

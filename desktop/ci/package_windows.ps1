@@ -17,8 +17,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Bundled font staging failed' }
 python "$root/desktop/build_font_decoder.py" "$stage/resources/vhttpd-fontdecode.exe"
 if ($LASTEXITCODE -ne 0) { throw 'Font decoder build failed' }
 Copy-Item "$root/desktop/assets/vhttpd-windows.ico" "$stage/resources/vhttpd-windows.ico"
+Copy-Item "$root/desktop/assets/vhttpd-tray.ico" "$stage/resources/vhttpd-tray.ico"
 Copy-Item (Join-Path (Split-Path $Executable) 'vhttpd-ssh-askpass.exe') "$stage/vhttpd-ssh-askpass.exe"
-Copy-Item "$root/admin/ui/brand/mark.png" "$stage/resources/vhttpd-mark.png"
+Copy-Item "$root/desktop/assets/vhttpd-mark.png" "$stage/resources/vhttpd-mark.png"
+Copy-Item "$root/desktop/assets/vhttpd-logo.png" "$stage/resources/vhttpd-logo.png"
+Copy-Item "$root/desktop/assets/vhttpd-logo-light.png" "$stage/resources/vhttpd-logo-light.png"
 foreach ($pattern in @('libcrypto-*.dll','libssl-*.dll')) {
  $dlls = @(Get-ChildItem "$env:OPENSSL_ROOT_DIR/bin" -Filter $pattern -File)
  if (!$dlls.Count) { throw "Missing OpenSSL DLL: $pattern" }

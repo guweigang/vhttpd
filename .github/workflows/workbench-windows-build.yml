@@ -160,7 +160,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Bundled font staging failed' }
           python desktop/build_font_decoder.py "$output/resources/vhttpd-fontdecode.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Font decoder build failed' }
-          Copy-Item admin/ui/brand/mark.png "$output/resources/vhttpd-mark.png"
+          Copy-Item desktop/assets/vhttpd-mark.png "$output/resources/vhttpd-mark.png"
+          Copy-Item desktop/assets/vhttpd-tray.ico "$output/resources/vhttpd-tray.ico"
+          Copy-Item desktop/assets/vhttpd-logo.png "$output/resources/vhttpd-logo.png"
+          Copy-Item desktop/assets/vhttpd-logo-light.png "$output/resources/vhttpd-logo-light.png"
           foreach ($pattern in @('libcrypto-*.dll', 'libssl-*.dll')) {
             $dlls = @(Get-ChildItem "$env:OPENSSL_ROOT_DIR/bin" -Filter $pattern -File)
             if ($dlls.Count -eq 0) { throw "Missing OpenSSL runtime DLL: $pattern" }
