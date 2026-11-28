@@ -211,7 +211,7 @@ fn test_failed_preflight_releases_resolved_executor_before_app_handoff() {
 	mut probe := &MultiAppProbe{}
 	cfg := server_lifecycle.ServerRuntimeConfig{ serve_data_plane: true, port: 0, executor_plan: executor.LogicExecutorRuntimePlan{ executor: MultiAppExecutor{ id: 'preflight', probe: probe }, lifecycle: executor.disabled_executor_lifecycle() } }
 	mut failed := false
-	run_single_server_with_config(config.default_vhttpd_config(), cfg) or { failed = true }
+	run_single_server_with_config(config.default_vhttpd_config(), cfg, []string{}) or { failed = true }
 	assert failed
 	assert probe.rows == ['close:preflight']
 }
