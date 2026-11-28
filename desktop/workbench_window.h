@@ -129,3 +129,39 @@ static int vhttpd_workbench_register_font(const char *path) {
     if (error) CFRelease(error);
     return registered || already;
 }
+
+// Keep the ui2 window and its delegate intact. Closing a retained NSWindow
+// removes its UI, while the app delegate keeps the event loop and tray alive.
+@interface VHTTPDWorkbenchAppDelegate : NSObject <NSApplicationDelegate>
+@property(nonatomic, retain) id original;
+@property(nonatomic, assign) NSWindow *window;
+@property(nonatomic, assign) BOOL closeToTray;
+@end
+@implementation VHTTPDWorkbenchAppDelegate
+- (BOOL)respondsToSelector:(SEL)selector {
+    return [super respondsToSelector:selector] || [self.original respondsToSelector:selector];
+}
+- (id)forwardingTargetForSelector:(SEL)selector { return self.original; }
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)application {
+    if (self.closeToTray) return NO;
+    return [self.original respondsToSelector:_cmd] ? [self.original applicationShouldTerminateAfterLastWindowClosed:application] : YES;
+}
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)application hasVisibleWindows:(BOOL)visible {
+    if (!visible && self.closeToTray) { [self.window deminiaturize:nil]; [self.window makeKeyAndOrderFront:nil]; }
+    return YES;
+}
+- (void)dealloc { [_original release]; [super dealloc]; }
+@end
+static VHTTPDWorkbenchAppDelegate *vhttpd_tray_delegate = nil;
+static void vhttpd_workbench_close_to_tray(void *native_window, int enabled) {
+    NSWindow *window = (NSWindow *)native_window;
+    if (!window) return;
+    if (!vhttpd_tray_delegate && enabled) {
+        vhttpd_tray_delegate = [VHTTPDWorkbenchAppDelegate new];
+        vhttpd_tray_delegate.original = NSApp.delegate;
+        vhttpd_tray_delegate.window = window;
+        NSApp.delegate = vhttpd_tray_delegate;
+        window.releasedWhenClosed = NO;
+    }
+    vhttpd_tray_delegate.closeToTray = enabled != 0;
+}

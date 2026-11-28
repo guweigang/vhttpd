@@ -47,3 +47,8 @@ fn bring_workbench_forward() {
 	ui2.scroll_to_rect('project_overview_page', 0, 520, 1, 190)
 	C.vhttpd_workbench_activate_x11(sapp.x11_get_display(), uint(sapp.x11_get_window()))
 }
+
+// Linux currently has no ui2 tray; keep a reachable close/exit path.
+fn set_workbench_close_to_tray(_enabled bool) {}
+
+fn hide_workbench_window() { ui2.minimize_window() }

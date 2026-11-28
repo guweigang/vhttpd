@@ -68,6 +68,10 @@ static int vhttpd_workbench_verify_private_fonts(void) {
 }
 
 static LRESULT CALLBACK vhttpd_workbench_size_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, UINT_PTR id, DWORD_PTR data) {
+    if (message == WM_CLOSE && GetPropW(hwnd,L"VHTTPDCloseToTray")) {
+        ShowWindow(hwnd,SW_HIDE);
+        return 0;
+    }
     if (message == WM_GETMINMAXINFO) {
         double scale = vhttpd_workbench_windows_scale();
         RECT frame = {0,0,(LONG)(760*scale),(LONG)(660*scale)};
@@ -296,10 +300,16 @@ static void vhttpd_workbench_edit_command(int command) {
     if (command == 3) SendMessageW(field,WM_PASTE,0,0);
 }
 
+static void vhttpd_workbench_close_to_tray(void *window, int enabled) {
+    if (!window) return;
+    if (enabled) SetPropW((HWND)window,L"VHTTPDCloseToTray",(HANDLE)1);
+    else RemovePropW((HWND)window,L"VHTTPDCloseToTray");
+}
+static void vhttpd_workbench_hide_windows(void *window) { if (window) ShowWindow((HWND)window,SW_HIDE); }
 static void vhttpd_workbench_activate_windows(void *native_window) {
     HWND window = (HWND)native_window;
     if (!window || !IsWindow(window)) return;
-    if (IsIconic(window)) ShowWindow(window, SW_RESTORE);
+    ShowWindow(window, IsIconic(window) ? SW_RESTORE : SW_SHOW);
     SetForegroundWindow(window);
 }
 #endif

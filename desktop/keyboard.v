@@ -117,7 +117,7 @@ fn workbench_key(raw_key string) {
 			else if app.show_runtime { handle_event('runtime_close') }
 			else if app.show_shared_relays { handle_event('shared_close') }
 		}
-		'cmd+w' { handle_event('quit') }
+		'cmd+w' { if ui2.tray_visible() { hide_workbench_window() } else { handle_event('quit') } }
 		else {}
 	}
 }

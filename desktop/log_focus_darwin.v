@@ -8,6 +8,10 @@ import ui2
 fn C.vhttpd_workbench_window_minimum(voidptr, f64, f64)
 fn C.vhttpd_workbench_window_content_floor(voidptr, f64, f64)
 
+fn C.vhttpd_workbench_close_to_tray(voidptr, int)
+
+fn set_workbench_close_to_tray(enabled bool) { C.vhttpd_workbench_close_to_tray(ui2.native_window_handle(), int(enabled)) }
+
 fn configure_workbench_window(_handle voidptr) {
 	// Read the published NSWindow directly. The current V compiler passes the
 	// address of ui2's aliased NativeView in the ready callback, rather than
@@ -16,6 +20,7 @@ fn configure_workbench_window(_handle voidptr) {
 	ui2.on_window_resize(constrain_workbench_window)
 	update_workbench_native_appearance()
 	configure_platform_menus()
+	set_workbench_close_to_tray(ui2.tray_visible())
 }
 
 fn update_workbench_native_appearance() {
@@ -40,4 +45,9 @@ fn bring_workbench_forward() {
 	macos.msg_void1(window, 'deminiaturize:', unsafe { nil })
 	macos.msg_void1(window, 'makeKeyAndOrderFront:', unsafe { nil })
 	macos.msg_void_bool(app, 'activateIgnoringOtherApps:', true)
+}
+
+fn hide_workbench_window() {
+    window := macos.Id(ui2.native_window_handle())
+    if window != unsafe { nil } { macos.msg_void1(window, 'orderOut:', unsafe { nil }) }
 }

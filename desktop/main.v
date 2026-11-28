@@ -818,6 +818,7 @@ fn handle_event(event string) {
 			}
 		}
 		'quit', 'tray:quit' {
+			set_workbench_close_to_tray(false)
 			if ui2.tray_visible() { ui2.remove_tray() }
 			cleanup()
 			ui2.quit()
