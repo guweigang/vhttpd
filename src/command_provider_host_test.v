@@ -10,6 +10,7 @@ import net
 import time
 import upstream
 import upstream.transport
+import ws
 
 fn test_generic_command_handler_needs_only_message_and_restart_capabilities() {
 	mut host := &NarrowCommandBridgeHost{}
@@ -187,7 +188,12 @@ fn run_bridge_session_fixture(mut host NarrowCommandBridgeHost, mut listener net
 	}
 	conn.set_write_timeout(time.second)
 	conn.set_read_timeout(time.second)
-	FeishuCardBridgeRuntime.handle_server_session(mut host, mut conn, 'dGhlIHNhbXBsZSBub25jZQ==', 'same', 'test')
+	mut owner := &ws.IngressOwner{}
+	mut run := owner.reserve() or { panic('session reservation failed') }
+	defer { run.finish() }
+	assert run.attach(conn.sock.handle)
+	mut ingress := ws.IngressConnection.tcp(conn)
+	FeishuCardBridgeRuntime.handle_server_session(mut host, mut ingress, 'dGhlIHNhbXBsZSBub25jZQ==', 'same', 'test', run)
 	done <- true
 }
 

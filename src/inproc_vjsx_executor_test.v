@@ -2734,7 +2734,8 @@ export default app;
 	executor.pump_all_lane_sessions() or { panic(err) }
 	snapshot := app.websocket.snapshot(true, 10, 0, '', 'ws_timer_failure')
 	assert snapshot.connections.len == 1
-	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '0'
+	assert snapshot.connections[0].metadata['dispatch_failure_count'] == '1'
+	assert 'missing_conn' !in app.websocket.state.pending
 }
 
 fn test_inproc_vjsx_executor_runtime_timer_preserves_drain_when_target_changes() {
@@ -3047,7 +3048,10 @@ export default app;
 	assert msg_resp.accepted
 	result := app.execute_websocket_dispatch_commands_result(msg_resp.commands)
 	assert !result.has_close
-	assert result.failures.len == 0
+	// Missing targets are rejected instead of retaining messages for retired connections.
+	assert result.failures.len == 1
+	assert result.failures[0].error_class == 'websocket_send_failed'
+	assert 'missing_conn' !in app.websocket.state.pending
 	if result.failures.len > 0 {
 		websocket_dispatch_followup_failures('ws_main_failure', 'GET', '/ws', map[string]string{}, {
 			'host': 'relay.test'
@@ -3390,6 +3394,9 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 		}
 	}
 	mut facade7 := app.as_facade()
+	// A real ingress reserves the registration before invoking the open callback.
+	// Keep it opening so timer sends can be observed in the pending queue.
+	app.websocket.state.reserve_dispatch_open('ws_control_nudge', &ws.DispatchConnState{})
 	server_id := 'srv_nudge_demo'
 	control_open := executor.dispatch_websocket_event(mut facade7, transport.WorkerWebSocketFrame{
 		mode:        'websocket_dispatch'
