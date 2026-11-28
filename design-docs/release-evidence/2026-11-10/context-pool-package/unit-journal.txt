@@ -1,0 +1,3 @@
+2026-11-10T13:50:44+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: Started vhttpd-context-pool-20261110.service - /usr/bin/python3 /root/vhttpd-release-tests/20261110-context-pool/controller.py.
+2026-11-10T14:12:28+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: vhttpd-context-pool-20261110.service: Deactivated successfully.
+2026-11-10T14:12:28+08:00 iZ2ze426aj3w242kk3b9dxZ systemd[1]: vhttpd-context-pool-20261110.service: Consumed 1min 39.327s CPU time, 126.4M memory peak, 0B memory swap peak.

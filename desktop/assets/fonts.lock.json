@@ -1,0 +1,32 @@
+{
+  "family": "Sarasa Term SC",
+  "version": "1.0.43",
+  "license": "SIL OFL 1.1",
+  "source": "https://github.com/be5invis/Sarasa-Gothic/releases/tag/v1.0.43",
+  "compression": "WOFF2, unhinted static TTF, Brotli quality 6, no codepoint subsetting",
+  "assets": [
+    {
+      "file": "SarasaTermSC-Regular.woff2",
+      "bytes": 5862076,
+      "sha256": "51f53049fc277a32236e2fee5a229023567da64fe816d56bc11df445233f7faf",
+      "role": "regular",
+      "decoded_file": "SarasaTermSC-Regular.ttf",
+      "decoded_bytes": 14092632,
+      "decoded_sha256": "f12f4ac80e144503d1cb5e2e6f6146cbf54c06eba577d8c199e6f090a75210b1"
+    },
+    {
+      "file": "SarasaTermSC-Bold.woff2",
+      "bytes": 6002052,
+      "sha256": "2ea0ee5bd9a45af646473ff4e08124a6b547079d08420462932ea7a30d41709f",
+      "role": "bold",
+      "decoded_file": "SarasaTermSC-Bold.ttf",
+      "decoded_bytes": 13864176,
+      "decoded_sha256": "a4e43c37dcf7bca9a2c8ed04edd2121b7962efacd795427d366becdd73ab1c2f"
+    },
+    {
+      "file": "Sarasa-OFL.txt",
+      "bytes": 4702,
+      "sha256": "32c932e0dbae4f6e6386964bbc2d04178707665a05ca65cf636241af13d50a53"
+    }
+  ]
+}

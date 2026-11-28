@@ -1,5 +1,16 @@
+globalThis.__vhttpd_write_application_log = function(meta, level, args) {
+  const message = args.map(value => {
+    if (typeof value === "string") return value;
+    try { return JSON.stringify(value) ?? String(value); } catch (_) { return String(value); }
+  }).join(" ");
+  if (globalThis.vhttpdHost && typeof globalThis.vhttpdHost.log === "function") {
+    globalThis.vhttpdHost.log(level, message, {
+      requestId: String(meta.requestId || ""), traceId: String(meta.traceId || "")
+    });
+  }
+};
 // Parameters/results keep dbx string semantics (including its NULL => "").
-globalThis.__vhttpd_database_api = function(host) {
+globalThis.__vhttpd_database_api = function(host, meta = {}) {
   const invoke = async (op, sql, params = [], options = {}, session = "") => {
     if (!host || typeof host.database !== "function") throw Error("database_unavailable");
     const timeout = options.timeoutMs === undefined ? 30000 : Number(options.timeoutMs);
@@ -7,7 +18,7 @@ globalThis.__vhttpd_database_api = function(host) {
     if (!Array.isArray(params) || params.some(p => typeof p !== "string")) throw new TypeError("database params must be strings");
     if (options.signal != null && typeof options.signal.addEventListener !== "function") throw new TypeError("signal must be an AbortSignal");
     if ((op === "query" || op === "execute") && (typeof sql !== "string" || !sql.trim())) throw new TypeError("missing_sql");
-    const pending = host.database(JSON.stringify({op, sql: sql || "", params, timeout_ms: timeout, session_id: session}), options.signal);
+    const pending = host.database(JSON.stringify({op, sql: sql || "", params, timeout_ms: timeout, session_id: session, request_id: typeof meta.requestId === "string" ? meta.requestId : "", trace_id: typeof meta.traceId === "string" ? meta.traceId : ""}), options.signal);
     // Compatibility await pumps QuickJS timers; lane completion wakeups handle
     // detached Promises. Both paths drain the same owner-only completion queue.
     const timer = setInterval(() => host.database("__drain"), 5);
@@ -94,6 +105,13 @@ globalThis.__vhttpd_database_api = function(host) {
       }
     }
   });
+};
+
+const __vhttpd_job_registrations = new WeakMap();
+globalThis.__vhttpd_take_job_registrations = function(runtime) {
+  const jobs = __vhttpd_job_registrations.get(runtime);
+  __vhttpd_job_registrations.delete(runtime);
+  return jobs ? Array.from(jobs.values()) : [];
 };
 
 globalThis.__vhttpd_create_runtime = function(meta) {
@@ -193,7 +211,11 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       runtimeProfile: meta.runtimeProfile,
       threadCount: meta.threadCount,
       capabilities,
-      db: globalThis.__vhttpd_database_api(hostApi),
+      db: globalThis.__vhttpd_database_api(hostApi, meta),
+      takeover(request) {
+        if (!hostApi || typeof hostApi.takeover !== "function") return {handled: false};
+        return JSON.parse(String(hostApi.takeover(JSON.stringify(request))));
+      },
       request,
       upstream,
       method: meta.method,
@@ -203,19 +225,19 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       },
       log(...args) {
         if (typeof console !== "undefined" && console && typeof console.log === "function") {
-          console.log("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "info", args);
         }
       },
       warn(...args) {
         if (typeof console !== "undefined" && console && typeof console.warn === "function") {
-          console.warn("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "warn", args);
         } else {
           this.log(...args);
         }
       },
       error(...args) {
         if (typeof console !== "undefined" && console && typeof console.error === "function") {
-          console.error("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "error", args);
         } else {
           this.log(...args);
         }
@@ -563,6 +585,23 @@ globalThis.__vhttpd_create_runtime = function(meta) {
         };
       }
     };
+    if (dispatchKind === "app_startup") {
+      __vhttpd_job_registrations.set(runtime, new Map());
+      runtime.schedule = (name, intervalSeconds, handler) => {
+        const jobs = __vhttpd_job_registrations.get(runtime);
+        if (!jobs) throw new Error("job registration has closed");
+        if (typeof name !== "string" || !name.trim()) {
+          throw new TypeError("job name must be a nonempty string");
+        }
+        if (!Number.isInteger(intervalSeconds) || intervalSeconds < 1 || intervalSeconds > 2147483647) {
+          throw new RangeError("job interval must be a positive whole number of seconds");
+        }
+        if (typeof handler !== "string" || typeof globalThis.__vhttpd_job_handlers?.get(handler) !== "function") {
+          throw new TypeError("job handler must name a function exported in jobs");
+        }
+        jobs.set(name, { name, interval_seconds: intervalSeconds, handler });
+      };
+    }
     return freezeValue(runtime);
   } catch (err) {
     const errorMessage = err && typeof err === "object" && "stack" in err && err.stack
@@ -632,19 +671,19 @@ globalThis.__vhttpd_create_runtime = function(meta) {
       },
       log(...args) {
         if (typeof console !== "undefined" && console && typeof console.log === "function") {
-          console.log("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "info", args);
         }
       },
       warn(...args) {
         if (typeof console !== "undefined" && console && typeof console.warn === "function") {
-          console.warn("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "warn", args);
         } else {
           this.log(...args);
         }
       },
       error(...args) {
         if (typeof console !== "undefined" && console && typeof console.error === "function") {
-          console.error("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "error", args);
         } else {
           this.log(...args);
         }
@@ -1085,7 +1124,11 @@ globalThis.__vhttpd_create_websocket_runtime = function(meta) {
       runtimeProfile: typeof meta.runtimeProfile === "string" ? meta.runtimeProfile : "",
       threadCount: typeof meta.threadCount === "number" ? meta.threadCount : 0,
       capabilities,
-      db: globalThis.__vhttpd_database_api(hostApi),
+      db: globalThis.__vhttpd_database_api(hostApi, meta),
+      takeover(request) {
+        if (!hostApi || typeof hostApi.takeover !== "function") return {handled: false};
+        return JSON.parse(String(hostApi.takeover(JSON.stringify(request))));
+      },
       request,
       method: typeof meta.method === "string" ? meta.method : "",
       path: requestPath,
@@ -1094,19 +1137,19 @@ globalThis.__vhttpd_create_websocket_runtime = function(meta) {
       },
       log(...args) {
         if (typeof console !== "undefined" && console && typeof console.log === "function") {
-          console.log("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "info", args);
         }
       },
       warn(...args) {
         if (typeof console !== "undefined" && console && typeof console.warn === "function") {
-          console.warn("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "warn", args);
         } else {
           this.log(...args);
         }
       },
       error(...args) {
         if (typeof console !== "undefined" && console && typeof console.error === "function") {
-          console.error("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "error", args);
         } else {
           this.log(...args);
         }
@@ -1246,19 +1289,19 @@ globalThis.__vhttpd_create_websocket_runtime = function(meta) {
       },
       log(...args) {
         if (typeof console !== "undefined" && console && typeof console.log === "function") {
-          console.log("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "info", args);
         }
       },
       warn(...args) {
         if (typeof console !== "undefined" && console && typeof console.warn === "function") {
-          console.warn("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "warn", args);
         } else {
           this.log(...args);
         }
       },
       error(...args) {
         if (typeof console !== "undefined" && console && typeof console.error === "function") {
-          console.error("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+          globalThis.__vhttpd_write_application_log(this, "error", args);
         } else {
           this.log(...args);
         }
@@ -1378,19 +1421,19 @@ globalThis.__vhttpd_create_websocket_frame = function(bundle) {
     },
     log(...args) {
       if (typeof console !== "undefined" && console && typeof console.log === "function") {
-        console.log("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+        globalThis.__vhttpd_write_application_log(this, "info", args);
       }
     },
     warn(...args) {
       if (typeof console !== "undefined" && console && typeof console.warn === "function") {
-        console.warn("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+        globalThis.__vhttpd_write_application_log(this, "warn", args);
       } else {
         this.log(...args);
       }
     },
     error(...args) {
       if (typeof console !== "undefined" && console && typeof console.error === "function") {
-        console.error("[vhttpd]", this.laneId, this.requestId || "", this.traceId || "", ...args);
+        globalThis.__vhttpd_write_application_log(this, "error", args);
       } else {
         this.log(...args);
       }
@@ -1795,7 +1838,23 @@ globalThis.__vhttpd_invoke_websocket_handle = function(frame) {
   const handler = globalThis.__vhttpd_websocket_handle;
   return globalThis.__vhttpd_invoke_wrapped_handler("websocket", handler, frame);
 };
+globalThis.__vhttpd_scheduled_handle = function(runtime, job) {
+  const handler = globalThis.__vhttpd_job_handlers?.get(job.handler);
+  if (typeof handler !== "function") throw new Error("missing scheduled handler: " + job.handler);
+  return handler(runtime, job.name);
+};
+
 globalThis.__vhttpd_bind_handlers = function(exportsValue) {
+  if (exportsValue && typeof exportsValue === "object") {
+    const jobs = exportsValue.jobs ?? exportsValue.default?.jobs;
+    globalThis.__vhttpd_job_handlers = new Map();
+    if (jobs && typeof jobs === "object") {
+      for (const name of Object.keys(jobs)) {
+        const handler = globalThis.__vhttpd_bind_method(jobs, name);
+        if (handler) globalThis.__vhttpd_job_handlers.set(name, handler);
+      }
+    }
+  }
   const httpHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "http");
   const websocketHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket");
   const websocketUpstreamHandler = globalThis.__vhttpd_resolve_handler_for_kind(exportsValue, "websocket_upstream");

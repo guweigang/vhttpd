@@ -1,0 +1,365 @@
+{
+  "timestamp": "2026-11-06T01:50:20.719082+00:00",
+  "status": "passed",
+  "new_tools": [
+    "application_protocol_probe",
+    "target_protocol_probe"
+  ],
+  "registered_tools": 107,
+  "client": "installed DSH dsh-mcp-client Streamable HTTP connector against UI-launched installed Desktop; Skill loaded separately by actual DSH model, turn 18",
+  "local": {
+    "registered": 107,
+    "result": [
+      {
+        "elapsed_ms": 6,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "stream",
+        "result": {
+          "bytes": 45,
+          "content_type": "text/event-stream",
+          "events": [
+            "protocol-first",
+            "protocol-second"
+          ],
+          "sample": "data: protocol-first\n\ndata: protocol-second\n\n",
+          "sample_limit": true,
+          "status": 200
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 15,
+        "failure": "",
+        "listener": "protocol_ws",
+        "ok": true,
+        "protocol": "websocket",
+        "result": {
+          "handshake": true,
+          "messages": [
+            "echo:connected",
+            "echo:protocol-qa"
+          ],
+          "peer_closed": false,
+          "received_text": true,
+          "sample_limit": true,
+          "sent": true
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 7,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "mcp",
+        "result": {
+          "has_more": false,
+          "protocol_version": "2025-03-26",
+          "session_created": false,
+          "tool_count": 1,
+          "tools": [
+            "echo"
+          ]
+        },
+        "source": "business_protocol"
+      }
+    ],
+    "rejected": 7
+  },
+  "remote": {
+    "registered": 107,
+    "target": "a3f98d37d0a38b357d18049e",
+    "result": [
+      {
+        "elapsed_ms": 7,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "stream",
+        "result": {
+          "bytes": 45,
+          "content_type": "text/event-stream",
+          "events": [
+            "protocol-first",
+            "protocol-second"
+          ],
+          "sample": "data: protocol-first\n\ndata: protocol-second\n\n",
+          "sample_limit": true,
+          "status": 200
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 11,
+        "failure": "",
+        "listener": "protocol_ws",
+        "ok": true,
+        "protocol": "websocket",
+        "result": {
+          "handshake": true,
+          "messages": [
+            "echo:connected",
+            "echo:protocol-qa"
+          ],
+          "peer_closed": false,
+          "received_text": true,
+          "sample_limit": true,
+          "sent": true
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 6,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "mcp",
+        "result": {
+          "has_more": false,
+          "protocol_version": "2025-03-26",
+          "session_created": false,
+          "tool_count": 1,
+          "tools": [
+            "echo"
+          ]
+        },
+        "source": "business_protocol"
+      }
+    ]
+  },
+  "runtime_reuse": {
+    "local": "existing pipeqa environment, runtime 0.9.0 unchanged",
+    "remote": "existing mcp-shared-config-qa, runtime 0.9.1 unchanged",
+    "new_instance_or_hub": false,
+    "bodytest_changed": false
+  },
+  "attempts": [
+    {
+      "kind": "initial_fixture_failure",
+      "response": 503,
+      "cause": "PHP worker socket ownership mismatch in reused local runtime; isolated fixture changed to vjsx; runtime not replaced"
+    },
+    {
+      "kind": "final_remote_predispatch_rejection",
+      "cause": "existing Desktop target inspection rejected while server worker snapshot was busy",
+      "business_message_sent": false,
+      "resolution": "verified saved host connection and idle state with host_inventory_get; fresh confirmed request succeeded"
+    }
+  ],
+  "tests": {
+    "mac_socket_and_management_catalog": "passed prior to final chunk-boundary regression",
+    "linux_socket_and_tool_scope": "2 V files passed; final chunk boundary suite passed again",
+    "python_mcp_cleanup": "2 tests passed",
+    "mac_socket_and_tool_scope": "2 V files passed including chunk-boundary deadline preservation",
+    "mac_existing_management_catalog": "passed",
+    "skill_format": "passed",
+    "vfmt": "passed after formatting convergence",
+    "runtime_build": "not run; no runtime source or package changed"
+  },
+  "limits": [
+    "configuration-selected plaintext IPv4 loopback listeners only",
+    "bounded nonfragmented text WebSocket frames; no compression/binary probes",
+    "MCP initialize and tools/list at version 2025-03-26; no authentication, tools/call or full catalog pagination",
+    "SSE samples are bounded observations; business fixture finite SSE, persistent chunked behavior covered by socket regression",
+    "MCP session DELETE best effort; stateful cleanup verified in transport fixtures, DSH business MCP fixture stateless"
+  ],
+  "completed_at": "2026-11-06T02:10:54.510982+00:00",
+  "final_local": {
+    "phase": "local_passed",
+    "registered": 107,
+    "result": [
+      {
+        "elapsed_ms": 2,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "stream",
+        "result": {
+          "bytes": 45,
+          "content_type": "text/event-stream",
+          "events": [
+            "protocol-first",
+            "protocol-second"
+          ],
+          "sample": "data: protocol-first\n\ndata: protocol-second\n\n",
+          "sample_limit": true,
+          "status": 200
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 1,
+        "failure": "",
+        "listener": "protocol_ws",
+        "ok": true,
+        "protocol": "websocket",
+        "result": {
+          "handshake": true,
+          "messages": [
+            "echo:connected",
+            "echo:protocol-qa"
+          ],
+          "peer_closed": false,
+          "received_text": true,
+          "sample_limit": true,
+          "sent": true
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 4,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "mcp",
+        "result": {
+          "has_more": false,
+          "protocol_version": "2025-03-26",
+          "session_created": false,
+          "tool_count": 1,
+          "tools": [
+            "echo"
+          ]
+        },
+        "source": "business_protocol"
+      }
+    ],
+    "rejected": 7
+  },
+  "final_remote": {
+    "phase": "remote_passed",
+    "registered": 107,
+    "target": "a3f98d37d0a38b357d18049e",
+    "result": [
+      {
+        "elapsed_ms": 6,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "stream",
+        "result": {
+          "bytes": 45,
+          "content_type": "text/event-stream",
+          "events": [
+            "protocol-first",
+            "protocol-second"
+          ],
+          "sample": "data: protocol-first\n\ndata: protocol-second\n\n",
+          "sample_limit": true,
+          "status": 200
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 11,
+        "failure": "",
+        "listener": "protocol_ws",
+        "ok": true,
+        "protocol": "websocket",
+        "result": {
+          "handshake": true,
+          "messages": [
+            "echo:connected",
+            "echo:protocol-qa"
+          ],
+          "peer_closed": false,
+          "received_text": true,
+          "sample_limit": true,
+          "sent": true
+        },
+        "source": "business_protocol"
+      },
+      {
+        "elapsed_ms": 3,
+        "failure": "",
+        "listener": "protocol_http",
+        "ok": true,
+        "protocol": "mcp",
+        "result": {
+          "has_more": false,
+          "protocol_version": "2025-03-26",
+          "session_created": false,
+          "tool_count": 1,
+          "tools": [
+            "echo"
+          ]
+        },
+        "source": "business_protocol"
+      }
+    ]
+  },
+  "installed": {
+    "desktop_sha256": "3de03a57745756ac7df052c2a4a7c023243788ff75bbd87da0e3afba9af74b34",
+    "runtime_sha256": "b04ab2a8215b05377f6fd95401449b382553bcd391bfa6228a95913a29d4a714",
+    "backup": "/private/tmp/vhttpd-update-qa.54t2tU/Workbench Before Protocol Probes.app",
+    "codesign": "strict verified"
+  },
+  "target_confirmation_verified": true,
+  "cleanup": {
+    "local": {
+      "root_sha256": "29b52e33b90a1ffb80ced5d508abad860d6959a71c63f7a3289a44b35c20e291",
+      "root_bytes_restored": true,
+      "fixture_removed": true,
+      "ports_closed": [
+        49934,
+        55301,
+        55302,
+        55303,
+        55304
+      ],
+      "control_credential_absent_from_responses": true
+    },
+    "remote": {
+      "root_sha256": "13353a3a9a31618867f472fb124913368c28a2160807b57016f8cbdeebc05f62",
+      "root_bytes_restored": true,
+      "fixture_removed": true,
+      "ports_closed": [
+        55171,
+        55172,
+        55173,
+        55174
+      ],
+      "control_credential_absent_from_responses": true
+    },
+    "mcp_closed": true,
+    "credential_file_removed": true,
+    "temporary_ssh_listener_stopped": true,
+    "test_authorized_key_cleared": true,
+    "original_default": "UI running, 0 applications, PID 68127",
+    "prior_default_pid": 57738,
+    "prior_default_resolution": "same previous-task config and executable verified; normal SIGTERM; restarted through updated Desktop"
+  },
+  "linux_validation": {
+    "vhttpd_path": "/Users/guweigang/Source/vhttpd",
+    "host_and_vm_branch": "feature/desktop-workbench",
+    "tested_workspace_head_before_final_doc_update": "d502e3f637c959f6ed887172fc7816809683625a",
+    "compiler": "/home/guweigang/v/v",
+    "version": "0.5.2 d13ccdd",
+    "compiler_branch": "local-dev",
+    "compiler_status": "clean",
+    "cc": "gcc",
+    "gc": "none",
+    "nocache": true,
+    "vjsx_root": "/home/guweigang/vhttpd-db-probe-qa/vjsx",
+    "vjsx_commit": "259620f1981a3573777ec8cda72883b1866404a7",
+    "vjsx_tracked_status": "clean",
+    "quickjs_root": "/home/guweigang/vhttpd-linux-deps/.deps/quickjs",
+    "dependencies": "reused; no installation or changes",
+    "tests": [
+      "desktop/host/protocol_probe_test.v",
+      "desktop/devmcp/protocol_probe_test.v"
+    ],
+    "command": "VJS_QUICKJS_PATH=/home/guweigang/vhttpd-linux-deps/.deps/quickjs /home/guweigang/v/v -cc gcc -gc none -nocache -w -enable-globals -d build_quickjs -path /Users/guweigang/Source/vhttpd/desktop|/Users/guweigang/Source/vhttpd/src|/home/guweigang/vhttpd-db-probe-qa|@vlib|@vmodules test <test files>",
+    "host_and_vm_final_status": "existing dirty mounted worktree preserved plus this batch changes; snapshots in QA directory and /tmp/vhttpd-protocol-probe-final-status",
+    "skipped": "full runtime rebuild/E2E and Windows not run; targeted host transport/tools changed, existing runtime exercised through DSH"
+  },
+  "checks": {
+    "scoped_dead_links": [],
+    "markdown_lint_ran": [],
+    "markdown_note": "No configured lint checks ran; not claimed as lint coverage",
+    "vfmt": "passed",
+    "diff_check": "passed"
+  }
+}

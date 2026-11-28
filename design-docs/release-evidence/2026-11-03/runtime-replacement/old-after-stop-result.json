@@ -1,0 +1,149 @@
+{
+  "status": "failed",
+  "started_utc": "2026-11-02T14:47:27Z",
+  "duration_seconds": 87600,
+  "build_info": {
+    "gc": "boehm",
+    "gc_enabled": true,
+    "version": "0.9.0"
+  },
+  "binary": "/root/vhttpd-release-tests/20261102-fixed5/package/vhttpd",
+  "binary_sha256": "36884c13ad7c03ea66d70e8a561e5a865986e6b34df8dcbaa85ac1ced0ec0080",
+  "scope": "isolated HTTP JSON and Paseo reconnect/text/binary; no DB/providers/production traffic",
+  "workload": "mixed",
+  "http_variant": "json",
+  "signature_mode": "isolated",
+  "http_target_rps": 40,
+  "http_concurrency": 4,
+  "paseo_cycle_interval_seconds": 2,
+  "sample_seconds": 10,
+  "host_available_min_kib": 262144,
+  "cgroup_required_memory_max_bytes": 536870912,
+  "http_port": 59841,
+  "ws_port": 48295,
+  "observed_pid": 9303,
+  "http_ok": 1625627,
+  "http_errors": 0,
+  "paseo_ok": 19821,
+  "paseo_errors": 0,
+  "latency_buckets_ms": {
+    "10": 1613043,
+    "50": 12401,
+    "100": 177,
+    "500": 6,
+    "1000": 0,
+    "over1000": 0
+  },
+  "max_latency_ms": 235.229,
+  "recent_errors": [],
+  "samples": 4131,
+  "log_rotation_count": 12,
+  "cgroup": "/sys/fs/cgroup/system.slice/vhttpd-soak-fixed5-24h-20261102.service",
+  "baseline_seconds": 600,
+  "cooldown_seconds": 600,
+  "load_duration_seconds": 86400,
+  "runtime_pid": 108824,
+  "phase": "load",
+  "elapsed_seconds": 41318.0,
+  "rss_growth_diagnostic_kib": 134036,
+  "failure": null,
+  "interrupted_signals": [
+    15
+  ],
+  "ended_utc": "2026-11-03T02:16:09Z",
+  "last_samples": [
+    {
+      "elapsed_seconds": 41288.0,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 200436,
+        "VmRSS": 200196,
+        "RssAnon": 189748,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 362702,
+        "start_ticks": 5375404
+      },
+      "host_available_kib": 621044,
+      "cgroup_memory_bytes": 271167488,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 249888,
+        "RssAnon": 242748,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 827031,
+        "start_ticks": 601054
+      },
+      "http_ok": 1624556,
+      "http_errors": 0,
+      "paseo_ok": 19808,
+      "paseo_errors": 0
+    },
+    {
+      "elapsed_seconds": 41298.0,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 200436,
+        "VmRSS": 200196,
+        "RssAnon": 189748,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 362798,
+        "start_ticks": 5375404
+      },
+      "host_available_kib": 621212,
+      "cgroup_memory_bytes": 271572992,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 249888,
+        "RssAnon": 242748,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 827119,
+        "start_ticks": 601054
+      },
+      "http_ok": 1624956,
+      "http_errors": 0,
+      "paseo_ok": 19813,
+      "paseo_errors": 0
+    },
+    {
+      "elapsed_seconds": 41308.0,
+      "phase": "load",
+      "runtime": {
+        "VmHWM": 200472,
+        "VmRSS": 200184,
+        "RssAnon": 189736,
+        "VmSwap": 0,
+        "Threads": 22,
+        "fd_count": 22,
+        "cpu_ticks": 362895,
+        "start_ticks": 5375404
+      },
+      "host_available_kib": 621684,
+      "cgroup_memory_bytes": 271470592,
+      "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "existing_runtime": {
+        "VmHWM": 288076,
+        "VmRSS": 249888,
+        "RssAnon": 242748,
+        "VmSwap": 0,
+        "Threads": 24,
+        "fd_count": 29,
+        "cpu_ticks": 827206,
+        "start_ticks": 601054
+      },
+      "http_ok": 1625356,
+      "http_errors": 0,
+      "paseo_ok": 19818,
+      "paseo_errors": 0
+    }
+  ]
+}

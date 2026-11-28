@@ -1,0 +1,9 @@
+VJS_QUICKJS_PATH="/Users/guweigang/Source/vhttpd/.deps/quickjs" v -cc cc -d build_quickjs -d vjsx_sqlite -path "/Users/guweigang/Source/vhttpd/.runtime/release-090-preflight/source|/Users/guweigang/Source/vhttpd/.deps|@vlib|@vmodules" -d use_openssl -enable-globals -d enable_db -gc boehm -prod -nocache -o /Users/guweigang/Source/vhttpd/.runtime/release-090-preflight/vhttpd /Users/guweigang/Source/vhttpd/.runtime/release-090-preflight/source
+.runtime/release-090-preflight/source/runtime_upgrade/deployment.v:130:4: notice: unused function: `read_application_manifest`
+  128 | }
+  129 | 
+  130 | fn read_application_manifest(project string) !string {
+      |    ~~~~~~~~~~~~~~~~~~~~~~~~~
+  131 |  return read_deployment_manifest(project,'')
+  132 | }
+Verified actual runtime: Boehm GC enabled

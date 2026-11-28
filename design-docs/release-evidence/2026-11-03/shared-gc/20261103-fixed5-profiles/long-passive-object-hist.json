@@ -1,0 +1,322 @@
+{
+  "pid": 108824,
+  "method": "read-only /proc/mem GC mark bits using offsets verified from exact binary disassembly; non-atomic live sample, no ptrace/stop/injected calls",
+  "duration_seconds": 0.8618788680032594,
+  "blocks": 22842,
+  "skipped": 0,
+  "marked_bytes": 53027984,
+  "top_sizes": [
+    {
+      "kind": 1,
+      "object_size": 208,
+      "count": 54887,
+      "bytes": 11416496
+    },
+    {
+      "kind": 1,
+      "object_size": 176,
+      "count": 55390,
+      "bytes": 9748640
+    },
+    {
+      "kind": 0,
+      "object_size": 160,
+      "count": 54510,
+      "bytes": 8721600
+    },
+    {
+      "kind": 2,
+      "object_size": 80,
+      "count": 107572,
+      "bytes": 8605760
+    },
+    {
+      "kind": 2,
+      "object_size": 96,
+      "count": 53818,
+      "bytes": 5166528
+    },
+    {
+      "kind": 1,
+      "object_size": 80,
+      "count": 54894,
+      "bytes": 4391520
+    },
+    {
+      "kind": 2,
+      "object_size": 16,
+      "count": 83860,
+      "bytes": 1341760
+    },
+    {
+      "kind": 1,
+      "object_size": 160,
+      "count": 1604,
+      "bytes": 256640
+    },
+    {
+      "kind": 1,
+      "object_size": 42512,
+      "count": 6,
+      "bytes": 255072
+    },
+    {
+      "kind": 0,
+      "object_size": 32,
+      "count": 6427,
+      "bytes": 205664
+    },
+    {
+      "kind": 0,
+      "object_size": 16,
+      "count": 11786,
+      "bytes": 188576
+    },
+    {
+      "kind": 0,
+      "object_size": 16416,
+      "count": 11,
+      "bytes": 180576
+    },
+    {
+      "kind": 1,
+      "object_size": 672,
+      "count": 260,
+      "bytes": 174720
+    },
+    {
+      "kind": 1,
+      "object_size": 1344,
+      "count": 125,
+      "bytes": 168000
+    },
+    {
+      "kind": 1,
+      "object_size": 8736,
+      "count": 16,
+      "bytes": 139776
+    },
+    {
+      "kind": 0,
+      "object_size": 64,
+      "count": 2152,
+      "bytes": 137728
+    },
+    {
+      "kind": 1,
+      "object_size": 67616,
+      "count": 2,
+      "bytes": 135232
+    },
+    {
+      "kind": 1,
+      "object_size": 512,
+      "count": 189,
+      "bytes": 96768
+    },
+    {
+      "kind": 0,
+      "object_size": 8224,
+      "count": 11,
+      "bytes": 90464
+    },
+    {
+      "kind": 1,
+      "object_size": 4384,
+      "count": 20,
+      "bytes": 87680
+    },
+    {
+      "kind": 1,
+      "object_size": 71344,
+      "count": 1,
+      "bytes": 71344
+    },
+    {
+      "kind": 1,
+      "object_size": 2048,
+      "count": 34,
+      "bytes": 69632
+    },
+    {
+      "kind": 1,
+      "object_size": 32,
+      "count": 1840,
+      "bytes": 58880
+    },
+    {
+      "kind": 1,
+      "object_size": 9360,
+      "count": 6,
+      "bytes": 56160
+    },
+    {
+      "kind": 0,
+      "object_size": 48,
+      "count": 1157,
+      "bytes": 55536
+    }
+  ],
+  "top_maps": [
+    {
+      "address": "0x7fac9f1dad10",
+      "key_bytes": 24,
+      "value_bytes": 4,
+      "count": 2030,
+      "dense_len": 2030,
+      "cap": 2113
+    },
+    {
+      "address": "0x7fac9d7112c0",
+      "key_bytes": 24,
+      "value_bytes": 48,
+      "count": 1467,
+      "dense_len": 1467,
+      "cap": 1486
+    },
+    {
+      "address": "0x7fac9f1da790",
+      "key_bytes": 8,
+      "value_bytes": 32,
+      "count": 1466,
+      "dense_len": 1466,
+      "cap": 1486
+    },
+    {
+      "address": "0x7fac9f1ffd10",
+      "key_bytes": 8,
+      "value_bytes": 8,
+      "count": 257,
+      "dense_len": 257,
+      "cap": 257
+    },
+    {
+      "address": "0x7fac9f1ffdc0",
+      "key_bytes": 24,
+      "value_bytes": 4,
+      "count": 102,
+      "dense_len": 102,
+      "cap": 102
+    },
+    {
+      "address": "0x7fac9d64ba50",
+      "key_bytes": 8,
+      "value_bytes": 136,
+      "count": 91,
+      "dense_len": 116,
+      "cap": 127
+    },
+    {
+      "address": "0x7fac9f1daa50",
+      "key_bytes": 24,
+      "value_bytes": 24,
+      "count": 83,
+      "dense_len": 83,
+      "cap": 91
+    },
+    {
+      "address": "0x7fac9efed8f0",
+      "key_bytes": 24,
+      "value_bytes": 336,
+      "count": 66,
+      "dense_len": 66,
+      "cap": 72
+    },
+    {
+      "address": "0x7fac9f17f840",
+      "key_bytes": 24,
+      "value_bytes": 336,
+      "count": 66,
+      "dense_len": 66,
+      "cap": 72
+    },
+    {
+      "address": "0x7fac9f1ff370",
+      "key_bytes": 8,
+      "value_bytes": 8,
+      "count": 35,
+      "dense_len": 35,
+      "cap": 37
+    },
+    {
+      "address": "0x7fac9efe4420",
+      "key_bytes": 24,
+      "value_bytes": 1,
+      "count": 22,
+      "dense_len": 22,
+      "cap": 22
+    },
+    {
+      "address": "0x7fac9f125a50",
+      "key_bytes": 24,
+      "value_bytes": 1,
+      "count": 22,
+      "dense_len": 22,
+      "cap": 22
+    },
+    {
+      "address": "0x7fac9f1ff160",
+      "key_bytes": 24,
+      "value_bytes": 8,
+      "count": 12,
+      "dense_len": 12,
+      "cap": 12
+    },
+    {
+      "address": "0x7fac9efe9f20",
+      "key_bytes": 24,
+      "value_bytes": 8,
+      "count": 10,
+      "dense_len": 19,
+      "cap": 20
+    },
+    {
+      "address": "0x7fac9f1462c0",
+      "key_bytes": 24,
+      "value_bytes": 184,
+      "count": 8,
+      "dense_len": 8,
+      "cap": 8
+    },
+    {
+      "address": "0x7fac9f1ff630",
+      "key_bytes": 8,
+      "value_bytes": 4,
+      "count": 8,
+      "dense_len": 8,
+      "cap": 8
+    },
+    {
+      "address": "0x7fac9f00ba50",
+      "key_bytes": 24,
+      "value_bytes": 1,
+      "count": 7,
+      "dense_len": 7,
+      "cap": 8
+    },
+    {
+      "address": "0x7fac9f033e70",
+      "key_bytes": 24,
+      "value_bytes": 1,
+      "count": 7,
+      "dense_len": 7,
+      "cap": 8
+    },
+    {
+      "address": "0x7fac9f084e70",
+      "key_bytes": 24,
+      "value_bytes": 1,
+      "count": 7,
+      "dense_len": 7,
+      "cap": 8
+    },
+    {
+      "address": "0x7fac9f09bc60",
+      "key_bytes": 24,
+      "value_bytes": 1,
+      "count": 7,
+      "dense_len": 7,
+      "cap": 8
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "directory": "/root/vhttpd-release-tests/20261109-source-four-runtime",
+    "status": "excluded",
+    "reason": "Harness SyntaxError before runtime start."
+  },
+  {
+    "directory": "/root/vhttpd-release-tests/20261109-source-four-runtime-v2",
+    "status": "excluded",
+    "reason": "Harness used ordinary 12s timeout for a deliberate 35s held request; diagnostic-only cleanup required SIGKILL after 15s. Not a runtime regression or pressure acceptance."
+  },
+  {
+    "directory": "/root/vhttpd-release-tests/20261109-source-four-runtime-v3",
+    "status": "excluded",
+    "reason": "Four configured engines produced seven measured source refresh threads instead of target four. Diagnostic-only unit deliberately stopped and whole run excluded. v4 two-component layout measured four threads and baseline 3.17MiB/s vs business about3.10MiB/s."
+  }
+]

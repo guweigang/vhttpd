@@ -1,13 +1,21 @@
 module ws
 
 import net
+import socket_runtime
 import net.websocket
 import sync
 import time
 
-#include <fcntl.h>
+#include "@VMODROOT/src/ws/handshake_callback_scope.h"
+#flag @VMODROOT/src/ws/handshake_callback_scope.c
 
-fn C.fcntl(int, int, ...voidptr) int
+fn C.vhttpd_ws_handshake_set(voidptr)
+fn C.vhttpd_ws_handshake_get() voidptr
+
+$if gcboehm ? {
+	#include <gc/gc.h>
+	fn C.GC_reachable_here(voidptr)
+}
 
 // Sessions and asynchronous writes reserve before spawn. Only the serving
 // scope closes original sockets; cancellation owns separate CLOEXEC handles.
@@ -29,6 +37,7 @@ mut:
 	stopping bool
 	done     bool
 	handles  []int
+	tls      bool
 }
 
 pub fn (mut owner IngressOwner) reserve() ?&IngressRun {
@@ -42,18 +51,20 @@ pub fn (mut owner IngressOwner) reserve() ?&IngressRun {
 }
 
 pub fn (mut run IngressRun) attach(fd int) bool {
+	return run.attach_socket(fd, false)
+}
+
+pub fn (mut run IngressRun) attach_tls(fd int) bool {
+	return run.attach_socket(fd, true)
+}
+
+fn (mut run IngressRun) attach_socket(fd int, tls bool) bool {
 	run.mu.@lock()
 	defer { run.mu.unlock() }
 	if run.stopping || run.done { return false }
-	owned := C.fcntl(fd, C.F_DUPFD_CLOEXEC, 0)
-	if owned < 0 { return false }
-	// Protect the caller-owned socket too before publishing this attachment.
-	flags := C.fcntl(fd, C.F_GETFD, 0)
-	if flags < 0 || C.fcntl(fd, C.F_SETFD, flags | C.FD_CLOEXEC) < 0 {
-		net.close(owned) or {}
-		return false
-	}
+	owned := socket_runtime.retain(fd) or { return false }
 	run.handles << owned
+	run.tls = run.tls || tls
 	return true
 }
 
@@ -61,7 +72,7 @@ pub fn (mut run IngressRun) child() ?&IngressRun {
 	mut owner := run.owner
 	mut task := owner.reserve() or { return none }
 	run.mu.@lock()
-	attached := !run.stopping && !run.done && run.handles.len > 0 && task.attach(run.handles[0])
+	attached := !run.stopping && !run.done && run.handles.len > 0 && task.attach_socket(run.handles[0], run.tls)
 	run.mu.unlock()
 	if !attached {
 		task.finish()
@@ -136,11 +147,11 @@ fn (run &IngressRun) writer_conn() &net.TcpConn {
 }
 
 fn (mut run IngressRun) write_client_close(client &websocket.Client, code int, reason string) {
-	if run.stopped() || client.is_ssl { return }
+	if run.stopped() || (client.is_ssl && !run.tls) { return }
 	// This immutable pre-listen snapshot retains the shared write lock/state and protocol role.
 	// Only the writer's TCP reference changes; it never closes the native Client.
 	mut writer := *client
-	writer.conn = run.writer_conn()
+	if !run.tls { writer.conn = run.writer_conn() }
 	text := if reason.len <= 123 { reason } else { '' }
 	mut payload := [u8(code >> 8), u8(code & 255)]
 	payload << text.bytes()
@@ -151,23 +162,46 @@ fn (mut run IngressRun) write_client_close(client &websocket.Client, code int, r
 // publication in on_attached, after the upgrade response succeeds.
 pub fn managed_server() (&websocket.Server, &HandshakeClient) {
 	mut server := websocket.new_server(.ip, 0, '')
-	mut captured := &HandshakeClient{}
-	server.on_connect(fn [mut captured] (mut sc websocket.ServerClient) !bool {
-		captured.client = sc.client
-		return true
-	}) or { panic(err) }
-	return server, captured
+	server.on_connect(managed_capture_client) or { panic(err) }
+	return server, &HandshakeClient{}
+}
+
+// The accept hook runs synchronously inside handle_handshake. A static hook
+// avoids a native closure retaining every completed client's buffer/callbacks.
+fn managed_capture_client(mut sc websocket.ServerClient) !bool {
+	ref := C.vhttpd_ws_handshake_get()
+	if ref == unsafe { nil } { return false }
+	mut captured := unsafe { &HandshakeClient(ref) }
+	captured.client = sc.client
+	return true
 }
 
 pub fn managed_handshake(mut server websocket.Server, mut conn net.TcpConn, key string, captured &HandshakeClient) ! {
+	mut ingress := IngressConnection.tcp(conn)
+	managed_ingress_handshake(mut server, mut ingress, key, captured)!
+}
+
+pub fn managed_ingress_handshake(mut server websocket.Server, mut conn IngressConnection, key string, captured &HandshakeClient) ! {
+	previous := C.vhttpd_ws_handshake_get()
+	C.vhttpd_ws_handshake_set(voidptr(captured))
 	defer {
-		if mut client := captured.client {
-			if client.get_state() == .open { client.close(1000, 'session ended') or {} }
+		mut owner := unsafe { captured }
+		if mut client := owner.client {
+			// close() prepares a TLS context for a possible reconnect, including
+			// plain ws:// clients. This accepted client will never reconnect.
+			client.dispose()
 		} else {
 			conn.close() or {}
 		}
+		owner.client = none
+		C.vhttpd_ws_handshake_set(previous)
+		// C thread-local pointers are not Boehm roots. Keep the V owner live
+		// through the entire synchronous handshake and its cleanup.
+		$if gcboehm ? {
+			C.GC_reachable_here(voidptr(captured))
+		}
 	}
-	server.handle_handshake(mut conn, key)!
+	conn.handshake(mut server, key)!
 }
 
 @[heap]

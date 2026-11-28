@@ -31,14 +31,12 @@ fn (e InProcVjsxExecutor) resolve_websocket_affinity_on_lane(mut app EmbeddedHos
 	host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.context()
-	runtime_meta := e.websocket_runtime_meta(lane, frame)
-	mut js_runtime := InProcVjsxWebSocketJs.runtime(ctx, runtime_meta,
-		app.get_runtime_config_json(), mut app)
+	// Routing queries need the same JS-owned facade as event callbacks;
+	// native per-query closures retain the query context after the frame dies.
+	mut js_runtime, mut js_frame := InProcVjsxWebSocketCallback.build_payload(ctx,
+		e.websocket_callback_input(lane, frame), app.get_runtime_config_json(), mut app)
 	defer {
 		js_runtime.free()
-	}
-	mut js_frame := InProcVjsxWebSocketJs.frame(ctx, frame, js_runtime)
-	defer {
 		js_frame.free()
 	}
 	mut result := host.call_entry('websocket_affinity', js_frame) or {
@@ -103,14 +101,12 @@ fn (e InProcVjsxExecutor) resolve_websocket_actor_on_lane(mut app EmbeddedHost, 
 	host := state.hosts[idx]
 	state.mu.unlock()
 	ctx := host.context()
-	runtime_meta := e.websocket_runtime_meta(lane, frame)
-	mut js_runtime := InProcVjsxWebSocketJs.runtime(ctx, runtime_meta,
-		app.get_runtime_config_json(), mut app)
+	// Routing queries need the same JS-owned facade as event callbacks;
+	// native per-query closures retain the query context after the frame dies.
+	mut js_runtime, mut js_frame := InProcVjsxWebSocketCallback.build_payload(ctx,
+		e.websocket_callback_input(lane, frame), app.get_runtime_config_json(), mut app)
 	defer {
 		js_runtime.free()
-	}
-	mut js_frame := InProcVjsxWebSocketJs.frame(ctx, frame, js_runtime)
-	defer {
 		js_frame.free()
 	}
 	mut result := host.call_entry('websocket_actor', js_frame) or {

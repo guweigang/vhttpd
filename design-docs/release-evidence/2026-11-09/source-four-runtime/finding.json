@@ -1,0 +1,103 @@
+{
+  "status": "Source-allocation reduction demonstrated; resident-memory improvement not accepted. This turn incremental traversal/membership reuse reverted. Business untouched.",
+  "experiment": {
+    "main": "old-new-new-old, two repeats each",
+    "incremental_control": "one prior-cache package run after main naturally completed",
+    "per_case_seconds": {
+      "baseline": 60,
+      "load": 240,
+      "cooldown": 300
+    },
+    "workload": "80 RPS synthetic JSON HTTP with POST payloads and expected503 responses, one official Paseo verification cycle each2s",
+    "configuration": "Two source roots with real metadata paths/sizes mirrored; two components, each one configured lane; actual four QuickJS runtimes and four refresh threads verified. Synthetic source contents and handler; no DB/providers or real business replay.",
+    "limits": {
+      "memory_bytes": 268435456,
+      "cpu_quota_percent_of_one_core": 30,
+      "swap_bytes": 0,
+      "start_gate_available_mib": 640,
+      "host_stop_guard_available_mib": 512,
+      "lowest_observed_host_available_kib": 711228
+    },
+    "http_verified": 95577,
+    "paseo_verified": 577,
+    "errors": 0,
+    "oom": false,
+    "idle_gc_during_sustained_load": false,
+    "long_held_request_and_resume_guards": "passed"
+  },
+  "summary_medians": {
+    "old": {
+      "background_alloc_mib_s": [
+        3.1638984411707005,
+        3.220311635076997
+      ],
+      "pressure_anon_mib": [
+        40.4375,
+        43.494140625
+      ],
+      "cold_anon_mib": [
+        32.927734375,
+        33.2109375
+      ]
+    },
+    "rejected_new": {
+      "background_alloc_mib_s": [
+        0.07500214108770145,
+        0.07536280954613958
+      ],
+      "pressure_anon_mib": [
+        59.935546875,
+        67.357421875
+      ],
+      "cold_anon_mib": [
+        34.615234375,
+        41.6875
+      ]
+    },
+    "prior_cache_control": {
+      "background_alloc_mib_s": 0.08042010246682578,
+      "pressure_anon_mib": 49.98046875,
+      "cold_anon_mib": 30.23046875
+    }
+  },
+  "final_source_decision": {
+    "decision": "Do not retain this increment. Roll back only this turn scanner traversal/membership reuse; keep prior directory cache and added semantic regression.",
+    "reason": "Microbenchmark saves only 3.25% beyond prior cache; new whole-package pressure anonymous 59.94-67.36 MiB vs prior-cache single control49.98 MiB. Conservative rejection; exact root not established and control has only one repeat.",
+    "rejected_binary_sha256": "767456d29dec7b7b19badcb91dcdf00994a1fb0db47a2d79c0154d9339553d70",
+    "restored_scanner_sha256": "041e89551cbd5c180bfba82684c6631a294c08c3ab4d59b8edaf099a30c42cc5",
+    "business_changed": false,
+    "no_new_vlang_vjsx_changes": true
+  },
+  "protected_business": {
+    "utc": "2026-11-09T10:42:12Z",
+    "pid": 3730524,
+    "start_ticks": 39645663,
+    "binary_sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+    "memory": {
+      "VmRSS": "139596 kB",
+      "RssAnon": "129344 kB",
+      "VmSwap": "0 kB",
+      "Threads": "29",
+      "TracerPid": "0"
+    },
+    "health": {
+      "19887": 200,
+      "19901": 200,
+      "19987": 200
+    },
+    "MemAvailable_kib": 891212,
+    "units": {
+      "vhttpd-source-four-runtime-v4-20261109.service": "inactive",
+      "vhttpd-source-four-runtime-control-20261109.service": "inactive",
+      "vhttpd-bodytest-memory-observer-20261108.service": "active"
+    }
+  },
+  "limitations": [
+    "Main package comparison also includes previously developed HTTP observation and idle GC changes; whole-package RSS effects cannot be assigned solely to scanner changes.",
+    "Prior-cache control has one repeat; concrete root of larger pool geometry is not proven. Increment rejected conservatively for negligible extra allocation savings and no demonstrated resident benefit.",
+    "Cooldown minus baseline includes bounded histories, caches and collector geometry; not a leak measurement.",
+    "Read-only concurrent allocator metadata is approximate. GC free accounting is not resident bytes, QuickJS logical malloc accounting is not RSS.",
+    "No 24-hour, high-concurrency stress, full business or Windows release acceptance."
+  ],
+  "next_step": "Separate inherited idle-GC and HTTP-observation changes against an identical scanner baseline; attribute extra mapped/retained GC and libc pages before a new release candidate."
+}

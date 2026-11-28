@@ -23,9 +23,26 @@ const vjsx_signature_source_exts = ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts'
 
 struct VjsxHostSignature {}
 
-fn VjsxHostSignature.file_hash(path string) string {
-	bytes := os.read_bytes(path) or { return 'read_error' }
-	return fnv1a.sum64_string(bytes.bytestr()).hex()
+struct VjsxSignatureFile {
+	path string
+	rel  string
+}
+
+fn VjsxHostSignature.file_hash(path string, mut buffer []u8) string {
+	mut file := os.open(path) or { return 'read_error' }
+	defer { file.close() }
+	mut hash := u64(14695981039346656037)
+	for {
+		count := file.read(mut buffer) or {
+			if err is os.Eof { break }
+			return 'read_error'
+		}
+		if count == 0 { break }
+		for byte in buffer[..count] {
+			hash = (hash ^ u64(byte)) * u64(1099511628211)
+		}
+	}
+	return hash.hex()
 }
 
 fn VjsxHostSignature.normalize_glob(raw string) string {
@@ -157,74 +174,82 @@ fn VjsxHostSignature.path_matches(rel_path string, pattern string) bool {
 	return VjsxHostSignature.match_segments(path_segments, pattern_segments)
 }
 
-fn VjsxHostSignature.collect_files(_root string, current string, mut out []string) {
+fn VjsxHostSignature.collect_files(current string, mut out []string) {
 	entries := os.ls(current) or { return }
 	for entry in entries {
 		path := os.join_path(current, entry)
 		if os.is_dir(path) && !os.is_link(path) {
-			VjsxHostSignature.collect_files(_root, path, mut out)
+			VjsxHostSignature.collect_files(path, mut out)
 			continue
 		}
 		if os.is_dir(path) {
 			continue
 		}
-		out << os.abs_path(path)
+		out << path
 	}
 }
 
-fn VjsxHostSignature.expand_globs(root string, globs []string) []string {
-	if root.trim_space() == '' || !os.exists(root) {
-		return []string{}
+fn VjsxHostSignature.glob_segments(globs []string) [][]string {
+	mut patterns := [][]string{}
+	for glob in globs {
+		normalized := VjsxHostSignature.normalize_glob(glob)
+		if normalized != '' { patterns << normalized.split('/') }
 	}
+	return patterns
+}
+
+fn VjsxHostSignature.matches_any(segments []string, patterns [][]string) bool {
+	for pattern in patterns {
+		if VjsxHostSignature.match_segments(segments, pattern) { return true }
+	}
+	return false
+}
+
+fn VjsxHostSignature.matching_files(root string, includes []string, excludes []string) []VjsxSignatureFile {
+	if root.trim_space() == '' || !os.exists(root) {
+		return []VjsxSignatureFile{}
+	}
+	root_abs := os.abs_path(root)
+	prefix := root_abs.trim_right(os.path_separator) + os.path_separator
+	include_patterns := VjsxHostSignature.glob_segments(includes)
+	exclude_patterns := VjsxHostSignature.glob_segments(excludes)
 	mut files := []string{}
-	VjsxHostSignature.collect_files(root, root, mut files)
-	mut matches := map[string]bool{}
-	for raw_path in files {
-		path := os.abs_path(raw_path)
+	VjsxHostSignature.collect_files(root_abs, mut files)
+	files.sort()
+	mut matches := []VjsxSignatureFile{}
+	for path in files {
 		if !os.exists(path) || os.is_dir(path) {
 			continue
 		}
-		rel := VjsxHostSignature.normalize_rel_path(VjsxHostPath.relative(root, path))
+		// Traversal starts at the normalized absolute root, so each file already
+		// has that prefix. Avoid resolving the working directory for every file.
+		rel := VjsxHostSignature.normalize_rel_path(path[prefix.len..])
 		if rel == '' {
 			continue
 		}
-		for pattern in globs {
-			normalized := VjsxHostSignature.normalize_glob(pattern)
-			if normalized == '' {
-				continue
-			}
-			if VjsxHostSignature.path_matches(rel, normalized) {
-				matches[path] = true
-				break
-			}
+		segments := rel.split('/')
+		if VjsxHostSignature.matches_any(segments, include_patterns)
+			&& !VjsxHostSignature.matches_any(segments, exclude_patterns) {
+			matches << VjsxSignatureFile{ path: path, rel: rel }
 		}
 	}
-	mut out := matches.keys()
-	out.sort()
-	return out
+	return matches
+}
+
+fn VjsxHostSignature.expand_globs(root string, globs []string) []string {
+	return VjsxHostSignature.matching_files(root, globs, []string{}).map(it.path)
 }
 
 fn VjsxHostSignature.collect_source_signature(root string, include_globs []string, exclude_globs []string, mut rows []string) {
 	if root.trim_space() == '' || !os.exists(root) {
 		return
 	}
-	include_matches := VjsxHostSignature.expand_globs(root,
-		VjsxHostSignature.glob_patterns(include_globs))
-	exclude_matches := VjsxHostSignature.expand_globs(root, exclude_globs)
-	mut exclude_set := map[string]bool{}
-	for path in exclude_matches {
-		exclude_set[path] = true
-	}
-	for path in include_matches {
-		if path in exclude_set {
-			continue
-		}
-		rel := VjsxHostSignature.normalize_rel_path(VjsxHostPath.relative(root, path))
-		if rel == '' {
-			continue
-		}
-		st := os.stat(path) or { continue }
-		rows << '${rel}:${st.mtime}:${st.size}:${VjsxHostSignature.file_hash(path)}'
+	files := VjsxHostSignature.matching_files(root,
+		VjsxHostSignature.glob_patterns(include_globs), exclude_globs)
+	mut buffer := []u8{len: 65536}
+	for file in files {
+		st := os.stat(file.path) or { continue }
+		rows << '${file.rel}:${st.mtime}:${st.size}:${VjsxHostSignature.file_hash(file.path, mut buffer)}'
 	}
 }
 
@@ -232,23 +257,11 @@ fn VjsxHostSignature.collect_source_probe(root string, include_globs []string, e
 	if root.trim_space() == '' || !os.exists(root) {
 		return
 	}
-	include_matches := VjsxHostSignature.expand_globs(root,
-		VjsxHostSignature.glob_patterns(include_globs))
-	exclude_matches := VjsxHostSignature.expand_globs(root, exclude_globs)
-	mut exclude_set := map[string]bool{}
-	for path in exclude_matches {
-		exclude_set[path] = true
-	}
-	for path in include_matches {
-		if path in exclude_set {
-			continue
-		}
-		rel := VjsxHostSignature.normalize_rel_path(VjsxHostPath.relative(root, path))
-		if rel == '' {
-			continue
-		}
-		st := os.stat(path) or { continue }
-		rows << '${rel}:${st.mtime}:${st.size}'
+	files := VjsxHostSignature.matching_files(root,
+		VjsxHostSignature.glob_patterns(include_globs), exclude_globs)
+	for file in files {
+		st := os.stat(file.path) or { continue }
+		rows << '${file.rel}:${st.mtime}:${st.size}'
 	}
 }
 

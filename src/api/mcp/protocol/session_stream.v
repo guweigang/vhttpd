@@ -1,12 +1,11 @@
 module protocol
 
 import net
+import socket_runtime
 import sync
 import time
 
-#include <fcntl.h>
 
-fn C.fcntl(fd i32, cmd i32, arg ...voidptr) i32
 
 // One transferred TCP connection, independent of the session ID that routes to it.
 // Only finish_stream closes it; cancellation uses an owned duplicate so a late
@@ -95,14 +94,10 @@ pub fn (mut s McpState) attach_stream(session_id string, conn &net.TcpConn) !&Se
 	mut session := s.sessions[session_id] or { return error('mcp_session_missing') }
 	now := time.now().unix()
 	if s.expire_session_locked(session_id, now) { return error('mcp_session_missing') }
-	fd := C.fcntl(conn.sock.handle, C.F_DUPFD_CLOEXEC, 0)
-	if fd < 0 { return error('mcp_stream_interrupt_failed') }
-	// The accepted socket also stays live until the stream owner finishes it.
-	flags := C.fcntl(conn.sock.handle, C.F_GETFD, 0)
-	if flags < 0 || C.fcntl(conn.sock.handle, C.F_SETFD, flags | C.FD_CLOEXEC) < 0 {
-		net.close(fd) or {}
-		return error('mcp_stream_native_cloexec_failed')
+	fd := socket_runtime.retain(conn.sock.handle) or {
+		return error(if err.msg() == 'socket_interrupt_dup_failed' { 'mcp_stream_interrupt_failed' } else { 'mcp_stream_native_cloexec_failed' })
 	}
+
 	s.stream_counter++
 	mut stream := &SessionStream{ conn: conn, token: s.stream_counter, interrupt: fd }
 	if mut old := session.stream { old.request_stop() }

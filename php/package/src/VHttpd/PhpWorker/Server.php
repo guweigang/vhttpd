@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace VHttpd\PhpWorker;
 
 use Throwable;
+use VHttpd\Attribute\Dispatchable;
+use VHttpd\PhpWorker\WebSocket\Connection;
+use VHttpd\Upstream\Plan;
+use VHttpd\Wire\FrameCodec;
 
 function parseSocketFromArgv(array $argv): string
 {
@@ -27,8 +31,9 @@ function parseSocketFromArgv(array $argv): string
 
 final class Server
 {
-    /** @var callable */
-    private $app;
+    /** @var array<string,callable> */
+    private array $handlers;
+    private ?Connection $activeWebSocket = null;
     private readonly int $parentPid;
 
     public function __construct(
@@ -46,11 +51,10 @@ final class Server
             throw new \RuntimeException('vhttpd app entry not found: ' . $appPath);
         }
 
-        $app = self::normalizeApp(require $appPath);
-        if (!is_callable($app)) {
-            throw new \RuntimeException('vhttpd app entry must return a callable');
+        $this->handlers = self::normalizeApp(require $appPath);
+        if ($this->handlers === []) {
+            throw new \RuntimeException('vhttpd app entry must provide a worker handler');
         }
-        $this->app = $app;
     }
 
     public function run(): void
@@ -129,88 +133,266 @@ final class Server
         return $error === 0 || in_array($error, $wouldBlock, true);
     }
 
-    private static function normalizeApp(mixed $app): mixed
+    /** @return array<string,callable> */
+    private static function normalizeApp(mixed $app): array
     {
+        $methods = [
+            'http' => ['dispatchEnvelopeWorker'],
+            'stream' => ['handleStream', 'handle_stream'],
+            'mcp' => ['handleMcp', 'handle_mcp'],
+            'websocket' => ['handleWebSocket', 'handle_websocket'],
+            'websocket_upstream' => ['handleWebSocketUpstream', 'handle_websocket_upstream'],
+        ];
+        $handlers = [];
+        if (is_object($app)) {
+            $attributes = (new \ReflectionObject($app))->getAttributes(Dispatchable::class);
+            foreach ($attributes as $attribute) {
+                $kind = $attribute->newInstance()->kind;
+                if (!isset($methods[$kind])) {
+                    throw new \InvalidArgumentException('unknown worker dispatch kind: ' . $kind);
+                }
+                $handlers[$kind] = self::handler($app, [...$methods[$kind], 'handle'])
+                    ?? throw new \InvalidArgumentException('missing worker handler for ' . $kind);
+            }
+            foreach ($methods as $kind => $names) {
+                $handler = self::handler($app, $names);
+                if ($handler !== null) {
+                    $handlers[$kind] ??= $handler;
+                }
+            }
+        }
         if (is_callable($app)) {
-            return $app;
-        }
-        if (!is_array($app)) {
-            return $app;
-        }
-
-        $http = $app['http'] ?? null;
-        $stream = $app['stream'] ?? null;
-        if (!is_callable($http) && !is_callable($stream)) {
-            return $app;
-        }
-
-        return static function (array $payload, array $envelope = []) use ($http, $stream): mixed {
-            $mode = (string) ($payload['mode'] ?? '');
-            if ($mode === 'stream' && is_callable($stream)) {
-                return $stream($payload);
+            $handlers['http'] ??= $app;
+        } elseif (is_array($app)) {
+            foreach ($methods as $kind => $names) {
+                $candidate = $app[$kind] ?? null;
+                $handler = is_callable($candidate)
+                    ? $candidate
+                    : self::handler($candidate, [...$names, 'handle']);
+                if ($handler !== null) {
+                    $handlers[$kind] = $handler;
+                }
             }
-            if (is_callable($http)) {
-                return $http($payload, $envelope);
-            }
-
-            return [
-                'mode' => 'stream',
-                'strategy' => 'dispatch',
-                'event' => 'open',
-                'id' => (string) ($payload['id'] ?? ''),
-                'handled' => false,
-                'done' => true,
-                'stream_type' => 'sse',
-                'content_type' => 'text/event-stream',
-                'headers' => [],
-                'state' => [],
-                'chunks' => [],
-            ];
-        };
+        }
+        if (isset($handlers['http'])) {
+            $handlers['stream'] ??= $handlers['http'];
+        }
+        return $handlers;
     }
 
-    /**
-     * @param \Socket $conn
-     */
+    private static function handler(mixed $app, array $methods): ?callable
+    {
+        foreach ($methods as $method) {
+            if (is_object($app) && is_callable([$app, $method])) {
+                $bound = $app->{$method}(...);
+                $signature = new \ReflectionMethod($app, $method);
+                if (!$signature->isVariadic() && $signature->getNumberOfParameters() === 1) {
+                    return static fn (array $payload): mixed => $bound($payload);
+                }
+                return $bound;
+            }
+        }
+        return null;
+    }
+
+    private function invoke(string $kind, array $payload, mixed $context): mixed
+    {
+        if (!isset($this->handlers[$kind])) {
+            return null;
+        }
+        $handler = $this->handlers[$kind];
+        return in_array($kind, ['http', 'websocket', 'stream'], true) ? $handler($payload, $context) : $handler($payload);
+    }
+
+    private static function withStaticRequest(callable $dispatch): mixed
+    {
+        foreach (get_loaded_extensions() as $extension) {
+            $scope = 'vphp_' . $extension . '_with_static_request';
+            if (function_exists($scope)) {
+                $next = $dispatch;
+                $dispatch = static fn () => $scope($next);
+            }
+        }
+
+        return $dispatch();
+    }
+
+    public function dispatchRequest(array $request): array
+    {
+        return self::withStaticRequest(fn (): array => $this->dispatchRequestInScope($request));
+    }
+
+    private function dispatchRequestInScope(array $request): array
+    {
+        $mode = (string) ($request['mode'] ?? '');
+        if ($mode === 'websocket_dispatch') {
+            $conn = $this->dispatchWebSocket($request);
+            return [
+                'mode' => $mode,
+                'event' => 'result',
+                'id' => (string) ($request['id'] ?? ''),
+                'accepted' => $conn->accepted(),
+                'closed' => $conn->closed(),
+                'commands' => $conn->frames(),
+            ];
+        }
+        if ($mode === 'mcp' || $mode === 'websocket_upstream') {
+            $result = $this->invoke($mode, $request, $request);
+            if ($result !== null && !is_array($result)) {
+                throw new \UnexpectedValueException($mode . ' worker result must be an array');
+            }
+            return [
+                'mode' => $mode,
+                'event' => 'result',
+                'id' => (string) ($request['id'] ?? ''),
+            ] + ($result ?? ['handled' => false, 'commands' => []]);
+        }
+        if ($mode === 'stream') {
+            return self::normalizeStreamDispatchResponse($request, $this->invoke('stream', $request, $request));
+        }
+        return self::normalizeResponse($request, $this->invoke('http', $request, $request));
+    }
+
+    private function dispatchWebSocket(array $request): Connection
+    {
+        $conn = new Connection(null, (string) ($request['id'] ?? ''),
+            fn (): ?Connection => $this->activeWebSocket);
+        $open = ($request['event'] ?? '') === 'open';
+        if (!isset($this->handlers['websocket'])) {
+            if ($open) {
+                $conn->reject(404, 'WebSocket handler not found');
+            }
+            return $conn;
+        }
+        // Native apps can retain the connection from the open event for room
+        // broadcasts. Route those sends through the current dispatch.
+        $this->activeWebSocket = $conn;
+        try {
+            $result = $this->invoke('websocket', $request, $conn);
+            if ($open && $result === false) {
+                $conn->reject();
+            } elseif ($open && !$conn->rejected() && !$conn->closed()) {
+                $conn->accept();
+            }
+            if (is_string($result) && !$conn->rejected() && !$conn->closed()) {
+                $conn->send($result);
+            }
+        } finally {
+            $this->activeWebSocket = null;
+        }
+        return $conn;
+    }
+
+    /** @param \Socket|resource $conn */
+    private function handleWebSocketFrame($conn, array $request): void
+    {
+        $dispatch = $this->dispatchWebSocket($request);
+        $frames = $dispatch->frames();
+        // A handler can queue commands during open before deciding to accept.
+        // Emit the handshake decision before delivering its commands.
+        if (($request['event'] ?? '') === 'open') {
+            $handshake = array_filter($frames, static fn (array $frame): bool =>
+                in_array($frame['event'], ['accept', 'reject'], true));
+            $frames = array_merge($handshake, array_diff_key($frames, $handshake));
+        }
+        $frames[] = ['mode' => 'websocket', 'event' => 'done', 'id' => (string) ($request['id'] ?? '')];
+        foreach ($frames as $frame) {
+            $raw = json_encode($frame, JSON_THROW_ON_ERROR);
+            if (is_resource($conn)) {
+                FrameCodec::write($conn, $raw);
+            } else {
+                self::writeFrame($conn, $raw);
+            }
+        }
+    }
+
+    /** @param \Socket $conn */
     private function handleConnection($conn): void
     {
         $payload = [];
+        $streamType = null;
         try {
-            $raw = self::readFrame($conn);
-            $payload = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-            if (!is_array($payload)) {
-                throw new \RuntimeException('worker payload must be a JSON object');
+            do {
+                $payload = json_decode(self::readFrame($conn), true, 512, JSON_THROW_ON_ERROR);
+                if (!is_array($payload)) {
+                    throw new \RuntimeException('worker payload must be a JSON object');
+                }
+                $mode = $payload['mode'] ?? '';
+                if ($mode === 'websocket') {
+                    self::withStaticRequest(fn () => $this->handleWebSocketFrame($conn, $payload));
+                }
+            } while ($mode === 'websocket' && ($payload['event'] ?? '') !== 'close');
+            if ($mode === 'websocket') {
+                return;
             }
 
-            $result = ($this->app)($payload, $payload);
-            if ($result instanceof StreamResponse) {
-                self::writeStreamResponse($conn, $payload, $result);
+            if (in_array($mode, ['mcp', 'websocket_dispatch', 'websocket_upstream'], true)) {
+                self::writeJsonFrame($conn, $this->dispatchRequest($payload));
                 return;
             }
-            if (($payload['mode'] ?? '') === 'stream') {
-                self::writeFrame($conn, json_encode(self::normalizeStreamDispatchResponse($payload, $result), JSON_THROW_ON_ERROR));
-                return;
-            }
-            self::writeFrame($conn, json_encode(self::normalizeResponse($payload, $result), JSON_THROW_ON_ERROR));
+            self::withStaticRequest(function () use ($conn, $payload, &$streamType): void {
+                $this->writeDispatchResponse($conn, $payload, $streamType);
+            });
         } catch (Throwable $e) {
-            if (str_contains($e->getMessage(), 'unexpected EOF')) {
+            if ($streamType === null && str_contains($e->getMessage(), 'unexpected EOF')) {
                 return;
             }
             try {
-                if (($payload['mode'] ?? '') === 'stream') {
-                    self::writeFrame($conn, json_encode(self::streamErrorResponse($payload, $e), JSON_THROW_ON_ERROR));
-                    return;
+                $mode = $payload['mode'] ?? '';
+                if ($streamType !== null) {
+                    self::writeJsonFrame($conn, [
+                        'id' => (string) ($payload['id'] ?? ''),
+                        'mode' => 'stream',
+                        'event' => 'error',
+                        'stream_type' => $streamType,
+                        'error' => $e->getMessage(),
+                        'error_class' => $e::class,
+                    ]);
+                } elseif ($mode === 'stream') {
+                    self::writeJsonFrame($conn, self::streamErrorResponse($payload, $e));
+                } elseif (in_array($mode, ['mcp', 'websocket_dispatch', 'websocket_upstream'], true)) {
+                    self::writeJsonFrame($conn, [
+                        'mode' => $mode,
+                        'event' => 'error',
+                        'id' => (string) ($payload['id'] ?? ''),
+                        'handled' => true,
+                        'status' => 500,
+                        'error' => $e->getMessage(),
+                        'error_class' => $e::class,
+                    ]);
+                } else {
+                    self::writeJsonFrame($conn, self::errorResponse($e));
                 }
-                self::writeFrame($conn, json_encode(self::errorResponse($e), JSON_THROW_ON_ERROR));
             } catch (Throwable) {
                 return;
             }
         }
     }
 
-    /**
-     * @param \Socket $conn
-     */
+    /** @param \Socket $conn */
+    private function writeDispatchResponse($conn, array $payload, ?string &$streamType): void
+    {
+        $mode = $payload['mode'] ?? '';
+        $result = $this->invoke($mode === 'stream' ? 'stream' : 'http', $payload, $payload);
+        if ($result instanceof Plan) {
+            self::writeJsonFrame($conn, $result->frame((string) ($payload['id'] ?? '')));
+            return;
+        }
+        if ($result instanceof \VSlim\Stream\Response) {
+            $result = new StreamResponse($result->chunks(), $result->status, $result->headers(),
+                $result->streamType, $result->contentType);
+        }
+        if ($result instanceof StreamResponse) {
+            self::writeStreamResponse($conn, $payload, $result, $streamType);
+            return;
+        }
+        $response = $mode === 'stream'
+            ? self::normalizeStreamDispatchResponse($payload, $result)
+            : self::normalizeResponse($payload, $result);
+        self::writeJsonFrame($conn, $response);
+    }
+
+    /** @param \Socket $conn */
     private static function readFrame($conn): string
     {
         $header = self::readExact($conn, 4);
@@ -265,6 +447,10 @@ final class Server
                 $payload['id'] = (string) ($request['id'] ?? '');
             }
             return $payload;
+        }
+        if ($result instanceof \VSlim\VHttpd\Response) {
+            $result = ['status' => $result->status, 'content_type' => $result->contentType,
+                'headers' => $result->headers(), 'body' => $result->body];
         }
         if (!is_array($result)) {
             $result = [
@@ -354,7 +540,7 @@ final class Server
      * @param \Socket $conn
      * @param array<string,mixed> $request
      */
-    private static function writeStreamResponse($conn, array $request, StreamResponse $response): void
+    private static function writeStreamResponse($conn, array $request, StreamResponse $response, ?string &$streamType): void
     {
         $headers = self::normalizeHeaders($response->headers);
         if (!isset($headers['content-type'])) {
@@ -371,6 +557,7 @@ final class Server
             'headers' => $headers,
         ]);
 
+        $streamType = $response->streamType;
         foreach ($response->chunks as $chunk) {
             self::writeJsonFrame($conn, self::streamChunkFrame($request, $response, $chunk));
         }

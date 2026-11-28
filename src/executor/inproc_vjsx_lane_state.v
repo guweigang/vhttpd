@@ -1,9 +1,12 @@
 module executor
 
+import application_logs
+
 pub fn (e InProcVjsxExecutor) record_lane_success(lane_id string) {
 	if lane_id == '' {
 		return
 	}
+	maintain_inproc_vjsx_allocator(true)
 	mut state := e.state
 	state.mu.@lock()
 	defer {
@@ -28,8 +31,12 @@ pub fn (e InProcVjsxExecutor) record_lane_error(lane_id string, err_msg string) 
 	if lane_id == '' {
 		return
 	}
+	maintain_inproc_vjsx_allocator(true)
 	mut state := e.state
 	state.mu.@lock()
+	scope := state.application_log_scope
+	mut logs := application_logs.shared()
+	logs.append(scope,application_logs.Record{source:'console',level:'error',lane_id:lane_id,message:err_msg})
 	defer {
 		state.mu.unlock()
 	}
@@ -51,6 +58,7 @@ pub fn (e InProcVjsxExecutor) record_lane_soft_error(lane_id string, err_msg str
 	if lane_id == '' {
 		return
 	}
+	maintain_inproc_vjsx_allocator(true)
 	normalized := InProcVjsxError.normalize_message(err_msg, 'inproc_vjsx_executor_unknown_error')
 	mut state := e.state
 	state.mu.@lock()

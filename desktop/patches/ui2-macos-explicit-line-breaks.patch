@@ -1,0 +1,16 @@
+--- a/appkit/ui_macos_darwin.v
++++ b/appkit/ui_macos_darwin.v
+@@ -2506,6 +2506,13 @@
+ const native_centered_label_slack = 4.0
+ 
+ fn native_label_fits_one_line(label_view NativeView, frame NativeRect) bool {
++	// Explicit line breaks must never be collapsed by the single-line shortcut.
++	// AppKit intrinsic sizes can be equal with and without a width constraint
++	// for multiline strings, so comparing heights alone is insufficient.
++	text := macos.utf8_string(macos.msg_id(label_view, 'stringValue'))
++	if text.contains('\n') || text.contains('\r') {
++		return false
++	}
+ 	wrapped := native_label_content_height(label_view, frame, 0)
+ 	single := native_label_content_height(label_view, frame, 1)
+ 	return wrapped > 0 && single > 0 && wrapped <= single + 0.5

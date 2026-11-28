@@ -2,10 +2,10 @@ module executor
 
 import json2 as json
 import log
+import time
 
-fn (e InProcVjsxExecutor) build_startup_runtime_payload(lane VjsxExecutionLane, kind string) string {
+fn (e InProcVjsxExecutor) build_startup_runtime_payload(lane VjsxExecutionLane, kind string, request_id string) string {
 	config := e.facade_snapshot().config
-	request_id := InProcVjsxStartupCodec.request_id(kind, lane.id)
 	path := InProcVjsxStartupCodec.path(kind)
 	return json.encode(InProcVjsxRuntimeMeta{
 		provider:                 e.provider()
@@ -34,15 +34,16 @@ fn (e InProcVjsxExecutor) build_startup_runtime_payload(lane VjsxExecutionLane, 
 	}, escape_unicode: true, time_as_unix: true)
 }
 
-fn (e InProcVjsxExecutor) execute_startup_hook(mut app EmbeddedHost, idx int, lane VjsxExecutionLane, kind string) ! {
+fn (e InProcVjsxExecutor) execute_runtime_hook(mut app EmbeddedHost, idx int, lane VjsxExecutionLane, kind string, job ?VjsxScheduledJob) ![]VjsxScheduledJob {
 	log.debug('[vhttpd] startup_hook begin lane=${lane.id} idx=${idx} kind=${kind}')
-	e.ensure_lane_host(idx)!
 	mut state := e.state
 	state.mu.@lock()
 	host := state.hosts[idx]
 	state.mu.unlock()
 	js_ctx_host := host.context()
-	hook_global_name := if kind == 'app_startup' {
+	hook_global_name := if job != none {
+		'__vhttpd_scheduled_handle'
+	} else if kind == 'app_startup' {
 		'__vhttpd_app_startup_handle'
 	} else {
 		'__vhttpd_startup_handle'
@@ -51,10 +52,14 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app EmbeddedHost, idx int, la
 	if hook_probe.is_undefined() || !hook_probe.is_function() {
 		log.debug('[vhttpd] startup_hook skip lane=${lane.id} idx=${idx} kind=${kind} reason=missing_handler')
 		hook_probe.free()
-		return
+		return []VjsxScheduledJob{}
 	}
 	hook_probe.free()
-	request_id := InProcVjsxStartupCodec.request_id(kind, lane.id)
+	request_id := if job != none {
+		'vjsx.scheduled.${lane.id}.${time.sys_mono_now()}'
+	} else {
+		InProcVjsxStartupCodec.request_id(kind, lane.id)
+	}
 	e.activate_lane_request_context(idx, mut app, lane.id, HttpLogicDispatchRequest{
 		method:     InProcVjsxStartupCodec.method(kind)
 		path:       InProcVjsxStartupCodec.path(kind)
@@ -64,7 +69,7 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app EmbeddedHost, idx int, la
 	defer {
 		e.clear_lane_request_context(idx)
 	}
-	runtime_obj := js_ctx_host.json_parse(e.build_startup_runtime_payload(lane, kind))
+	runtime_obj := js_ctx_host.json_parse(e.build_startup_runtime_payload(lane, kind, request_id))
 	defer {
 		runtime_obj.free()
 	}
@@ -79,10 +84,18 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app EmbeddedHost, idx int, la
 	defer {
 		js_runtime.free()
 	}
-	mut result := if host.is_module_entry && host.module_handle() != none {
+	mut result := if definition := job {
+		hook := js_ctx_host.js_global(hook_global_name)
+		defer { hook.free() }
+		job_obj := js_ctx_host.json_parse(json.encode(definition))
+		defer { job_obj.free() }
+		host.call_handler(hook, js_runtime, job_obj) or {
+			return error('inproc_vjsx_executor_scheduled_failed:${err.msg()}')
+		}
+	} else if host.is_module_entry && host.module_handle() != none {
 		host.call_entry(kind, js_runtime) or {
 			if err.msg() == 'inproc_vjsx_executor_missing_${kind}_handler' {
-				return
+				return []VjsxScheduledJob{}
 			}
 			return error('inproc_vjsx_executor_${kind}_failed:${err.msg()}')
 		}
@@ -92,7 +105,7 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app EmbeddedHost, idx int, la
 			hook.free()
 		}
 		if hook.is_undefined() || !hook.is_function() {
-			return
+			return []VjsxScheduledJob{}
 		}
 		host.call_handler_resolved(hook, js_runtime) or {
 			return error('inproc_vjsx_executor_${kind}_failed:${err.msg()}')
@@ -119,19 +132,26 @@ fn (e InProcVjsxExecutor) execute_startup_hook(mut app EmbeddedHost, idx int, la
 		normalized.free()
 	}
 	commands := InProcVjsxStartupCodec.commands_from_js_value(normalized)
-	if commands.len == 0 {
-		return
-	}
-	dispatch_ctx := DispatchContext{
-		metadata: {
-			'dispatch_kind': kind
-			'lane_id':       lane.id
+	if commands.len > 0 {
+		dispatch_ctx := DispatchContext{
+			metadata: {
+				'dispatch_kind': kind
+				'lane_id':       lane.id
+			}
+			event:    kind
 		}
-		event:    kind
-	}
-	command_error := app.run_command_envelopes(request_id, dispatch_ctx, commands)
-	if command_error != '' {
-		return error('inproc_vjsx_executor_${kind}_command_failed:${command_error}')
+		command_error := app.run_command_envelopes(request_id, dispatch_ctx, commands)
+		if command_error != '' {
+			return error('inproc_vjsx_executor_${kind}_command_failed:${command_error}')
+		}
 	}
 	log.debug('[vhttpd] startup_hook done lane=${lane.id} idx=${idx} kind=${kind} commands=${commands.len}')
+	if kind != 'app_startup' {
+		return []VjsxScheduledJob{}
+	}
+	take_jobs := js_ctx_host.js_global('__vhttpd_take_job_registrations')
+	defer { take_jobs.free() }
+	jobs := host.call_handler(take_jobs, js_runtime)!
+	defer { jobs.free() }
+	return json.decode[[]VjsxScheduledJob](jobs.json_stringify())!
 }

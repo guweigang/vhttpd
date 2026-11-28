@@ -1,0 +1,18 @@
+{
+  "vhttpd_source_identical_to_prior_candidate": true,
+  "prior_binary_sha256": "60da360c10cc76bc5f37c609b95dc275bec98f88c256f31cf7c491c31ef43faf",
+  "veb_files": {
+    "controller.v": "6829a37a9034b348bdfa040e3bd90ccaa47e2a8bb26c56a54e4d32641fd2e65d",
+    "response_writer_transfer_test.v": "f90c5c27ca0fb6bad24687b386227eee27269cfa346f01019ed7a157267a2a07",
+    "veb_fasthttp.v": "4e757a5c2f8088fb3c85dcbd99949fc61e1f09181a992406b405e43696087257",
+    "veb.v": "323e90512c458cf26a9e527785219e8b0aaed2d1c783acaade6c0b629e8d5adb",
+    "context.v": "8021ca6752def491888a9094aae268e09890c12f909260c6a169d961df71172e",
+    "response_writer_append_test.v": "9d9fd2be57f1e89642a815752439976b0db3e84944364cccf691839838b2658a"
+  },
+  "gc_source_sha256": "711336923f4288267a459a9567e054f46e0ef8fc4e1d6d0ba810efd65d480714",
+  "scope": "Source frozen from previous candidate, not dirty worktree. Excludes tmp/git/node_modules/prebuilt binary. Generation and final C/compiler audit tracked separately.",
+  "generated_c_sha256": "0cd25018398ac4bbd197cb4540cbcbb6bf96e87aef8f0500705b0ab5fd63ba26",
+  "gc_object_sha256": "7592c15d86847012199c9db03df624ab85d20b9e23e274a614a8f9be08c6e36c",
+  "same_gc_control_sha256": "249bf9291da23b05f3c26c161bad2f24105420b0b42882e2c4704d803a2d2aa3",
+  "candidate_binary_sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9"
+}

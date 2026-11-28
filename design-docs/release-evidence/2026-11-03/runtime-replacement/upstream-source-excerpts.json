@@ -1,0 +1,20 @@
+{
+  "official-master-struct.v": {
+    "sha256_full_source": "e0c76679ee75492bc56097a403e6b37741059363b049003d2aafe937b5e88cb7",
+    "line_start": 4380,
+    "line_end": 4397,
+    "source": "4380: fn (mut g FlatGen) shared_dup_fns() {\n4381: \tnames := g.sorted_shared_wrapper_names()\n4382: \tif names.len == 0 {\n4383: \t\treturn\n4384: \t}\n4385: \tfor name in names {\n4386: \t\tg.writeln('static inline void* __dup${name}(void* src, int sz) {')\n4387: \t\tg.writeln('#if defined(_VPREALLOC)')\n4388: \t\tg.writeln('\\t${name}* dest = (${name}*)malloc((size_t)sz);')\n4389: \t\tg.writeln('#else')\n4390: \t\tg.writeln('\\t${name}* dest = (${name}*)malloc_uncollectable((ptrdiff_t)sz);')\n4391: \t\tg.writeln('#endif')\n4392: \t\tg.writeln('\\tmemcpy(dest, src, (size_t)sz);')\n4393: \t\tg.writeln('\\tsync__RwMutex__init(&dest->mtx);')\n4394: \t\tg.writeln('\\treturn dest;')\n4395: \t\tg.writeln('}')\n4396: \t}\n4397: \tg.writeln('')"
+  },
+  "fork-head-struct.v": {
+    "sha256_full_source": "b3eb6169c49fb8be445b1e836d4a1fe128c432696e4084ff1bcb33c344215852",
+    "line_start": 3591,
+    "line_end": 3608,
+    "source": "3591: fn (mut g FlatGen) shared_dup_fns() {\n3592: \tnames := g.sorted_shared_wrapper_names()\n3593: \tif names.len == 0 {\n3594: \t\treturn\n3595: \t}\n3596: \tfor name in names {\n3597: \t\tg.writeln('static inline void* __dup${name}(void* src, int sz) {')\n3598: \t\tg.writeln('#if defined(_VPREALLOC)')\n3599: \t\tg.writeln('\\t${name}* dest = (${name}*)malloc((size_t)sz);')\n3600: \t\tg.writeln('#else')\n3601: \t\tg.writeln('\\t${name}* dest = (${name}*)malloc_uncollectable((isize)sz);')\n3602: \t\tg.writeln('#endif')\n3603: \t\tg.writeln('\\tmemcpy(dest, src, (size_t)sz);')\n3604: \t\tg.writeln('\\tsync__RwMutex__init(&dest->mtx);')\n3605: \t\tg.writeln('\\treturn dest;')\n3606: \t\tg.writeln('}')\n3607: \t}\n3608: \tg.writeln('')"
+  },
+  "official-release-cgen.v": {
+    "sha256_full_source": "9f9dc8c417b91fdd172548c63d404f5e1c3f7828fa9cdc47219eeb38c5ad4e51",
+    "line_start": 2095,
+    "line_end": 2114,
+    "source": "2095: fn (mut g Gen) write_shareds() {\n2096: \tmut done_types := []int{}\n2097: \tfor typ, base in g.shareds {\n2098: \t\tif typ in done_types {\n2099: \t\t\tcontinue\n2100: \t\t}\n2101: \t\tdone_types << typ\n2102: \t\tsh_typ := '__shared__${base}'\n2103: \t\tmtx_typ := 'sync__RwMutex'\n2104: \t\tg.shared_types.writeln('struct ${sh_typ} {')\n2105: \t\tg.shared_types.writeln('\\t${mtx_typ} mtx;')\n2106: \t\tg.shared_types.writeln('\\t${base} val;')\n2107: \t\tg.shared_types.writeln('};')\n2108: \t\tg.shared_functions.writeln('static inline voidptr __dup${sh_typ}(voidptr src, ${ast.int_type_name} sz) {')\n2109: \t\tg.shared_functions.writeln('\\t${sh_typ}* dest = builtin__memdup(src, sz);')\n2110: \t\tg.shared_functions.writeln('\\tsync__RwMutex_init(&dest->mtx);')\n2111: \t\tg.shared_functions.writeln('\\treturn dest;')\n2112: \t\tg.shared_functions.writeln('}')\n2113: \t\tg.typedefs.writeln('typedef struct ${sh_typ} ${sh_typ};')\n2114: \t}"
+  }
+}

@@ -179,6 +179,9 @@ fn decode_v2_config_strict(text string) !V2Config {
 	root := doc.to_any().as_map()
 	validate_v2_config_keys(doc, root)!
 	mut cfg := doc.decode[V2Config]()!
+	for id, entry in (root['relays'] or { toml.Any(map[string]toml.Any{}) }).as_map() {
+		cfg.relay_fields[id] = entry.as_map().keys()
+	}
 	apply_v2_provider_specs(text, doc, mut cfg)
 	apply_v2_extension_options(root, mut cfg)
 	apply_v2_pipeline_match_queries(root, mut cfg)
@@ -196,7 +199,26 @@ fn merge_v2_config_include(mut target V2Config, source V2Config, source_path str
 	merge_v2_policies_include(mut target.policies, source.policies, source_path)!
 	merge_v2_named_map[V2ProviderSpec](mut target.providers, source.providers, 'providers',
 		source_path)!
-	merge_v2_named_map[V2RelaySpec](mut target.relays, source.relays, 'relays', source_path)!
+	// Relay fragments may contribute disjoint fields. A repeated field is an
+	// error, even if equal: include ordering never silently overrides a value.
+	for id, value in source.relays {
+		if id !in target.relays {
+			target.relays[id] = value
+			target.relay_fields[id] = source.relay_fields[id].clone()
+			continue
+		}
+		mut previous := target.relays[id]
+		for key in source.relay_fields[id] {
+			if key in target.relay_fields[id] { return error('v2_config_include_duplicate:relays.${id}.${key}:${source_path}') }
+		}
+		$for field in V2RelaySpec.fields {
+			if field.name in source.relay_fields[id] { previous.$(field.name) = value.$(field.name) }
+		}
+		target.relays[id] = previous
+		mut fields := target.relay_fields[id].clone()
+		fields << source.relay_fields[id]
+		target.relay_fields[id] = fields
+	}
 	merge_v2_pipelines(mut target.pipelines, source.pipelines, source_path)!
 }
 

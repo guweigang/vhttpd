@@ -20,27 +20,35 @@ struct CodexPreparedRpc {
 fn (mut hub ProviderRuntimeHub) codex_prepare_rpc(instance string, pending codex.PendingRpc, explicit_thread_id string) CodexPreparedRpc {
 	resolved := codex.ProviderRuntime.normalize_instance(instance)
 	mut state := &hub.codex
-	return hub.codex_runtime_mutate[CodexPreparedRpc](resolved, fn [resolved, pending, explicit_thread_id, mut state] (mut rt codex.ProviderRuntime) CodexPreparedRpc {
-		if !rt.is_connected() { return CodexPreparedRpc{ failure: 'codex provider not connected' } }
-		connection := rt.connection() or { return CodexPreparedRpc{ failure: 'codex provider not connected' } }
-		current_thread_id := rt.current_thread_id()
-		mut resume := ?codex.RpcRegistration(none)
-		mut resume_thread_id := ''
-		if pending.method == 'turn/start' && explicit_thread_id != '' && current_thread_id != '' && explicit_thread_id != current_thread_id {
-			resume = state.register_rpc_unlocked(resolved, mut rt, codex.PendingRpc{})
-			resume_thread_id = explicit_thread_id
+	resolved_instance := codex.ProviderRuntime.normalize_instance(resolved)
+	hub.codex.mu.@lock()
+	mut rt := hub.codex_runtime_instance_unlocked(resolved_instance)
+	if rt.instance == '' { rt.instance = resolved_instance }
+	defer {
+		hub.codex_runtime_store_unlocked(resolved_instance, rt)
+		hub.codex.mu.unlock()
+	}
+	if !rt.is_connected() { return CodexPreparedRpc{ failure: 'codex provider not connected' } }
+	connection := rt.connection() or { return CodexPreparedRpc{ failure: 'codex provider not connected' } }
+	current_thread_id := rt.current_thread_id()
+	needed := if pending.method == 'turn/start' && explicit_thread_id != '' && current_thread_id != '' && explicit_thread_id != current_thread_id { 2 } else { 1 }
+	if !rt.can_register_rpcs(needed) { return CodexPreparedRpc{failure: 'codex_pending_rpc_limit'} }
+	mut resume := ?codex.RpcRegistration(none)
+	mut resume_thread_id := ''
+	if pending.method == 'turn/start' && explicit_thread_id != '' && current_thread_id != '' && explicit_thread_id != current_thread_id {
+		resume = state.register_rpc_unlocked(resolved, mut rt, codex.PendingRpc{})
+		resume_thread_id = explicit_thread_id
+	}
+	registration := state.register_rpc_unlocked(resolved, mut rt, pending)
+	mut bound_thread_id := ''
+	if pending.stream_id != '' {
+		bound_thread_id = if explicit_thread_id != '' {
+			rt.bind_stream_to_thread(explicit_thread_id, pending.stream_id)
+		} else {
+			rt.bind_stream_to_current_thread(pending.stream_id)
 		}
-		registration := state.register_rpc_unlocked(resolved, mut rt, pending)
-		mut bound_thread_id := ''
-		if pending.stream_id != '' {
-			bound_thread_id = if explicit_thread_id != '' {
-				rt.bind_stream_to_thread(explicit_thread_id, pending.stream_id)
-			} else {
-				rt.bind_stream_to_current_thread(pending.stream_id)
-			}
-		}
-		return CodexPreparedRpc{ instance: resolved, ws_url: rt.ws_url, bound_thread_id: bound_thread_id, resume_thread_id: resume_thread_id, registration: registration, resume_registration: resume, connection: connection }
-	})
+	}
+	return CodexPreparedRpc{ instance: resolved, ws_url: rt.ws_url, bound_thread_id: bound_thread_id, resume_thread_id: resume_thread_id, registration: registration, resume_registration: resume, connection: connection }
 }
 
 // Each frame retains its own response registration only after a successful

@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "group": "vha1109_1215199",
+  "binary_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+  "limits": {
+    "memory.max": "268435456",
+    "memory.swap.max": "0",
+    "cpu.max": "30000 100000"
+  },
+  "runtime": 1215383,
+  "phase": "load",
+  "elapsed": 45.451815748005174,
+  "profiles": [
+    "load-1"
+  ],
+  "failure": "Perf disk budget",
+  "traceback": "Traceback (most recent call last):\n  File \"/root/vhttpd-release-tests/20261109-gc-http-factorial/06-profile-short/driver.py\", line 34, in <module>\n    save();assert sum(p.stat().st_size for p in R.glob('*.data'))<128*1024*1024,'Perf disk budget';time.sleep(5)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Perf disk budget\n"
+}

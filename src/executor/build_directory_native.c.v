@@ -1,5 +1,7 @@
 module executor
 
+$if !windows {
+
 import os
 
 #include <fcntl.h>
@@ -30,4 +32,6 @@ fn retain_build_directory(path string, identity os.Stat) !int {
 
 fn close_build_directory(fd int) {
 	C.close(i32(fd))
+}
+
 }

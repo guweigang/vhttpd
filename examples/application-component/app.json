@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "b387214b-4fb1-4d83-a22e-c75d25c86ccd",
+  "name": "component-demo",
+  "display_name": "Independent application demo",
+  "version": "0.1.0",
+  "description": "An independently installed vjsx application that uses environment resources.",
+  "entry": "component.toml"
+}

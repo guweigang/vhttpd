@@ -67,3 +67,10 @@ pub fn (mut s FeishuState) commit_tenant_token_request(request TenantTokenReques
 	s.runtime[request.name] = runtime
 	return true
 }
+
+pub fn (mut s FeishuState) application_message_mode(name string) bool {
+	s.mu.@lock()
+	defer { s.mu.unlock() }
+	cfg := s.apps[name] or { return false }
+	return cfg.application_messages
+}

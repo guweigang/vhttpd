@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: dispatch_system/routing_rules
+title: HTTP 路由匹配与规则引擎
+scope:
+    - src/dispatch/http_match.v
+    - src/dispatch/http.v
+    - src/route_rule_test.v
+source_files: []
+depends_on: []
+related_to: []

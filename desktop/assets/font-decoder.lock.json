@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "name": "woff2",
+      "revision": "7b67e12355fe7da148db5c19d4261f0a498a9537",
+      "url": "https://codeload.github.com/google/woff2/tar.gz/7b67e12355fe7da148db5c19d4261f0a498a9537",
+      "sha256": "af25f87356507cd541fe02eb52145ce21d0a62b2ef028c058720ecf96ad4d7f8",
+      "bytes": 39308
+    },
+    {
+      "name": "brotli",
+      "revision": "d89c4b1c52e25ddafe047bc78bbee5c1e24b1809",
+      "url": "https://codeload.github.com/google/brotli/tar.gz/d89c4b1c52e25ddafe047bc78bbee5c1e24b1809",
+      "sha256": "4117be20f96bc907a9c773a0b7353c3ec92b922639020064f475c8a699377e6f",
+      "bytes": 681878
+    }
+  ]
+}

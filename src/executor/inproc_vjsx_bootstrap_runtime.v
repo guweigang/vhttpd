@@ -32,7 +32,7 @@ pub fn (e InProcVjsxExecutor) bootstrap_placeholder() ! {
 	}
 	if !state.signature_refresh_started {
 		state.signature_refresh_started = true
-		state.signature_refresh_thread = spawn InProcVjsxSignatureRefresh.loop(mut state)
+		state.signature_refresh_thread = spawn InProcVjsxSignatureRefresh.loop(e)
 	}
 	state.facade.bootstrapped = true
 	state.facade.last_error = ''

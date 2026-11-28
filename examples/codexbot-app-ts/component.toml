@@ -1,0 +1,29 @@
+# Install this application into a Desktop environment. Credentials live in config/bot.local.json.
+version = 2
+
+[listeners.codexbot]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19883
+
+[engines.codexbot]
+kind = "vjsx"
+entry = "app.mts"
+module_root = "."
+signature_exclude = [".var/**", "config/bot.local.json", "tests/**", "codex/ts/**"]
+runtime_profile = "node"
+thread_count = 2
+enable_fs = true
+websocket_dispatch = true
+
+[adapters.codexbot]
+kind = "http-handler"
+engine = "engine:codexbot"
+
+[[pipelines]]
+id = "codexbot.http"
+group = "codexbot"
+ingress = "listener:codexbot"
+match.paths = ["*"]
+egress = "adapter:codexbot"

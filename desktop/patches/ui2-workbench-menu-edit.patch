@@ -1,0 +1,19 @@
+--- a/ui/ui_immediate.c.v
++++ b/ui/ui_immediate.c.v
+@@ -4523,3 +4523,16 @@
+ 		return draw_text(ctx, t, x, y, w, h, centered_style)
+ 	}
+ }
++
++// Host menu commands reuse the same editor path as Ctrl+A/X/C/V.
++$if linux && !ui2_headless ? {
++	pub fn workbench_text_has_selection() bool {
++		if editor := g_text_editors[g_focused_field] { return !editor.selection.collapsed() }
++		return false
++	}
++	pub fn workbench_text_edit(action string) {
++		key := match action { 'all' { gg.KeyCode.a } 'cut' { gg.KeyCode.x } 'copy' { gg.KeyCode.c } 'paste' { gg.KeyCode.v } else { return } }
++		handle_key_down(key, u32(gg.Modifier.ctrl))
++		request_refresh()
++	}
++}

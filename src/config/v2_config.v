@@ -16,6 +16,8 @@ pub mut:
 	providers     map[string]V2ProviderSpec
 	pipelines     []V2PipelineSpec
 	relays        map[string]V2RelaySpec
+	// Physical declarations tracked by the loader; never accepted as config input.
+	relay_fields map[string][]string
 }
 
 pub struct V2ServerSpec {

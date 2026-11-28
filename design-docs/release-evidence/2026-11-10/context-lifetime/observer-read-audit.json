@@ -1,0 +1,17 @@
+{
+  "utc": "2026-11-10T06:11:57Z",
+  "observer_script_sha256": "0a48c285cfd5c94ccc49d5acb41c0f8da55e748e9d7293147ece0c194d1552eb",
+  "health_or_network_lines": [
+    {
+      "line": 104,
+      "text": "        time.sleep(10)"
+    }
+  ],
+  "idle_state_observation": null,
+  "scope": "Read-only monitor source/idle globals; no restart, monitor edits, collection or debugger. Counter layout is prior96-byte idle state; only an observation, not allocation-root proof.",
+  "legacy_idle_symbols_observed_via_nm": [
+    "last_attempt.779.lto_priv.0",
+    "last_activity.781.lto_priv.0"
+  ],
+  "symbol_evidence": "Read-only nm output observed in this task; no values/layout inferred for these older LTO-private symbols."
+}

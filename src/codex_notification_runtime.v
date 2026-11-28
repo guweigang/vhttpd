@@ -22,6 +22,7 @@ fn (mut app App) codex_handle_notification(instance string, method string, raw s
 		}
 	}
 	active_stream_id := app.codex_get_active_stream_id_for_instance(instance)
+	app.touch_reply_stream(if target_stream_id != '' { target_stream_id } else { active_stream_id })
 	pending_stream_id := app.codex_pending_stream_id(instance)
 	log.info('[codex] 🧭 notif route instance=${codex.ProviderRuntime.normalize_instance(instance)} method=${method} thread=${detected_thread_id} target_stream=${target_stream_id} active_stream=${active_stream_id} pending_stream=${pending_stream_id}')
 

@@ -1,0 +1,32 @@
+[
+  {
+    "remote_path": "/root/vhttpd-release-tests/20261103-fixed6-diagnosis/http-json/allocations.raw",
+    "bytes": 42132492,
+    "sha256": "b089dc07dcb84c835247642f383fa38303522ce343e8b770894cd075efa23443"
+  },
+  {
+    "remote_path": "/root/vhttpd-release-tests/20261103-fixed6-diagnosis/http-json/allocations.gz",
+    "bytes": 2928661,
+    "sha256": "97edae63dfa5c885254f297d6886482cf67f49c733d1c62a69870cf001f09f9f"
+  },
+  {
+    "remote_path": "/root/vhttpd-release-tests/20261103-fixed6-diagnosis/http-native/allocations.raw",
+    "bytes": 468990,
+    "sha256": "d8890f9ac0af4a9a9d1d5ac1066667749ba411bfcc7ee698c9fb3fb332e69599"
+  },
+  {
+    "remote_path": "/root/vhttpd-release-tests/20261103-fixed6-diagnosis/http-native/allocations.gz",
+    "bytes": 88776,
+    "sha256": "cf80af3a89e8daa2ad3eb4c985797533912f52c48eee957013fb617db199d67e"
+  },
+  {
+    "remote_path": "/root/vhttpd-release-tests/20261103-fixed6-diagnosis/paseo/allocations.raw",
+    "bytes": 85989221,
+    "sha256": "8d714b15883cd116d56d10c95f200e619b827bc197c2e493560c5101fe5862ae"
+  },
+  {
+    "remote_path": "/root/vhttpd-release-tests/20261103-fixed6-diagnosis/paseo/allocations.gz",
+    "bytes": 4401117,
+    "sha256": "4aae10b4d0ba9302fe73327625c5526b2a032912f6d2d50f55b0a73b621cb1ea"
+  }
+]

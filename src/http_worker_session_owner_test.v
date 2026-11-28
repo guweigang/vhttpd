@@ -1,5 +1,7 @@
 module main
 
+import ws
+
 import executor
 import worker
 import net
@@ -203,7 +205,8 @@ fn test_long_worker_websocket_and_cancelled_activation_finish_the_original_pool(
 		worker_fd := worker_conn.sock.handle
 		app.engines = EngineRuntime{ primary: next }
 		if !active { run.request_stop() }
-		spawn run_worker_websocket_session(mut run, app.build_websocket_runtime_context_for_state(engines.primary), mut server, mut worker_conn, path, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', 'origin-session', 'trace', 0, opened.lease)
+		mut ingress_conn := ws.IngressConnection.tcp(server)
+		spawn run_worker_websocket_session(mut run, app.build_websocket_runtime_context_for_state(engines.primary), mut ingress_conn, mut worker_conn, path, 'dGhlIHNhbXBsZSBub25jZQ==', 'GET', '/ws', 'origin-session', 'trace', 0, opened.lease)
 		if active {
 			mut bytes := []u8{len: 2048}
 			n := peer.read(mut bytes) or { panic(err) }

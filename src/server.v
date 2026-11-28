@@ -1,5 +1,7 @@
 module main
 
+import acme
+
 // ═══════════════════════════════════════════════════════════════════════
 // Lock Hierarchy (acquire in this order; NEVER acquire a lower lock while holding a higher one)
 //
@@ -23,6 +25,8 @@ module main
 //   - Never hold L0 while calling into user-provided callbacks (plugins, executors).
 // ═══════════════════════════════════════════════════════════════════════
 import config
+import runtime_upgrade
+import json2 as json
 import executor
 import log
 import os
@@ -36,6 +40,7 @@ import time
 #include <signal.h>
 
 fn C.tzset()
+fn C._tzset()
 
 __global (
 	g_active_runtime_registry ActiveRuntimeRegistry
@@ -108,12 +113,12 @@ fn (r &ActiveRuntimeRegistry) listener_summaries() []executor.AdminListenerRunti
 		cfg := cfgs[i] or { continue }
 		pipelines := app.admin_pipeline_runtime_snapshot()
 		app.control_plane.mu.@lock()
-		metrics := app.control_plane.http_observations.total
+		metrics := app.control_plane.http_observations.total.snapshot()
 		mut route_metrics := []executor.AdminHttpRouteMetrics{}
 		mut ids := app.control_plane.http_observations.routes.keys()
 		ids.sort()
-		for id in ids { route_metrics << executor.AdminHttpRouteMetrics{pipeline_id: id, metrics: app.control_plane.http_observations.routes[id]} }
-		errors := app.control_plane.http_observations.errors.clone()
+		for id in ids { route_metrics << executor.AdminHttpRouteMetrics{pipeline_id: id, metrics: app.control_plane.http_observations.routes[id].snapshot()} }
+		errors := app.control_plane.http_observations.errors.snapshot()
 		app.control_plane.mu.unlock()
 		summaries << executor.AdminListenerRuntimeSummary{
 			listener_id: cfg.plan_listener_id
@@ -148,6 +153,7 @@ fn active_runtime_is_shutting_down() bool {
 	}
 }
 
+@[markused]
 fn active_runtime_config_snapshot() []server_lifecycle.ServerRuntimeConfig {
 	unsafe {
 		return g_active_runtime_registry.config_snapshot()
@@ -174,16 +180,22 @@ fn vhttpd_shutdown_runtime(sig os.Signal) {
 	exit(128 + int(sig))
 }
 
-const vhttpd_version = '0.1.0'
-
 const known_long_flags = [
 	'--help',
 	'--version',
+	'--build-info',
 	'--config',
 	'--host',
 	'--port',
 	'--ssl-cert',
 	'--ssl-key',
+	'--acme-domain',
+	'--acme-state-dir',
+	'--acme-directory',
+	'--acme-email',
+	'--acme-ca-file',
+	'--acme-http-port',
+	'--acme-renew-before-seconds',
 	'--event-log',
 	'--pid-file',
 	'--worker-read-timeout-ms',
@@ -250,11 +262,22 @@ fn print_vhttpd_help() {
 	println('Common options:')
 	println('  --help, -h')
 	println('  --version, -v')
+	println('  --development-guide <topic> Print packaged develop or vjsx guidance as JSON')
+	println('  --schema                    Print the packaged configuration schema as JSON')
+	println('  --build-info      Show compiled GC mode and runtime GC status as JSON')
+	println('  --manual-restart   Enable authenticated manual-process restart')
 	println('  --config <path>              TOML config file')
 	println('  --host <host>                Data plane host')
 	println('  --port <port>                Data plane port')
 	println('  --ssl-cert <path>            Enable HTTPS with this certificate')
 	println('  --ssl-key <path>             Private key for --ssl-cert')
+	println('  --acme-domain <hostname>     Enable built-in ACME HTTP-01 for one DNS name')
+	println('  --acme-state-dir <path>      Private directory for ACME keys and certificates')
+	println('  --acme-directory <url>       ACME directory (default: Let’s Encrypt staging)')
+	println('  --acme-email <address>       Optional contact for the ACME account')
+	println('  --acme-ca-file <path>        Optional CA root for a local ACME test server')
+	println('  --acme-http-port <port>       HTTP-01 listener port (default: 80)')
+	println('  --acme-renew-before-seconds <seconds>  Maximum renewal window')
 	println('  --admin-host <host>          Admin plane host')
 	println('  --admin-port <port>          Admin plane port')
 	println('  --admin-token <token>        Admin API token')
@@ -318,23 +341,33 @@ fn run_single_server(args []string, cfg config.VhttpdConfig) ! {
 		log.error('server runtime config resolve failed: ${err}')
 		return err
 	}
-	run_single_server_with_config(cfg, runtime_cfg)!
+	run_single_server_with_config(cfg, runtime_cfg, args)!
 }
 
-fn run_single_server_with_config(cfg config.VhttpdConfig, runtime_cfg server_lifecycle.ServerRuntimeConfig) ! {
+fn run_single_server_with_config(cfg config.VhttpdConfig, initial_cfg server_lifecycle.ServerRuntimeConfig, args []string) ! {
+	mut runtime_cfg := initial_cfg
 	mut transferred := false
 	defer { if !transferred { runtime_cfg.executor_plan.executor.close() } }
-	preflight_server_bind(runtime_cfg) or {
-		log.error('[vhttpd] ${err.msg()}')
-		return err
+	settings := acme.Settings.resolve(args)!
+	mut acme_runtime := ?&acme.Runtime(none)
+	mut pid_files := [runtime_cfg.pid_file]
+	if settings.domain != '' {
+		runtime := new_acme_runtime(runtime_cfg, settings)!
+		acme_runtime = runtime
+		pid_files << runtime.instance_pid_path()
 	}
-	process_runtime.acquire_pid_files([runtime_cfg.pid_file]) or {
-		log.error('[vhttpd] ${err.msg()}')
-		return err
-	}
+	preflight_server_bind(runtime_cfg)!
+	process_runtime.acquire_pid_files(pid_files)!
 	defer { process_runtime.close_pid_files() }
+	defer {
+		if mut runtime := acme_runtime { runtime.stop() }
+	}
+	if mut runtime := acme_runtime {
+		runtime_cfg = start_acme_runtime(mut runtime, runtime_cfg)!
+	}
 	mut app := build_app_runtime(runtime_cfg.provider_settings, runtime_cfg.executor_plan, cfg,
 		runtime_cfg.plan, runtime_cfg.app_build_cfg)
+	app.lifecycle.acme_runtime = acme_runtime
 	transferred = true
 	register_active_runtime(app, runtime_cfg)
 	defer {
@@ -345,6 +378,10 @@ fn run_single_server_with_config(cfg config.VhttpdConfig, runtime_cfg server_lif
 
 	start_server_runtime(mut app, runtime_cfg)
 	serve_server_runtime(mut app, runtime_cfg)
+	// An empty environment still owns its Admin plane and must remain alive.
+	if !runtime_cfg.serve_data_plane {
+		for !active_runtime_is_shutting_down() { time.sleep(50 * time.millisecond) }
+	}
 	wait_for_active_runtime_shutdown()
 }
 
@@ -355,7 +392,7 @@ fn run_server(args []string) ! {
 	}
 	configure_runtime_timezone(runtime_timezone_from_plan_or_config(args, cfg))
 	log.debug('[vhttpd] run_server: timezone configured')
-	os.signal_ignore(.pipe)
+	$if !windows { os.signal_ignore(.pipe) }
 	process_runtime.install_shutdown_signal_handler(vhttpd_shutdown_runtime)!
 	defer {
 		process_runtime.shutdown_managed_processes()
@@ -399,15 +436,55 @@ fn configure_runtime_timezone(config_tz string) {
 		tz = 'Asia/Shanghai'
 	}
 	os.setenv('TZ', tz, true)
-	C.tzset()
+	$if windows { C._tzset() } $else { C.tzset() }
 	logging.RuntimeLogger.configure()
 	log.info('vhttpd timezone: ${tz}')
 }
 
+fn runtime_gc_kind() string {
+	$if gcboehm ? { return 'boehm' }
+	$if vgc ? { return 'vgc' }
+	return 'none'
+}
+
 fn main() {
+	configure_process_allocator()
+	if os.args.len == 2 && os.args[1] == '--build-info' {
+		println(json.encode({'version': json.Any(vhttpd_version), 'gc': json.Any(runtime_gc_kind()), 'gc_enabled': json.Any(gc_is_enabled())}))
+		return
+	}
 	// Configuration errors precede timezone setup; honor explicit JSON output there too.
 	if logging.RuntimeLogger.json_enabled() { logging.RuntimeLogger.configure() }
-	args := os.args[1..]
+	if os.args.len == 3 && os.args[1] == '--workbench-restart-helper' {
+		run_manual_restart_helper(os.args[2]) or { eprintln('restart_helper_failed'); exit(1) }; return
+	}
+	if os.args.len == 3 && os.args[1] == '--workbench-upgrade-check' {
+		result := runtime_upgrade.check(os.args[2], vhttpd_version) or { eprintln('whole_project_validation_failed'); exit(2) }
+		println(json.encode(result)); return
+	}
+	if os.args.len == 3 && os.args[1] == '--workbench-upgrade-helper' {
+		runtime_upgrade.run(os.args[2]) or { eprintln('runtime_upgrade_failed'); exit(1) }; return
+	}
+	if os.args.len == 2 && os.args[1] == '--workbench-component-version' { println('3'); return }
+	if os.args.len == 2 && os.args[1] == '--workbench-deploy-version' { println('1'); return }
+	if os.args.len == 3 && os.args[1] == '--workbench-deploy-prepare' {
+		result := runtime_upgrade.prepare_deployment(os.args[2]) or { eprintln(runtime_upgrade.deployment_safe_error(err.msg())); exit(2) }
+		println(json.encode(result)); return
+	}
+	if os.args.len == 3 && os.args[1] == '--workbench-deploy-helper' {
+		runtime_upgrade.run_deployment(os.args[2]) or { eprintln(runtime_upgrade.deployment_safe_error(err.msg())); exit(1) }; return
+	}
+	if os.args.len == 2 && os.args[1] == '--schema' {
+		println(packaged_schema_json())
+		return
+	}
+	if os.args.len == 3 && os.args[1] == '--development-guide' {
+		guide := packaged_development_guide(os.args[2]) or { eprintln(err.msg()); exit(2) }
+		println(guide)
+		return
+	}
+	manual_restart := '--manual-restart' in os.args
+	args := os.args[1..].filter(it != '--manual-restart')
 	if has_flag(args, ['--help', '-h']) {
 		print_vhttpd_help()
 		return
@@ -421,7 +498,11 @@ fn main() {
 		eprintln('run `vhttpd --help` for usage.')
 		exit(2)
 	}
-	run_server(args) or { exit(1) }
+	remote_control_initialize(args, manual_restart) or { eprintln('workbench_metadata_unavailable') }
+	run_server(args) or {
+		log.error('[vhttpd] startup failed: ${err.msg()}')
+		exit(1)
+	}
 }
 
 // HTTP shutdown makes serving return before the signal worker finishes cleanup.

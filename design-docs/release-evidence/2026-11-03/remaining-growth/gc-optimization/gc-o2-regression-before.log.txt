@@ -1,0 +1,14 @@
+---- Testing... ----------------------------------------------------------------
+FAIL 11680.444 ms vlib/builtin/gc_uncollectable_reclaim_test.v
+uncollectable churn: before=12288 after=4399104 heap=4960256 free=561152
+V panic: uncollectable thread wrappers retained 4386816 bytes after GC
+ v hash: d13ccdd
+    pid: 0xe8
+    tid: 0xe8
+                                                        | 0x555555557dc0 | /tmp/v_0/tsession_7fffff4c1b40_01M6G1Y4Q9AVM3KKBTGZS07JGT/0_0/gc_uncollectable_reclaim_test(+0x3dc0) 
+                                                        | 0x7fffff5d91ca | /lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca) 
+                                                        | 0x7fffff5d928b | /lib/x86_64-linux-gnu/libc.so.6(.libc_start_main+0x8b) 
+                                                        | 0x555555557df5 | /tmp/v_0/tsession_7fffff4c1b40_01M6G1Y4Q9AVM3KKBTGZS07JGT/0_0/gc_uncollectable_reclaim_test(+0x3df5)
+--------------------------------------------------------------------------------
+To reproduce just failure 1 run:    /opt/relay-build/v/v -cc gcc -prod -parallel-cc -gc boehm -d use_bundled_libgc -enable-globals -cc gcc -prod -parallel-cc -gc boehm -d use_bundled_libgc -enable-globals /opt/relay-build/v/vlib/builtin/gc_uncollectable_reclaim_test.v
+Summary for all V _test.v files: 1 failed, 1 total. Elapsed time: 39026 ms, on 1 job. Comptime: 27324 ms. Runtime: 11678 ms.

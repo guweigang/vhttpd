@@ -1,0 +1,32 @@
+[New LWP 48813]
+[New LWP 48812]
+[New LWP 48811]
+[New LWP 48809]
+[New LWP 48808]
+[New LWP 48807]
+[New LWP 48806]
+[New LWP 48805]
+[New LWP 48804]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x00007c3f79e98e51 in __futex_abstimed_wait_common64 (private=128, cancel=true, abstime=0x0, op=265, expected=48811, futex_word=0x7c3f6f7fe990) at ./nptl/futex-internal.c:57
+
+warning: 57	./nptl/futex-internal.c: No such file or directory
+Breakpoint 1 at 0x5daaaa757fa0
+
+Thread 7 "vhttpd" received signal SIGPWR, Power fail/restart.
+[Switching to Thread 0x7c3f777e06c0 (LWP 48807)]
+0x00007c3f79f26fa7 in __GI___select (nfds=7, readfds=0x7c3f777de8c0, writefds=0x0, exceptfds=0x0, timeout=0x7c3f777de890) at ../sysdeps/unix/sysv/linux/select.c:69
+warning: 69	../sysdeps/unix/sysv/linux/select.c: No such file or directory
+
+Thread 2 "vhttpd" received signal SIGPWR, Power fail/restart.
+[Switching to Thread 0x7c3f6e7fc6c0 (LWP 48813)]
+0x00007c3f79f2a2d2 in epoll_wait (epfd=12, events=0x7c3f6e7faad0, maxevents=256, timeout=100) at ../sysdeps/unix/sysv/linux/epoll_wait.c:30
+warning: 30	../sysdeps/unix/sysv/linux/epoll_wait.c: No such file or directory
+/root/vhttpd-release-tests/20261102-fixed2-paseo-diagnosis/usage-probe.gdb:6: Error in sourced command file:
+The program received a signal in another thread while
+making a function call from GDB.
+Evaluation of the expression containing the function
+(__libc_calloc) will be abandoned.
+When the function is done executing, GDB will silently stop.
+[Inferior 1 (process 48803) detached]

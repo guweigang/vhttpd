@@ -1,0 +1,133 @@
+{
+  "status": "short-attribution-completed-one-source-fix-validated-not-deployed",
+  "package_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+  "workspace_head": "afd4e85d4480bd8c91e19b758a738899476fe118",
+  "method": "Same existing binary; 20 s baseline, 40 s HTTP-only then 40 s Paseo-only, 45 s cooldown. Perf records all allocation API entry sizes and SAME-TID selected function entry/exit events in short windows, no full-stack streaming. No lost events or misnested exits in accepted windows. DWARF stacks from excluded first run are only path hints.",
+  "accepted_run": "08-scope-short",
+  "excluded_runs": {
+    "06-profile-short": "Full DWARF record grew past 128 MiB budget; driver stopped this diagnostic only. Numerous PERF_RECORD_LOST, not used for byte fractions or memory acceptance. Its valid symbolized stacks identify candidate paths only.",
+    "07-scope-short": "perf auto-suffixed return-event names; recording failed before pressure. Not accepted. Own leftover return definitions were removed; fixed run validates actual event existence before starting."
+  },
+  "http": {
+    "recorded_requested_bytes": 9423364,
+    "events": 70441,
+    "window_seconds": 2.008528191014193,
+    "inclusive_dispatch_fraction": 0.2615508644259099,
+    "context_box_requested_bytes": 661608,
+    "context_box_fraction_of_recorded_requests": 0.07020932227599401,
+    "context_box_bytes_per_call": 8168,
+    "other_verified_paths": [
+      "Two heap contexts allocated in veb handle_request_and_route, 7976 and 8168 bytes.",
+      "Response conversion, send_response_to_client and preserve_for_response_writer copy the ~7373-byte response body.",
+      "Request observation includes application log persistence; inclusive and exclusive scope fractions must not be added."
+    ]
+  },
+  "paseo": {
+    "recorded_requested_bytes": 3910266,
+    "events": 33521,
+    "config_lookup": {
+      "scope": "executor.InProcVjsxHostApi@static@config_lookup",
+      "requested_bytes": 2063043,
+      "fraction_of_recorded_requests": 0.5275965880582038,
+      "entered_calls": 27
+    },
+    "source": "src/executor/inproc_vjsx_host_config_api.v:6 decodes the entire JSON and traverses maps for each getter. No bounded revision-aware cache is implemented in this change."
+  },
+  "gc_remaining": {
+    "atomic_16_32_classes": [
+      {
+        "kind": 0,
+        "size": 16,
+        "blocks": 404,
+        "reserved_bytes": 1654784,
+        "resident_bytes": 1654784,
+        "marked_bytes_estimate": 170096,
+        "zero_mark_blocks": 0
+      },
+      {
+        "kind": 0,
+        "size": 32,
+        "blocks": 371,
+        "reserved_bytes": 1519616,
+        "resident_bytes": 1519616,
+        "marked_bytes_estimate": 143264,
+        "zero_mark_blocks": 0
+      }
+    ],
+    "resident_bytes": 3174400,
+    "marked_bytes_estimate": 313360,
+    "zero_mark_blocks": 0,
+    "interpretation": "Sparse nonempty object blocks, not whole-free pages. Exact reference owners/TLS caches/false conservative roots not proven; marked objects are not exact business liveness.",
+    "census_scope": "Read-only numeric metadata/pagemap, verified binary layout, same GC epoch and free-count consistency; concurrent mutator races remain possible."
+  },
+  "fix": {
+    "file": "src/http_observation_runtime.v",
+    "change": "Borrow Context synchronously by &Context instead of value, eliminating compiler-generated Context memdup heap box.",
+    "codegen": {
+      "before_source_sha256": "9835727803178ab7ce7de1dc130a02c8c7e0c1da9a0bffd463f42c1a86295feb",
+      "after_source_sha256": "274c324f9871c4909257f75780dfa1ec44e95994a83b3df757fc2d2d0621db75",
+      "before_context_box_copy_present": true,
+      "after_context_box_copy_present": false,
+      "before_signature": "void App__complete_http_observation(main__App* app, main__Context __heap_value_param_0, i64 started, string observation_id) {",
+      "after_signature": "void App__complete_http_observation(main__App* app, main__Context* ctx, i64 started, string observation_id) {",
+      "measured_old_package_allocation_bytes_per_call": 8168,
+      "old_package_sha256": "684281b177341e958ba3dead47c2e01ac9ebcb5a29d17466f906a4cb5b69b469",
+      "scope": "Generated production C confirms elimination of Context heap box. No fixed package has been built or deployed; this does not prove RSS improvement."
+    },
+    "runtime_impact": "No fixed-package RSS, throughput or 24-hour improvement claimed. No package build/deployment or bodytest switch.",
+    "vlang_or_vjsx_modified": false
+  },
+  "validation": {
+    "macos": "Direct actual HTTP observation test passed; V 0.5.2 d13ccdd, cc, Boehm default.",
+    "linux": "Direct actual HTTP observation test passed; /home/guweigang/v/v V 0.5.2 d13ccdd local-dev, GCC, gc none, native frozen vjsx/QuickJS under /tmp/vhttpd-idle-sdk-20261109.",
+    "sdk": "259620f1981a3573777ec8cda72883b1866404a7",
+    "global_make_gate": "make test stopped at pre-existing lint-safety failures in src/ws/hub_runtime.v nil-default runtime callbacks; direct targeted tests passed. Full repository gate not claimed.",
+    "current_other_changes": "Concurrent desktop changes were left untouched."
+  },
+  "limits": [
+    "Requested bytes are API request volume, not net new memory, retained bytes or leaks. Realloc records contain target capacity.",
+    "Selected scopes partition recorded events by thread; outside scopes remain directly attributed by return address, without claiming full high-level coverage.",
+    "Profiling changes throughput; the measured windows are allocation diagnosis, not performance or memory acceptance.",
+    "Small size-class occupancy is not a generational per-object allocation-to-root proof."
+  ],
+  "business_final": {
+    "utc": "2026-11-09T13:35:36Z",
+    "pid": 3730524,
+    "start_ticks": 39645663,
+    "sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+    "status_kib": {
+      "VmRSS": 138304,
+      "RssAnon": 129344,
+      "VmSwap": 0,
+      "Threads": 29
+    },
+    "health": [
+      {
+        "port": 19887,
+        "status": 200
+      },
+      {
+        "port": 19901,
+        "status": 200
+      },
+      {
+        "port": 19987,
+        "status": 200
+      }
+    ],
+    "host_mem_available_kib": 894104,
+    "observer_active": "active",
+    "own_perf_probes_removed": true,
+    "scope_run_completed": true,
+    "http_ok": 2978,
+    "paseo_ok": 19,
+    "host_min_during_run_kib": 791864,
+    "max_cgroup_memory_bytes": 139214848,
+    "last_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "next_priority": [
+    "Bound config getter parsing per runtime/config revision with invalidation and bounded lifetime.",
+    "Validate remaining veb context/body copies against ownership/lifetime before removing them.",
+    "Only build/retest a package after source fixes have concrete allocation proof; P0-02 remains open."
+  ]
+}

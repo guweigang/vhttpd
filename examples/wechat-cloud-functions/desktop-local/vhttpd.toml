@@ -1,0 +1,52 @@
+version = 2
+
+[server]
+pid_file = ".runtime/vhttpd.pid"
+
+[observability]
+event_log = ".runtime/events.ndjson"
+
+[listeners.web]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19886
+
+[listeners.admin]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19986
+
+[control]
+listener = "listener:admin"
+token = "local-development-only"
+
+[resources.db.wechat]
+kind = "pgsql"
+host = "127.0.0.1"
+port = 19896
+username = "wechat_desktop"
+password = ""
+database = "postgres"
+pool_size = 4
+options = {socket = ".runtime/db.sock", pool_name = "wechat"}
+
+[engines.wechat]
+kind = "vjsx"
+entry = "real.mts"
+module_root = ".."
+runtime_profile = "node"
+thread_count = 2
+enable_network = true
+resources = ["resource:db/wechat"]
+
+[adapters.wechat]
+kind = "http-handler"
+engine = "engine:wechat"
+
+[[pipelines]]
+id = "wechat"
+ingress = "listener:web"
+match.paths = ["*"]
+egress = "adapter:wechat"

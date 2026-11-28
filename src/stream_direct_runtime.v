@@ -10,9 +10,11 @@ import worker
 
 fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	delivery := worker_stream_start_delivery_outcome(start, 'sse')
-	ctx.takeover_conn()
+	mut client := takeover_http_stream(mut ctx) or {
+		return ctx.server_error(err.msg())
+	}
 	// Worker socket ownership remains with HttpResponseRuntime.stream.
-	defer { ctx.conn.close() or {} }
+	defer { client.close() or {} }
 	status := if delivery.status > 0 { delivery.status } else { 200 }
 	mut headers := delivery.headers.clone()
 	headers['x-request-id'] = req_id
@@ -20,7 +22,7 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 	headers['x-accel-buffering'] = 'no'
 	headers['x-vhttpd-stream-mode'] = 'direct'
 	ctype := delivery.headers['content-type'] or { 'text/event-stream' }
-	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, false) or {
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut client, status, ctype, headers, false) or {
 		return veb.no_result()
 	}
 	// HEAD returns to the outer worker owner after writing headers.
@@ -32,7 +34,7 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 		}
 		if frame.event == 'chunk' {
 			if method.to_upper() != 'HEAD' {
-				worker.WorkerHttpStreamWriter.write_sse_message(mut ctx.conn, frame) or { break }
+				client.write_sse(frame) or { break }
 			}
 			continue
 		}
@@ -67,16 +69,18 @@ fn HttpStreamRuntime.direct_sse(rt StreamRuntimeContext, mut ctx Context, mut co
 
 fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context, mut conn unix.StreamConn, start transport.WorkerStreamFrame, method string, path string, req_id string, trace_id string, start_ms i64) veb.Result {
 	delivery := worker_stream_start_delivery_outcome(start, 'passthrough')
-	ctx.takeover_conn()
+	mut client := takeover_http_stream(mut ctx) or {
+		return ctx.server_error(err.msg())
+	}
 	// Worker socket ownership remains with HttpResponseRuntime.stream.
-	defer { ctx.conn.close() or {} }
+	defer { client.close() or {} }
 	status := if delivery.status > 0 { delivery.status } else { 200 }
 	mut headers := delivery.headers.clone()
 	headers['x-request-id'] = req_id
 	headers['x-vhttpd-trace-id'] = trace_id
 	headers['x-vhttpd-stream-mode'] = 'direct'
 	ctype := delivery.headers['content-type'] or { 'text/plain; charset=utf-8' }
-	worker.WorkerHttpStreamWriter.write_headers_conn(mut ctx.conn, status, ctype, headers, true) or {
+	worker.WorkerHttpStreamWriter.write_headers_conn(mut client, status, ctype, headers, true) or {
 		return veb.no_result()
 	}
 	// HEAD returns to the outer worker owner after writing headers.
@@ -93,7 +97,7 @@ fn HttpStreamRuntime.direct_passthrough(rt StreamRuntimeContext, mut ctx Context
 				} else {
 					frame.data
 				}
-				worker.WorkerHttpStreamWriter.write_chunk(mut ctx.conn, data) or { break }
+				worker.WorkerHttpStreamWriter.write_chunk(mut client, data) or { break }
 			}
 			continue
 		}

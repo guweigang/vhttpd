@@ -4,7 +4,6 @@ import ws
 import connection_runtime
 import json2 as json
 import log
-import net
 import net.websocket
 import time
 import executor
@@ -23,6 +22,7 @@ mut:
 	client    ?&websocket.Client
 	sender    ?&connection_runtime.WebSocketSender
 	watchers  []thread
+	serving   ?&ws.IngressRun
 }
 
 fn (mut state FeishuCardBridgeServerState) reply(payload string) ! {
@@ -57,7 +57,7 @@ fn feishu_card_bridge_server_attached_cb(mut sc websocket.ServerClient, ref void
 	feishu_card_bridge_server_connect_cb(mut sc, ref)!
 	// Publish only after the handshake response was written successfully.
 	state.sender = state.bridge.register_client(state.client_id, sc.client)
-	state.watchers << spawn feishu_bridge_server_watchdog(state.bridge, state.client_id, sc.client)
+	state.watchers << spawn feishu_bridge_server_watchdog(state.bridge, state.client_id, sc.client, state.serving)
 }
 
 fn feishu_card_bridge_http_response(mut app App, mut ctx Context, method string, path string, req_id string, trace_id string, start_ms i64, status int, headers map[string]string, body string, error_class string) veb.Result {
@@ -337,12 +337,13 @@ fn feishu_card_bridge_server_close_cb(mut _ws websocket.Client, _code int, _reas
 	bridge.unregister_client(state.client_id, &_ws)
 }
 
-fn FeishuCardBridgeRuntime.handle_server_session(mut host FeishuBridgeProxyHost, mut conn net.TcpConn, key string, client_id string, req_id string) {
+fn FeishuCardBridgeRuntime.handle_server_session(mut host FeishuBridgeProxyHost, mut conn ws.IngressConnection, key string, client_id string, req_id string, serving &ws.IngressRun) {
 	mut server, captured := ws.managed_server()
 	mut state := &FeishuCardBridgeServerState{
 		host:      host
 		bridge:    host.bridge_context()
 		client_id: client_id
+		serving:   serving
 	}
 	defer {
 		state.release_client()
@@ -352,7 +353,7 @@ fn FeishuCardBridgeRuntime.handle_server_session(mut host FeishuBridgeProxyHost,
 	// Keep these as free-function trampolines; see callback note above.
 	server.on_message_ref(feishu_card_bridge_server_message_cb, state)
 	server.on_close_ref(feishu_card_bridge_server_close_cb, state)
-	ws.managed_handshake(mut server, mut conn, key, captured) or {
+	ws.managed_ingress_handshake(mut server, mut conn, key, captured) or {
 		log.error('[bridge] ❌ bridge ws handshake failed req=${req_id}: ${err}')
 	}
 }
@@ -400,32 +401,36 @@ pub fn (mut app App) feishu_card_bridge_ws(mut ctx Context) veb.Result {
 	delivery := feishu_card_bridge_server_session_delivery_outcome(client_id, req_id, trace_id)
 	relay_client_id := delivery.metadata['relay_client_id'] or { client_id }
 	mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
-	ctx.takeover_conn()
-	ctx.conn.set_write_timeout(time.infinite)
-	ctx.conn.set_read_timeout(time.infinite)
-	mut conn := ctx.conn
+	mut conn := takeover_inbound_websocket(mut ctx) or {
+		run.finish()
+		return inbound_websocket_unavailable(mut ctx)
+	}
 	spawn FeishuCardBridgeRuntime.run_server_session(mut run, mut app, mut conn, key, relay_client_id,
 		req_id)
 	return veb.no_result()
 }
 
-fn FeishuCardBridgeRuntime.run_server_session(mut run ws.IngressRun, mut host FeishuBridgeProxyHost, mut conn net.TcpConn, key string, client_id string, req_id string) {
+fn FeishuCardBridgeRuntime.run_server_session(mut run ws.IngressRun, mut host FeishuBridgeProxyHost, mut conn ws.IngressConnection, key string, client_id string, req_id string) {
 	defer { run.finish() }
 	if run.stopped() {
 		conn.close() or {}
 		return
 	}
-	FeishuCardBridgeRuntime.handle_server_session(mut host, mut conn, key, client_id, req_id)
+	FeishuCardBridgeRuntime.handle_server_session(mut host, mut conn, key, client_id, req_id, &run)
 }
 
-fn feishu_bridge_server_watchdog(context FeishuCardBridgeContext, client_id string, client &websocket.Client) {
+fn feishu_bridge_server_watchdog(context FeishuCardBridgeContext, client_id string, client &websocket.Client, serving ?&ws.IngressRun) {
 	mut bridge := context
 	for {
 		time.sleep(time.second)
 		authority := bridge.server_authority(client_id, client) or { return }
 		if !bridge.state.bridge_lease_expired(authority) { continue }
 		bridge.unregister_client(client_id, client)
-		if !isnil(client.conn) { client.conn.close() or {} }
+		if mut run := serving {
+			run.request_stop()
+		} else if !isnil(client.conn) {
+			client.conn.close() or {}
+		}
 		return
 	}
 }

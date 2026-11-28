@@ -1,6 +1,7 @@
 module main
 
 import admin
+import browser_auth
 import http_runtime
 import dispatch
 import feishu
@@ -21,7 +22,7 @@ pub:
 pub mut:
 	shared       &App @[required]
 	workbench_focus &admin.WorkbenchFocusStore = &admin.WorkbenchFocusStore{}
-	browser_auth &admin.BrowserAuth = &admin.BrowserAuth{}
+	browser_auth &browser_auth.BrowserAuth = &browser_auth.BrowserAuth{}
 }
 
 struct AdminPlaneRuntime {}

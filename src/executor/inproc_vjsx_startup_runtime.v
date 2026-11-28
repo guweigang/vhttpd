@@ -15,7 +15,7 @@ fn (e InProcVjsxExecutor) run_lane_startup(mut app EmbeddedHost, idx int, lane V
 	if !should_run {
 		return
 	}
-	e.execute_startup_hook(mut app, idx, lane, 'startup')!
+	e.execute_runtime_hook(mut app, idx, lane, 'startup', none)!
 	state.mu.@lock()
 	if idx >= 0 && idx < state.hosts.len {
 		state.hosts[idx].startup_completed = true
@@ -24,28 +24,17 @@ fn (e InProcVjsxExecutor) run_lane_startup(mut app EmbeddedHost, idx int, lane V
 }
 
 fn (e InProcVjsxExecutor) run_app_startup(mut app EmbeddedHost, idx int, lane VjsxExecutionLane) ! {
-	mut source_signature := ''
 	mut state := e.state
-	state.mu.@lock()
-	if idx >= 0 && idx < state.hosts.len {
-		source_signature = state.hosts[idx].source_signature
-	}
-	if state.app_startup_source_signature != source_signature {
-		state.app_startup_source_signature = source_signature
-		state.app_startup_running = false
-		state.app_startup_completed = false
-		state.app_startup_last_error = ''
-	}
-	state.mu.unlock()
 	for {
 		state.mu.@lock()
-		if state.app_startup_source_signature != source_signature {
-			state.app_startup_source_signature = source_signature
-			state.app_startup_running = false
-			state.app_startup_completed = false
-			state.app_startup_last_error = ''
+		source_signature := state.hosts[idx].source_signature
+		if state.stopping {
+			state.mu.unlock()
+			return error('inproc_vjsx_executor_closed')
 		}
-		if state.app_startup_completed {
+		// A lane prepared before a source refresh cannot replace the current
+		// generation's startup state while waiting for another lane.
+		if source_signature != state.cached_source_signature {
 			state.mu.unlock()
 			return
 		}
@@ -54,10 +43,18 @@ fn (e InProcVjsxExecutor) run_app_startup(mut app EmbeddedHost, idx int, lane Vj
 			time.sleep(time.millisecond * inproc_vjsx_startup_wait_poll_ms)
 			continue
 		}
+		if state.app_startup_source_signature != source_signature {
+			state.app_startup_source_signature = source_signature
+			state.app_startup_completed = false
+		}
+		if state.app_startup_completed {
+			state.mu.unlock()
+			return
+		}
 		state.app_startup_running = true
 		state.app_startup_last_error = ''
 		state.mu.unlock()
-		e.execute_startup_hook(mut app, idx, lane, 'app_startup') or {
+		jobs := e.execute_runtime_hook(mut app, idx, lane, 'app_startup', none) or {
 			state.mu.@lock()
 			state.app_startup_running = false
 			state.app_startup_completed = false
@@ -68,6 +65,9 @@ fn (e InProcVjsxExecutor) run_app_startup(mut app EmbeddedHost, idx int, lane Vj
 		state.mu.@lock()
 		state.app_startup_running = false
 		state.app_startup_completed = true
+		if !state.stopping && state.cached_source_signature == source_signature {
+			state.job_schedule = new_vjsx_job_schedule(source_signature, jobs)
+		}
 		state.app_startup_last_error = ''
 		state.mu.unlock()
 		return

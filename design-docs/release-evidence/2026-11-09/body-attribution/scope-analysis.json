@@ -1,0 +1,2714 @@
+{
+  "duration_seconds": 19.97043044,
+  "gc_allocated_mib_per_second": 3.0878195151645005,
+  "all_global_allocations_bytes": 64660528,
+  "global_allocations_during_union_of_source_scopes_bytes": 64566064,
+  "global_allocation_coverage_fraction": 0.9985390778126649,
+  "source_scope_time_fraction": 0.01761577708887881,
+  "entry_calls": {
+    "1": 796,
+    "2": 78
+  },
+  "thread_entry_calls": {
+    "3730539": 220,
+    "3730535": 220,
+    "3730543": 217,
+    "3730542": 217
+  },
+  "unmatched_exits": 0,
+  "remaining_open_scopes": 0,
+  "inconsistent_epoch_reads": 0,
+  "gc_epoch_range": [
+    20581,
+    20582
+  ],
+  "limitations": [
+    "Allocation deltas are global counters inside the UNION of source-probe/signature intervals; overlapping scopes are counted once.",
+    "This establishes time coverage, not exclusive allocation ownership or retained-byte attribution. Concurrent non-scan allocations can contribute.",
+    "Same-SHA independent prior allocation call stacks provide direct ownership evidence for scanner allocations.",
+    "Low-frequency four boundary probes; no malloc-level instrumentation, no GC intervention."
+  ],
+  "spans": [
+    {
+      "start_ns": 632415477640101,
+      "end_ns": 632415477870800,
+      "allocated_bytes_global": 17376
+    },
+    {
+      "start_ns": 632415478027882,
+      "end_ns": 632415478180799,
+      "allocated_bytes_global": 27712
+    },
+    {
+      "start_ns": 632415484817400,
+      "end_ns": 632415486262154,
+      "allocated_bytes_global": 195792
+    },
+    {
+      "start_ns": 632415577974123,
+      "end_ns": 632415578197597,
+      "allocated_bytes_global": 26128
+    },
+    {
+      "start_ns": 632415578266138,
+      "end_ns": 632415578436653,
+      "allocated_bytes_global": 25280
+    },
+    {
+      "start_ns": 632415585799622,
+      "end_ns": 632415587190436,
+      "allocated_bytes_global": 228464
+    },
+    {
+      "start_ns": 632415678304128,
+      "end_ns": 632415678490859,
+      "allocated_bytes_global": 20688
+    },
+    {
+      "start_ns": 632415678528029,
+      "end_ns": 632415678684491,
+      "allocated_bytes_global": 18256
+    },
+    {
+      "start_ns": 632415686684950,
+      "end_ns": 632415688061569,
+      "allocated_bytes_global": 232128
+    },
+    {
+      "start_ns": 632415778591845,
+      "end_ns": 632415778912724,
+      "allocated_bytes_global": 62512
+    },
+    {
+      "start_ns": 632415787463093,
+      "end_ns": 632415788827031,
+      "allocated_bytes_global": 212256
+    },
+    {
+      "start_ns": 632415878894146,
+      "end_ns": 632415879270049,
+      "allocated_bytes_global": 38880
+    },
+    {
+      "start_ns": 632415888394706,
+      "end_ns": 632415889766070,
+      "allocated_bytes_global": 235968
+    },
+    {
+      "start_ns": 632415979181056,
+      "end_ns": 632415979345072,
+      "allocated_bytes_global": 36256
+    },
+    {
+      "start_ns": 632415979354736,
+      "end_ns": 632415979542014,
+      "allocated_bytes_global": 33616
+    },
+    {
+      "start_ns": 632415989347161,
+      "end_ns": 632415990673680,
+      "allocated_bytes_global": 221888
+    },
+    {
+      "start_ns": 632416079440284,
+      "end_ns": 632416079618779,
+      "allocated_bytes_global": 24176
+    },
+    {
+      "start_ns": 632416079636576,
+      "end_ns": 632416079776736,
+      "allocated_bytes_global": 16848
+    },
+    {
+      "start_ns": 632416090145755,
+      "end_ns": 632416091463636,
+      "allocated_bytes_global": 220880
+    },
+    {
+      "start_ns": 632416179729798,
+      "end_ns": 632416180094658,
+      "allocated_bytes_global": 46624
+    },
+    {
+      "start_ns": 632416190939873,
+      "end_ns": 632416192260702,
+      "allocated_bytes_global": 220336
+    },
+    {
+      "start_ns": 632416280013949,
+      "end_ns": 632416280426665,
+      "allocated_bytes_global": 139744
+    },
+    {
+      "start_ns": 632416291738788,
+      "end_ns": 632416293112423,
+      "allocated_bytes_global": 227440
+    },
+    {
+      "start_ns": 632416380464351,
+      "end_ns": 632416380857277,
+      "allocated_bytes_global": 44544
+    },
+    {
+      "start_ns": 632416380866315,
+      "end_ns": 632416381089241,
+      "allocated_bytes_global": 95696
+    },
+    {
+      "start_ns": 632416392552071,
+      "end_ns": 632416395233005,
+      "allocated_bytes_global": 595360
+    },
+    {
+      "start_ns": 632416480886589,
+      "end_ns": 632416481077777,
+      "allocated_bytes_global": 21712
+    },
+    {
+      "start_ns": 632416481176290,
+      "end_ns": 632416481314375,
+      "allocated_bytes_global": 25072
+    },
+    {
+      "start_ns": 632416494595223,
+      "end_ns": 632416495990847,
+      "allocated_bytes_global": 231472
+    },
+    {
+      "start_ns": 632416581193002,
+      "end_ns": 632416581375184,
+      "allocated_bytes_global": 29024
+    },
+    {
+      "start_ns": 632416581420092,
+      "end_ns": 632416581575659,
+      "allocated_bytes_global": 23792
+    },
+    {
+      "start_ns": 632416595532663,
+      "end_ns": 632416596734491,
+      "allocated_bytes_global": 201072
+    },
+    {
+      "start_ns": 632416681501771,
+      "end_ns": 632416681748176,
+      "allocated_bytes_global": 21024
+    },
+    {
+      "start_ns": 632416681764515,
+      "end_ns": 632416681951650,
+      "allocated_bytes_global": 21392
+    },
+    {
+      "start_ns": 632416696428071,
+      "end_ns": 632416697860477,
+      "allocated_bytes_global": 237584
+    },
+    {
+      "start_ns": 632416781869196,
+      "end_ns": 632416782235676,
+      "allocated_bytes_global": 52048
+    },
+    {
+      "start_ns": 632416797384858,
+      "end_ns": 632416798623323,
+      "allocated_bytes_global": 224176
+    },
+    {
+      "start_ns": 632416882225002,
+      "end_ns": 632416882555675,
+      "allocated_bytes_global": 32688
+    },
+    {
+      "start_ns": 632416898381084,
+      "end_ns": 632416899900696,
+      "allocated_bytes_global": 228304
+    },
+    {
+      "start_ns": 632416982491332,
+      "end_ns": 632416982670925,
+      "allocated_bytes_global": 32528
+    },
+    {
+      "start_ns": 632416982700520,
+      "end_ns": 632416982866754,
+      "allocated_bytes_global": 37792
+    },
+    {
+      "start_ns": 632416999543802,
+      "end_ns": 632417000740479,
+      "allocated_bytes_global": 228096
+    },
+    {
+      "start_ns": 632417082782240,
+      "end_ns": 632417082971348,
+      "allocated_bytes_global": 22256
+    },
+    {
+      "start_ns": 632417083019074,
+      "end_ns": 632417083187840,
+      "allocated_bytes_global": 24160
+    },
+    {
+      "start_ns": 632417100378980,
+      "end_ns": 632417101663829,
+      "allocated_bytes_global": 216112
+    },
+    {
+      "start_ns": 632417183080083,
+      "end_ns": 632417183416069,
+      "allocated_bytes_global": 29584
+    },
+    {
+      "start_ns": 632417201244498,
+      "end_ns": 632417202436555,
+      "allocated_bytes_global": 227616
+    },
+    {
+      "start_ns": 632417283422016,
+      "end_ns": 632417283820813,
+      "allocated_bytes_global": 156464
+    },
+    {
+      "start_ns": 632417302040000,
+      "end_ns": 632417303302595,
+      "allocated_bytes_global": 229008
+    },
+    {
+      "start_ns": 632417383818873,
+      "end_ns": 632417384242473,
+      "allocated_bytes_global": 136864
+    },
+    {
+      "start_ns": 632417402878539,
+      "end_ns": 632417405521954,
+      "allocated_bytes_global": 579216
+    },
+    {
+      "start_ns": 632417484226234,
+      "end_ns": 632417484528235,
+      "allocated_bytes_global": 48944
+    },
+    {
+      "start_ns": 632417504962917,
+      "end_ns": 632417506380820,
+      "allocated_bytes_global": 212288
+    },
+    {
+      "start_ns": 632417584504951,
+      "end_ns": 632417584811115,
+      "allocated_bytes_global": 46784
+    },
+    {
+      "start_ns": 632417605865374,
+      "end_ns": 632417607282015,
+      "allocated_bytes_global": 213552
+    },
+    {
+      "start_ns": 632417684790793,
+      "end_ns": 632417685114181,
+      "allocated_bytes_global": 43648
+    },
+    {
+      "start_ns": 632417706667780,
+      "end_ns": 632417708107765,
+      "allocated_bytes_global": 241440
+    },
+    {
+      "start_ns": 632417785057594,
+      "end_ns": 632417785367198,
+      "allocated_bytes_global": 62752
+    },
+    {
+      "start_ns": 632417807511430,
+      "end_ns": 632417808847043,
+      "allocated_bytes_global": 208864
+    },
+    {
+      "start_ns": 632417885336892,
+      "end_ns": 632417885725109,
+      "allocated_bytes_global": 48656
+    },
+    {
+      "start_ns": 632417908427087,
+      "end_ns": 632417909642850,
+      "allocated_bytes_global": 234896
+    },
+    {
+      "start_ns": 632417985667377,
+      "end_ns": 632417986023706,
+      "allocated_bytes_global": 44048
+    },
+    {
+      "start_ns": 632418009318451,
+      "end_ns": 632418010423303,
+      "allocated_bytes_global": 219664
+    },
+    {
+      "start_ns": 632418086021993,
+      "end_ns": 632418086308561,
+      "allocated_bytes_global": 45136
+    },
+    {
+      "start_ns": 632418110151100,
+      "end_ns": 632418111241915,
+      "allocated_bytes_global": 222144
+    },
+    {
+      "start_ns": 632418186338940,
+      "end_ns": 632418186554129,
+      "allocated_bytes_global": 21360
+    },
+    {
+      "start_ns": 632418186578390,
+      "end_ns": 632418186733365,
+      "allocated_bytes_global": 32336
+    },
+    {
+      "start_ns": 632418211058058,
+      "end_ns": 632418212078886,
+      "allocated_bytes_global": 231088
+    },
+    {
+      "start_ns": 632418286658057,
+      "end_ns": 632418286861800,
+      "allocated_bytes_global": 27296
+    },
+    {
+      "start_ns": 632418286869665,
+      "end_ns": 632418287086837,
+      "allocated_bytes_global": 88896
+    },
+    {
+      "start_ns": 632418287107017,
+      "end_ns": 632418287218820,
+      "allocated_bytes_global": 22128
+    },
+    {
+      "start_ns": 632418311979261,
+      "end_ns": 632418312866721,
+      "allocated_bytes_global": 218192
+    },
+    {
+      "start_ns": 632418387200519,
+      "end_ns": 632418387456052,
+      "allocated_bytes_global": 24704
+    },
+    {
+      "start_ns": 632418387484655,
+      "end_ns": 632418387649090,
+      "allocated_bytes_global": 27232
+    },
+    {
+      "start_ns": 632418387659425,
+      "end_ns": 632418387921116,
+      "allocated_bytes_global": 92096
+    },
+    {
+      "start_ns": 632418412935702,
+      "end_ns": 632418415180328,
+      "allocated_bytes_global": 577712
+    },
+    {
+      "start_ns": 632418487555235,
+      "end_ns": 632418487772042,
+      "allocated_bytes_global": 26528
+    },
+    {
+      "start_ns": 632418488015916,
+      "end_ns": 632418488148468,
+      "allocated_bytes_global": 18880
+    },
+    {
+      "start_ns": 632418515146687,
+      "end_ns": 632418516173086,
+      "allocated_bytes_global": 219520
+    },
+    {
+      "start_ns": 632418587872157,
+      "end_ns": 632418588048522,
+      "allocated_bytes_global": 30080
+    },
+    {
+      "start_ns": 632418588235777,
+      "end_ns": 632418588380485,
+      "allocated_bytes_global": 32384
+    },
+    {
+      "start_ns": 632418616018866,
+      "end_ns": 632418617109676,
+      "allocated_bytes_global": 233328
+    },
+    {
+      "start_ns": 632418688154597,
+      "end_ns": 632418688326227,
+      "allocated_bytes_global": 12816
+    },
+    {
+      "start_ns": 632418688454937,
+      "end_ns": 632418688567221,
+      "allocated_bytes_global": 18960
+    },
+    {
+      "start_ns": 632418716917380,
+      "end_ns": 632418717966684,
+      "allocated_bytes_global": 213936
+    },
+    {
+      "start_ns": 632418788434404,
+      "end_ns": 632418788836400,
+      "allocated_bytes_global": 57296
+    },
+    {
+      "start_ns": 632418817980917,
+      "end_ns": 632418818958791,
+      "allocated_bytes_global": 226304
+    },
+    {
+      "start_ns": 632418888937473,
+      "end_ns": 632418889259761,
+      "allocated_bytes_global": 36912
+    },
+    {
+      "start_ns": 632418918887030,
+      "end_ns": 632418920026011,
+      "allocated_bytes_global": 231440
+    },
+    {
+      "start_ns": 632418989240694,
+      "end_ns": 632418989424047,
+      "allocated_bytes_global": 25120
+    },
+    {
+      "start_ns": 632418989442875,
+      "end_ns": 632418989563189,
+      "allocated_bytes_global": 36944
+    },
+    {
+      "start_ns": 632419019905454,
+      "end_ns": 632419020883179,
+      "allocated_bytes_global": 224096
+    },
+    {
+      "start_ns": 632419089521971,
+      "end_ns": 632419089717520,
+      "allocated_bytes_global": 24080
+    },
+    {
+      "start_ns": 632419089737146,
+      "end_ns": 632419089832806,
+      "allocated_bytes_global": 15040
+    },
+    {
+      "start_ns": 632419120865138,
+      "end_ns": 632419121978534,
+      "allocated_bytes_global": 222112
+    },
+    {
+      "start_ns": 632419189817597,
+      "end_ns": 632419190224202,
+      "allocated_bytes_global": 45552
+    },
+    {
+      "start_ns": 632419222048762,
+      "end_ns": 632419222888261,
+      "allocated_bytes_global": 216688
+    },
+    {
+      "start_ns": 632419290131292,
+      "end_ns": 632419290309532,
+      "allocated_bytes_global": 31216
+    },
+    {
+      "start_ns": 632419290318978,
+      "end_ns": 632419290600332,
+      "allocated_bytes_global": 114000
+    },
+    {
+      "start_ns": 632419322930599,
+      "end_ns": 632419323837857,
+      "allocated_bytes_global": 240064
+    },
+    {
+      "start_ns": 632419390635503,
+      "end_ns": 632419391108884,
+      "allocated_bytes_global": 140224
+    },
+    {
+      "start_ns": 632419423798015,
+      "end_ns": 632419425993191,
+      "allocated_bytes_global": 575408
+    },
+    {
+      "start_ns": 632419490969601,
+      "end_ns": 632419491153145,
+      "allocated_bytes_global": 17984
+    },
+    {
+      "start_ns": 632419491232462,
+      "end_ns": 632419491333941,
+      "allocated_bytes_global": 19440
+    },
+    {
+      "start_ns": 632419525818207,
+      "end_ns": 632419526826929,
+      "allocated_bytes_global": 212544
+    },
+    {
+      "start_ns": 632419591251743,
+      "end_ns": 632419591431376,
+      "allocated_bytes_global": 32192
+    },
+    {
+      "start_ns": 632419591470297,
+      "end_ns": 632419591678437,
+      "allocated_bytes_global": 30112
+    },
+    {
+      "start_ns": 632419626682117,
+      "end_ns": 632419627730290,
+      "allocated_bytes_global": 226800
+    },
+    {
+      "start_ns": 632419691521439,
+      "end_ns": 632419691740209,
+      "allocated_bytes_global": 20624
+    },
+    {
+      "start_ns": 632419691809840,
+      "end_ns": 632419692019007,
+      "allocated_bytes_global": 24256
+    },
+    {
+      "start_ns": 632419727558379,
+      "end_ns": 632419728536455,
+      "allocated_bytes_global": 226176
+    },
+    {
+      "start_ns": 632419791831165,
+      "end_ns": 632419792037880,
+      "allocated_bytes_global": 29696
+    },
+    {
+      "start_ns": 632419792102777,
+      "end_ns": 632419792268633,
+      "allocated_bytes_global": 30112
+    },
+    {
+      "start_ns": 632419828413768,
+      "end_ns": 632419829367078,
+      "allocated_bytes_global": 234976
+    },
+    {
+      "start_ns": 632419892127204,
+      "end_ns": 632419892291192,
+      "allocated_bytes_global": 20608
+    },
+    {
+      "start_ns": 632419892351939,
+      "end_ns": 632419892497272,
+      "allocated_bytes_global": 15088
+    },
+    {
+      "start_ns": 632419929249069,
+      "end_ns": 632419930481447,
+      "allocated_bytes_global": 214240
+    },
+    {
+      "start_ns": 632419992381739,
+      "end_ns": 632419992545704,
+      "allocated_bytes_global": 19024
+    },
+    {
+      "start_ns": 632419992605940,
+      "end_ns": 632419992729815,
+      "allocated_bytes_global": 22048
+    },
+    {
+      "start_ns": 632420030031183,
+      "end_ns": 632420031305074,
+      "allocated_bytes_global": 213808
+    },
+    {
+      "start_ns": 632420092653879,
+      "end_ns": 632420092838706,
+      "allocated_bytes_global": 47472
+    },
+    {
+      "start_ns": 632420092848706,
+      "end_ns": 632420093063809,
+      "allocated_bytes_global": 29664
+    },
+    {
+      "start_ns": 632420130807330,
+      "end_ns": 632420132067841,
+      "allocated_bytes_global": 238656
+    },
+    {
+      "start_ns": 632420192929129,
+      "end_ns": 632420193099580,
+      "allocated_bytes_global": 17408
+    },
+    {
+      "start_ns": 632420193154956,
+      "end_ns": 632420193333445,
+      "allocated_bytes_global": 21552
+    },
+    {
+      "start_ns": 632420231817760,
+      "end_ns": 632420232904194,
+      "allocated_bytes_global": 216064
+    },
+    {
+      "start_ns": 632420293189300,
+      "end_ns": 632420293362024,
+      "allocated_bytes_global": 27344
+    },
+    {
+      "start_ns": 632420293369025,
+      "end_ns": 632420293627107,
+      "allocated_bytes_global": 112944
+    },
+    {
+      "start_ns": 632420332779990,
+      "end_ns": 632420333974583,
+      "allocated_bytes_global": 246448
+    },
+    {
+      "start_ns": 632420393662162,
+      "end_ns": 632420393938492,
+      "allocated_bytes_global": 53088
+    },
+    {
+      "start_ns": 632420393941695,
+      "end_ns": 632420394165638,
+      "allocated_bytes_global": 87136
+    },
+    {
+      "start_ns": 632420433834254,
+      "end_ns": 632420436370397,
+      "allocated_bytes_global": 565856
+    },
+    {
+      "start_ns": 632420493939329,
+      "end_ns": 632420494186325,
+      "allocated_bytes_global": 24672
+    },
+    {
+      "start_ns": 632420494273324,
+      "end_ns": 632420494442164,
+      "allocated_bytes_global": 29968
+    },
+    {
+      "start_ns": 632420536122439,
+      "end_ns": 632420537330205,
+      "allocated_bytes_global": 215072
+    },
+    {
+      "start_ns": 632420594300979,
+      "end_ns": 632420594500481,
+      "allocated_bytes_global": 21888
+    },
+    {
+      "start_ns": 632420594566542,
+      "end_ns": 632420594796296,
+      "allocated_bytes_global": 22768
+    },
+    {
+      "start_ns": 632420637037778,
+      "end_ns": 632420638254444,
+      "allocated_bytes_global": 228672
+    },
+    {
+      "start_ns": 632420694630969,
+      "end_ns": 632420694815250,
+      "allocated_bytes_global": 23120
+    },
+    {
+      "start_ns": 632420694884107,
+      "end_ns": 632420695055916,
+      "allocated_bytes_global": 26784
+    },
+    {
+      "start_ns": 632420737918825,
+      "end_ns": 632420739159422,
+      "allocated_bytes_global": 226512
+    },
+    {
+      "start_ns": 632420794935736,
+      "end_ns": 632420795292400,
+      "allocated_bytes_global": 40256
+    },
+    {
+      "start_ns": 632420838906262,
+      "end_ns": 632420839959984,
+      "allocated_bytes_global": 218448
+    },
+    {
+      "start_ns": 632420895239957,
+      "end_ns": 632420895419299,
+      "allocated_bytes_global": 36848
+    },
+    {
+      "start_ns": 632420895424616,
+      "end_ns": 632420895564517,
+      "allocated_bytes_global": 26192
+    },
+    {
+      "start_ns": 632420939774946,
+      "end_ns": 632420940739492,
+      "allocated_bytes_global": 220544
+    },
+    {
+      "start_ns": 632420995522279,
+      "end_ns": 632420995838994,
+      "allocated_bytes_global": 33472
+    },
+    {
+      "start_ns": 632421040635704,
+      "end_ns": 632421041834075,
+      "allocated_bytes_global": 213456
+    },
+    {
+      "start_ns": 632421095846525,
+      "end_ns": 632421096102231,
+      "allocated_bytes_global": 49936
+    },
+    {
+      "start_ns": 632421141490269,
+      "end_ns": 632421142669526,
+      "allocated_bytes_global": 243472
+    },
+    {
+      "start_ns": 632421196193747,
+      "end_ns": 632421196479576,
+      "allocated_bytes_global": 61632
+    },
+    {
+      "start_ns": 632421242299102,
+      "end_ns": 632421243477385,
+      "allocated_bytes_global": 211696
+    },
+    {
+      "start_ns": 632421296493892,
+      "end_ns": 632421296978367,
+      "allocated_bytes_global": 132320
+    },
+    {
+      "start_ns": 632421343132257,
+      "end_ns": 632421344472518,
+      "allocated_bytes_global": 215648
+    },
+    {
+      "start_ns": 632421396826178,
+      "end_ns": 632421396993183,
+      "allocated_bytes_global": 28512
+    },
+    {
+      "start_ns": 632421396999694,
+      "end_ns": 632421397221122,
+      "allocated_bytes_global": 104416
+    },
+    {
+      "start_ns": 632421443966265,
+      "end_ns": 632421446562867,
+      "allocated_bytes_global": 586448
+    },
+    {
+      "start_ns": 632421497293667,
+      "end_ns": 632421497496272,
+      "allocated_bytes_global": 49632
+    },
+    {
+      "start_ns": 632421545965970,
+      "end_ns": 632421547374675,
+      "allocated_bytes_global": 218224
+    },
+    {
+      "start_ns": 632421597577250,
+      "end_ns": 632421597793709,
+      "allocated_bytes_global": 26576
+    },
+    {
+      "start_ns": 632421597840668,
+      "end_ns": 632421597959792,
+      "allocated_bytes_global": 34352
+    },
+    {
+      "start_ns": 632421646790970,
+      "end_ns": 632421648193613,
+      "allocated_bytes_global": 228992
+    },
+    {
+      "start_ns": 632421697903409,
+      "end_ns": 632421698086506,
+      "allocated_bytes_global": 27552
+    },
+    {
+      "start_ns": 632421698103573,
+      "end_ns": 632421698198785,
+      "allocated_bytes_global": 21888
+    },
+    {
+      "start_ns": 632421747596140,
+      "end_ns": 632421748944737,
+      "allocated_bytes_global": 224064
+    },
+    {
+      "start_ns": 632421798184692,
+      "end_ns": 632421798361885,
+      "allocated_bytes_global": 16368
+    },
+    {
+      "start_ns": 632421798378900,
+      "end_ns": 632421798474649,
+      "allocated_bytes_global": 22624
+    },
+    {
+      "start_ns": 632421848387623,
+      "end_ns": 632421849878997,
+      "allocated_bytes_global": 219984
+    },
+    {
+      "start_ns": 632421898469158,
+      "end_ns": 632421898685528,
+      "allocated_bytes_global": 29744
+    },
+    {
+      "start_ns": 632421898709654,
+      "end_ns": 632421898830456,
+      "allocated_bytes_global": 20640
+    },
+    {
+      "start_ns": 632421949205784,
+      "end_ns": 632421950707998,
+      "allocated_bytes_global": 214624
+    },
+    {
+      "start_ns": 632421998792850,
+      "end_ns": 632421998968595,
+      "allocated_bytes_global": 17760
+    },
+    {
+      "start_ns": 632421998987096,
+      "end_ns": 632421999098555,
+      "allocated_bytes_global": 28736
+    },
+    {
+      "start_ns": 632422050095864,
+      "end_ns": 632422051672135,
+      "allocated_bytes_global": 229664
+    },
+    {
+      "start_ns": 632422099072595,
+      "end_ns": 632422099439446,
+      "allocated_bytes_global": 53712
+    },
+    {
+      "start_ns": 632422150967949,
+      "end_ns": 632422151714286,
+      "allocated_bytes_global": 106928
+    },
+    {
+      "start_ns": 632422151761822,
+      "end_ns": 632422152462039,
+      "allocated_bytes_global": 110080
+    },
+    {
+      "start_ns": 632422199393025,
+      "end_ns": 632422199731922,
+      "allocated_bytes_global": 50832
+    },
+    {
+      "start_ns": 632422251820180,
+      "end_ns": 632422253290283,
+      "allocated_bytes_global": 254272
+    },
+    {
+      "start_ns": 632422299737792,
+      "end_ns": 632422300058390,
+      "allocated_bytes_global": 56576
+    },
+    {
+      "start_ns": 632422300062495,
+      "end_ns": 632422300296928,
+      "allocated_bytes_global": 90224
+    },
+    {
+      "start_ns": 632422352668500,
+      "end_ns": 632422354134282,
+      "allocated_bytes_global": 197328
+    },
+    {
+      "start_ns": 632422400026853,
+      "end_ns": 632422400208550,
+      "allocated_bytes_global": 23872
+    },
+    {
+      "start_ns": 632422400216413,
+      "end_ns": 632422400522162,
+      "allocated_bytes_global": 118400
+    },
+    {
+      "start_ns": 632422453508753,
+      "end_ns": 632422456605817,
+      "allocated_bytes_global": 600128
+    },
+    {
+      "start_ns": 632422500534465,
+      "end_ns": 632422500837357,
+      "allocated_bytes_global": 45424
+    },
+    {
+      "start_ns": 632422556194872,
+      "end_ns": 632422557440017,
+      "allocated_bytes_global": 227200
+    },
+    {
+      "start_ns": 632422600834795,
+      "end_ns": 632422601102330,
+      "allocated_bytes_global": 43216
+    },
+    {
+      "start_ns": 632422657131773,
+      "end_ns": 632422658463541,
+      "allocated_bytes_global": 224656
+    },
+    {
+      "start_ns": 632422701145207,
+      "end_ns": 632422701423282,
+      "allocated_bytes_global": 51216
+    },
+    {
+      "start_ns": 632422758261446,
+      "end_ns": 632422759429700,
+      "allocated_bytes_global": 231936
+    },
+    {
+      "start_ns": 632422801470206,
+      "end_ns": 632422801753825,
+      "allocated_bytes_global": 51840
+    },
+    {
+      "start_ns": 632422859241435,
+      "end_ns": 632422860417735,
+      "allocated_bytes_global": 211712
+    },
+    {
+      "start_ns": 632422901807680,
+      "end_ns": 632422902031948,
+      "allocated_bytes_global": 61920
+    },
+    {
+      "start_ns": 632422960328255,
+      "end_ns": 632422961884375,
+      "allocated_bytes_global": 204192
+    },
+    {
+      "start_ns": 632423002120332,
+      "end_ns": 632423002381970,
+      "allocated_bytes_global": 31232
+    },
+    {
+      "start_ns": 632423061292613,
+      "end_ns": 632423062765456,
+      "allocated_bytes_global": 238608
+    },
+    {
+      "start_ns": 632423102467443,
+      "end_ns": 632423102828283,
+      "allocated_bytes_global": 49584
+    },
+    {
+      "start_ns": 632423162169235,
+      "end_ns": 632423163768967,
+      "allocated_bytes_global": 221264
+    },
+    {
+      "start_ns": 632423202812727,
+      "end_ns": 632423203100643,
+      "allocated_bytes_global": 52800
+    },
+    {
+      "start_ns": 632423263256865,
+      "end_ns": 632423264577147,
+      "allocated_bytes_global": 234288
+    },
+    {
+      "start_ns": 632423303182001,
+      "end_ns": 632423303428530,
+      "allocated_bytes_global": 51280
+    },
+    {
+      "start_ns": 632423303431539,
+      "end_ns": 632423303658081,
+      "allocated_bytes_global": 85568
+    },
+    {
+      "start_ns": 632423364304852,
+      "end_ns": 632423365629916,
+      "allocated_bytes_global": 221536
+    },
+    {
+      "start_ns": 632423403485168,
+      "end_ns": 632423403695063,
+      "allocated_bytes_global": 18224
+    },
+    {
+      "start_ns": 632423403703456,
+      "end_ns": 632423403945921,
+      "allocated_bytes_global": 91184
+    },
+    {
+      "start_ns": 632423404367826,
+      "end_ns": 632423404558291,
+      "allocated_bytes_global": 24592
+    },
+    {
+      "start_ns": 632423465241735,
+      "end_ns": 632423467681570,
+      "allocated_bytes_global": 578176
+    },
+    {
+      "start_ns": 632423504056406,
+      "end_ns": 632423504340623,
+      "allocated_bytes_global": 27728
+    },
+    {
+      "start_ns": 632423504673238,
+      "end_ns": 632423504830389,
+      "allocated_bytes_global": 24992
+    },
+    {
+      "start_ns": 632423567541089,
+      "end_ns": 632423568700673,
+      "allocated_bytes_global": 218960
+    },
+    {
+      "start_ns": 632423604471646,
+      "end_ns": 632423604654609,
+      "allocated_bytes_global": 26400
+    },
+    {
+      "start_ns": 632423604920033,
+      "end_ns": 632423605070009,
+      "allocated_bytes_global": 21856
+    },
+    {
+      "start_ns": 632423668486368,
+      "end_ns": 632423669535122,
+      "allocated_bytes_global": 241904
+    },
+    {
+      "start_ns": 632423704816204,
+      "end_ns": 632423705028494,
+      "allocated_bytes_global": 18560
+    },
+    {
+      "start_ns": 632423705144979,
+      "end_ns": 632423705284084,
+      "allocated_bytes_global": 24688
+    },
+    {
+      "start_ns": 632423769417339,
+      "end_ns": 632423770389827,
+      "allocated_bytes_global": 215648
+    },
+    {
+      "start_ns": 632423805128946,
+      "end_ns": 632423805326968,
+      "allocated_bytes_global": 20672
+    },
+    {
+      "start_ns": 632423805417323,
+      "end_ns": 632423805578941,
+      "allocated_bytes_global": 23504
+    },
+    {
+      "start_ns": 632423870420888,
+      "end_ns": 632423871748787,
+      "allocated_bytes_global": 223792
+    },
+    {
+      "start_ns": 632423905427091,
+      "end_ns": 632423905611836,
+      "allocated_bytes_global": 33936
+    },
+    {
+      "start_ns": 632423905661678,
+      "end_ns": 632423905764204,
+      "allocated_bytes_global": 30528
+    },
+    {
+      "start_ns": 632423971519496,
+      "end_ns": 632423972498576,
+      "allocated_bytes_global": 206848
+    },
+    {
+      "start_ns": 632424005741212,
+      "end_ns": 632424005927140,
+      "allocated_bytes_global": 26752
+    },
+    {
+      "start_ns": 632424005971948,
+      "end_ns": 632424006111067,
+      "allocated_bytes_global": 22800
+    },
+    {
+      "start_ns": 632424072426912,
+      "end_ns": 632424073159494,
+      "allocated_bytes_global": 114400
+    },
+    {
+      "start_ns": 632424073187051,
+      "end_ns": 632424073769559,
+      "allocated_bytes_global": 111152
+    },
+    {
+      "start_ns": 632424106050902,
+      "end_ns": 632424106225891,
+      "allocated_bytes_global": 33712
+    },
+    {
+      "start_ns": 632424106242472,
+      "end_ns": 632424106357976,
+      "allocated_bytes_global": 13152
+    },
+    {
+      "start_ns": 632424173261213,
+      "end_ns": 632424174813232,
+      "allocated_bytes_global": 236192
+    },
+    {
+      "start_ns": 632424206336277,
+      "end_ns": 632424206708590,
+      "allocated_bytes_global": 51360
+    },
+    {
+      "start_ns": 632424274146067,
+      "end_ns": 632424275773538,
+      "allocated_bytes_global": 213744
+    },
+    {
+      "start_ns": 632424306663537,
+      "end_ns": 632424306992392,
+      "allocated_bytes_global": 47056
+    },
+    {
+      "start_ns": 632424307015216,
+      "end_ns": 632424307274298,
+      "allocated_bytes_global": 97360
+    },
+    {
+      "start_ns": 632424375078214,
+      "end_ns": 632424375802834,
+      "allocated_bytes_global": 110224
+    },
+    {
+      "start_ns": 632424375861048,
+      "end_ns": 632424376536481,
+      "allocated_bytes_global": 119184
+    },
+    {
+      "start_ns": 632424406981155,
+      "end_ns": 632424407176354,
+      "allocated_bytes_global": 22544
+    },
+    {
+      "start_ns": 632424407184583,
+      "end_ns": 632424407522353,
+      "allocated_bytes_global": 118720
+    },
+    {
+      "start_ns": 632424475924589,
+      "end_ns": 632424478817492,
+      "allocated_bytes_global": 590624
+    },
+    {
+      "start_ns": 632424507536036,
+      "end_ns": 632424507866852,
+      "allocated_bytes_global": 41920
+    },
+    {
+      "start_ns": 632424578346843,
+      "end_ns": 632424579650064,
+      "allocated_bytes_global": 219488
+    },
+    {
+      "start_ns": 632424607855753,
+      "end_ns": 632424608155651,
+      "allocated_bytes_global": 46912
+    },
+    {
+      "start_ns": 632424679375103,
+      "end_ns": 632424680433051,
+      "allocated_bytes_global": 233856
+    },
+    {
+      "start_ns": 632424708208376,
+      "end_ns": 632424708541953,
+      "allocated_bytes_global": 58704
+    },
+    {
+      "start_ns": 632424780244203,
+      "end_ns": 632424781277650,
+      "allocated_bytes_global": 216368
+    },
+    {
+      "start_ns": 632424808571931,
+      "end_ns": 632424808875472,
+      "allocated_bytes_global": 40576
+    },
+    {
+      "start_ns": 632424881148560,
+      "end_ns": 632424882563621,
+      "allocated_bytes_global": 224416
+    },
+    {
+      "start_ns": 632424908859371,
+      "end_ns": 632424909153285,
+      "allocated_bytes_global": 58640
+    },
+    {
+      "start_ns": 632424982362114,
+      "end_ns": 632424983410204,
+      "allocated_bytes_global": 214400
+    },
+    {
+      "start_ns": 632425009131883,
+      "end_ns": 632425009409670,
+      "allocated_bytes_global": 37680
+    },
+    {
+      "start_ns": 632425083328330,
+      "end_ns": 632425084223258,
+      "allocated_bytes_global": 229904
+    },
+    {
+      "start_ns": 632425109392753,
+      "end_ns": 632425109715716,
+      "allocated_bytes_global": 49248
+    },
+    {
+      "start_ns": 632425184251635,
+      "end_ns": 632425185059593,
+      "allocated_bytes_global": 232576
+    },
+    {
+      "start_ns": 632425209664808,
+      "end_ns": 632425209955844,
+      "allocated_bytes_global": 47360
+    },
+    {
+      "start_ns": 632425285150205,
+      "end_ns": 632425286332078,
+      "allocated_bytes_global": 211760
+    },
+    {
+      "start_ns": 632425309951133,
+      "end_ns": 632425310403075,
+      "allocated_bytes_global": 150368
+    },
+    {
+      "start_ns": 632425386198753,
+      "end_ns": 632425387261961,
+      "allocated_bytes_global": 226496
+    },
+    {
+      "start_ns": 632425410292666,
+      "end_ns": 632425410458875,
+      "allocated_bytes_global": 17952
+    },
+    {
+      "start_ns": 632425410467299,
+      "end_ns": 632425410702734,
+      "allocated_bytes_global": 110864
+    },
+    {
+      "start_ns": 632425487120991,
+      "end_ns": 632425489591374,
+      "allocated_bytes_global": 595648
+    },
+    {
+      "start_ns": 632425510766834,
+      "end_ns": 632425511038561,
+      "allocated_bytes_global": 57952
+    },
+    {
+      "start_ns": 632425589435462,
+      "end_ns": 632425590698471,
+      "allocated_bytes_global": 228400
+    },
+    {
+      "start_ns": 632425611038508,
+      "end_ns": 632425611336133,
+      "allocated_bytes_global": 45536
+    },
+    {
+      "start_ns": 632425690478272,
+      "end_ns": 632425691588229,
+      "allocated_bytes_global": 229056
+    },
+    {
+      "start_ns": 632425711284047,
+      "end_ns": 632425711564055,
+      "allocated_bytes_global": 53072
+    },
+    {
+      "start_ns": 632425791328093,
+      "end_ns": 632425792435449,
+      "allocated_bytes_global": 213072
+    },
+    {
+      "start_ns": 632425811524243,
+      "end_ns": 632425811816759,
+      "allocated_bytes_global": 48192
+    },
+    {
+      "start_ns": 632425892147422,
+      "end_ns": 632425893324886,
+      "allocated_bytes_global": 215168
+    },
+    {
+      "start_ns": 632425911804203,
+      "end_ns": 632425912189371,
+      "allocated_bytes_global": 55600
+    },
+    {
+      "start_ns": 632425992932480,
+      "end_ns": 632425994109203,
+      "allocated_bytes_global": 222352
+    },
+    {
+      "start_ns": 632426012155787,
+      "end_ns": 632426012431171,
+      "allocated_bytes_global": 46784
+    },
+    {
+      "start_ns": 632426093784198,
+      "end_ns": 632426095050978,
+      "allocated_bytes_global": 230400
+    },
+    {
+      "start_ns": 632426112403962,
+      "end_ns": 632426112744563,
+      "allocated_bytes_global": 40400
+    },
+    {
+      "start_ns": 632426194628061,
+      "end_ns": 632426195878794,
+      "allocated_bytes_global": 220384
+    },
+    {
+      "start_ns": 632426212684840,
+      "end_ns": 632426213052417,
+      "allocated_bytes_global": 53600
+    },
+    {
+      "start_ns": 632426295459274,
+      "end_ns": 632426296771064,
+      "allocated_bytes_global": 229520
+    },
+    {
+      "start_ns": 632426313036889,
+      "end_ns": 632426313282832,
+      "allocated_bytes_global": 52608
+    },
+    {
+      "start_ns": 632426313285563,
+      "end_ns": 632426313497009,
+      "allocated_bytes_global": 87520
+    },
+    {
+      "start_ns": 632426396349611,
+      "end_ns": 632426397564617,
+      "allocated_bytes_global": 214064
+    },
+    {
+      "start_ns": 632426413347602,
+      "end_ns": 632426413505942,
+      "allocated_bytes_global": 20736
+    },
+    {
+      "start_ns": 632426413514559,
+      "end_ns": 632426413729180,
+      "allocated_bytes_global": 114576
+    },
+    {
+      "start_ns": 632426497184929,
+      "end_ns": 632426499607932,
+      "allocated_bytes_global": 599856
+    },
+    {
+      "start_ns": 632426513822700,
+      "end_ns": 632426514013090,
+      "allocated_bytes_global": 63456
+    },
+    {
+      "start_ns": 632426599246171,
+      "end_ns": 632426600461555,
+      "allocated_bytes_global": 210768
+    },
+    {
+      "start_ns": 632426614094188,
+      "end_ns": 632426614267920,
+      "allocated_bytes_global": 44944
+    },
+    {
+      "start_ns": 632426700049243,
+      "end_ns": 632426701283147,
+      "allocated_bytes_global": 237808
+    },
+    {
+      "start_ns": 632426714335562,
+      "end_ns": 632426714530644,
+      "allocated_bytes_global": 42704
+    },
+    {
+      "start_ns": 632426800886352,
+      "end_ns": 632426802332727,
+      "allocated_bytes_global": 215424
+    },
+    {
+      "start_ns": 632426814588350,
+      "end_ns": 632426814947412,
+      "allocated_bytes_global": 42368
+    },
+    {
+      "start_ns": 632426901704582,
+      "end_ns": 632426902413095,
+      "allocated_bytes_global": 109600
+    },
+    {
+      "start_ns": 632426902428903,
+      "end_ns": 632426903234191,
+      "allocated_bytes_global": 112752
+    },
+    {
+      "start_ns": 632426914850789,
+      "end_ns": 632426915021688,
+      "allocated_bytes_global": 37104
+    },
+    {
+      "start_ns": 632426915037873,
+      "end_ns": 632426915195136,
+      "allocated_bytes_global": 23456
+    },
+    {
+      "start_ns": 632427002509599,
+      "end_ns": 632427003224971,
+      "allocated_bytes_global": 107344
+    },
+    {
+      "start_ns": 632427003316549,
+      "end_ns": 632427003912824,
+      "allocated_bytes_global": 103488
+    },
+    {
+      "start_ns": 632427015109645,
+      "end_ns": 632427015247360,
+      "allocated_bytes_global": 18304
+    },
+    {
+      "start_ns": 632427015301062,
+      "end_ns": 632427015459336,
+      "allocated_bytes_global": 23456
+    },
+    {
+      "start_ns": 632427103321206,
+      "end_ns": 632427104803422,
+      "allocated_bytes_global": 228672
+    },
+    {
+      "start_ns": 632427115339433,
+      "end_ns": 632427115510805,
+      "allocated_bytes_global": 27408
+    },
+    {
+      "start_ns": 632427115543789,
+      "end_ns": 632427115686141,
+      "allocated_bytes_global": 26384
+    },
+    {
+      "start_ns": 632427204219102,
+      "end_ns": 632427205604698,
+      "allocated_bytes_global": 227888
+    },
+    {
+      "start_ns": 632427215597029,
+      "end_ns": 632427215775709,
+      "allocated_bytes_global": 24640
+    },
+    {
+      "start_ns": 632427215777382,
+      "end_ns": 632427215940255,
+      "allocated_bytes_global": 29248
+    },
+    {
+      "start_ns": 632427305032962,
+      "end_ns": 632427306371170,
+      "allocated_bytes_global": 209552
+    },
+    {
+      "start_ns": 632427315865505,
+      "end_ns": 632427316020943,
+      "allocated_bytes_global": 21616
+    },
+    {
+      "start_ns": 632427316031212,
+      "end_ns": 632427316239411,
+      "allocated_bytes_global": 122048
+    },
+    {
+      "start_ns": 632427405810361,
+      "end_ns": 632427407241448,
+      "allocated_bytes_global": 218672
+    },
+    {
+      "start_ns": 632427416283943,
+      "end_ns": 632427416819066,
+      "allocated_bytes_global": 134784
+    },
+    {
+      "start_ns": 632427506583629,
+      "end_ns": 632427507295178,
+      "allocated_bytes_global": 119488
+    },
+    {
+      "start_ns": 632427507301933,
+      "end_ns": 632427509333729,
+      "allocated_bytes_global": 482816
+    },
+    {
+      "start_ns": 632427516598151,
+      "end_ns": 632427516749698,
+      "allocated_bytes_global": 27600
+    },
+    {
+      "start_ns": 632427516857233,
+      "end_ns": 632427516965802,
+      "allocated_bytes_global": 30784
+    },
+    {
+      "start_ns": 632427608573975,
+      "end_ns": 632427609273666,
+      "allocated_bytes_global": 110864
+    },
+    {
+      "start_ns": 632427609414126,
+      "end_ns": 632427610019833,
+      "allocated_bytes_global": 113120
+    },
+    {
+      "start_ns": 632427616843685,
+      "end_ns": 632427616996981,
+      "allocated_bytes_global": 23920
+    },
+    {
+      "start_ns": 632427617065594,
+      "end_ns": 632427617184983,
+      "allocated_bytes_global": 16912
+    },
+    {
+      "start_ns": 632427709369177,
+      "end_ns": 632427710086586,
+      "allocated_bytes_global": 123296
+    },
+    {
+      "start_ns": 632427710107975,
+      "end_ns": 632427710790786,
+      "allocated_bytes_global": 106720
+    },
+    {
+      "start_ns": 632427717095005,
+      "end_ns": 632427717240015,
+      "allocated_bytes_global": 17440
+    },
+    {
+      "start_ns": 632427717303810,
+      "end_ns": 632427717426006,
+      "allocated_bytes_global": 25472
+    },
+    {
+      "start_ns": 632427810184077,
+      "end_ns": 632427811830457,
+      "allocated_bytes_global": 216896
+    },
+    {
+      "start_ns": 632427817330056,
+      "end_ns": 632427817472842,
+      "allocated_bytes_global": 20256
+    },
+    {
+      "start_ns": 632427817498595,
+      "end_ns": 632427817598982,
+      "allocated_bytes_global": 17552
+    },
+    {
+      "start_ns": 632427910984933,
+      "end_ns": 632427911689034,
+      "allocated_bytes_global": 114752
+    },
+    {
+      "start_ns": 632427911924198,
+      "end_ns": 632427912587540,
+      "allocated_bytes_global": 101296
+    },
+    {
+      "start_ns": 632427917563281,
+      "end_ns": 632427917727308,
+      "allocated_bytes_global": 25920
+    },
+    {
+      "start_ns": 632427917745887,
+      "end_ns": 632427917857668,
+      "allocated_bytes_global": 33984
+    },
+    {
+      "start_ns": 632428011789750,
+      "end_ns": 632428012496722,
+      "allocated_bytes_global": 111040
+    },
+    {
+      "start_ns": 632428012678696,
+      "end_ns": 632428013291681,
+      "allocated_bytes_global": 126256
+    },
+    {
+      "start_ns": 632428017812170,
+      "end_ns": 632428018124332,
+      "allocated_bytes_global": 57104
+    },
+    {
+      "start_ns": 632428112591743,
+      "end_ns": 632428113294170,
+      "allocated_bytes_global": 115472
+    },
+    {
+      "start_ns": 632428113382242,
+      "end_ns": 632428114067890,
+      "allocated_bytes_global": 114016
+    },
+    {
+      "start_ns": 632428118050442,
+      "end_ns": 632428118196343,
+      "allocated_bytes_global": 28960
+    },
+    {
+      "start_ns": 632428118214216,
+      "end_ns": 632428118366816,
+      "allocated_bytes_global": 25744
+    },
+    {
+      "start_ns": 632428213393180,
+      "end_ns": 632428214097308,
+      "allocated_bytes_global": 105840
+    },
+    {
+      "start_ns": 632428214146992,
+      "end_ns": 632428214734991,
+      "allocated_bytes_global": 107888
+    },
+    {
+      "start_ns": 632428218280345,
+      "end_ns": 632428218418732,
+      "allocated_bytes_global": 18560
+    },
+    {
+      "start_ns": 632428218442937,
+      "end_ns": 632428218541196,
+      "allocated_bytes_global": 17008
+    },
+    {
+      "start_ns": 632428314199651,
+      "end_ns": 632428315487076,
+      "allocated_bytes_global": 219520
+    },
+    {
+      "start_ns": 632428318505233,
+      "end_ns": 632428318904472,
+      "allocated_bytes_global": 139504
+    },
+    {
+      "start_ns": 632428415062404,
+      "end_ns": 632428416282255,
+      "allocated_bytes_global": 223808
+    },
+    {
+      "start_ns": 632428418889194,
+      "end_ns": 632428419283082,
+      "allocated_bytes_global": 129392
+    },
+    {
+      "start_ns": 632428515866584,
+      "end_ns": 632428518221584,
+      "allocated_bytes_global": 579984
+    },
+    {
+      "start_ns": 632428519192452,
+      "end_ns": 632428519327195,
+      "allocated_bytes_global": 27968
+    },
+    {
+      "start_ns": 632428519363720,
+      "end_ns": 632428519467771,
+      "allocated_bytes_global": 34416
+    },
+    {
+      "start_ns": 632428617892886,
+      "end_ns": 632428618967107,
+      "allocated_bytes_global": 238592
+    },
+    {
+      "start_ns": 632428619408673,
+      "end_ns": 632428619541439,
+      "allocated_bytes_global": 25056
+    },
+    {
+      "start_ns": 632428619554536,
+      "end_ns": 632428619687207,
+      "allocated_bytes_global": 20384
+    },
+    {
+      "start_ns": 632428718737521,
+      "end_ns": 632428719834887,
+      "allocated_bytes_global": 237744
+    },
+    {
+      "start_ns": 632428719901793,
+      "end_ns": 632428720047050,
+      "allocated_bytes_global": 24704
+    },
+    {
+      "start_ns": 632428819559894,
+      "end_ns": 632428820872890,
+      "allocated_bytes_global": 257760
+    },
+    {
+      "start_ns": 632428920083819,
+      "end_ns": 632428920258394,
+      "allocated_bytes_global": 21120
+    },
+    {
+      "start_ns": 632428920401596,
+      "end_ns": 632428921607325,
+      "allocated_bytes_global": 249584
+    },
+    {
+      "start_ns": 632429020357127,
+      "end_ns": 632429020529830,
+      "allocated_bytes_global": 30112
+    },
+    {
+      "start_ns": 632429020782034,
+      "end_ns": 632429020891922,
+      "allocated_bytes_global": 23792
+    },
+    {
+      "start_ns": 632429021267743,
+      "end_ns": 632429022354376,
+      "allocated_bytes_global": 229216
+    },
+    {
+      "start_ns": 632429120629376,
+      "end_ns": 632429120802583,
+      "allocated_bytes_global": 29472
+    },
+    {
+      "start_ns": 632429120969793,
+      "end_ns": 632429121091716,
+      "allocated_bytes_global": 32864
+    },
+    {
+      "start_ns": 632429122040262,
+      "end_ns": 632429123106588,
+      "allocated_bytes_global": 224176
+    },
+    {
+      "start_ns": 632429220901951,
+      "end_ns": 632429221087069,
+      "allocated_bytes_global": 20464
+    },
+    {
+      "start_ns": 632429221182181,
+      "end_ns": 632429221349029,
+      "allocated_bytes_global": 29440
+    },
+    {
+      "start_ns": 632429222797907,
+      "end_ns": 632429223992791,
+      "allocated_bytes_global": 232128
+    },
+    {
+      "start_ns": 632429321180201,
+      "end_ns": 632429321348584,
+      "allocated_bytes_global": 23632
+    },
+    {
+      "start_ns": 632429321356562,
+      "end_ns": 632429321575937,
+      "allocated_bytes_global": 114784
+    },
+    {
+      "start_ns": 632429323657586,
+      "end_ns": 632429324724329,
+      "allocated_bytes_global": 197168
+    },
+    {
+      "start_ns": 632429421675033,
+      "end_ns": 632429422070808,
+      "allocated_bytes_global": 133776
+    },
+    {
+      "start_ns": 632429424387183,
+      "end_ns": 632429425445625,
+      "allocated_bytes_global": 226704
+    },
+    {
+      "start_ns": 632429521952965,
+      "end_ns": 632429522133073,
+      "allocated_bytes_global": 29088
+    },
+    {
+      "start_ns": 632429522179768,
+      "end_ns": 632429522321099,
+      "allocated_bytes_global": 27712
+    },
+    {
+      "start_ns": 632429525139441,
+      "end_ns": 632429527428643,
+      "allocated_bytes_global": 583792
+    },
+    {
+      "start_ns": 632429622232215,
+      "end_ns": 632429622548136,
+      "allocated_bytes_global": 38672
+    },
+    {
+      "start_ns": 632429627134949,
+      "end_ns": 632429628226542,
+      "allocated_bytes_global": 238416
+    },
+    {
+      "start_ns": 632429722506569,
+      "end_ns": 632429722785071,
+      "allocated_bytes_global": 57904
+    },
+    {
+      "start_ns": 632429728016841,
+      "end_ns": 632429728993353,
+      "allocated_bytes_global": 214016
+    },
+    {
+      "start_ns": 632429822881293,
+      "end_ns": 632429823139221,
+      "allocated_bytes_global": 49088
+    },
+    {
+      "start_ns": 632429828846633,
+      "end_ns": 632429829771347,
+      "allocated_bytes_global": 228480
+    },
+    {
+      "start_ns": 632429923167619,
+      "end_ns": 632429923431798,
+      "allocated_bytes_global": 46976
+    },
+    {
+      "start_ns": 632429929705683,
+      "end_ns": 632429930959735,
+      "allocated_bytes_global": 227632
+    },
+    {
+      "start_ns": 632430023438487,
+      "end_ns": 632430023710006,
+      "allocated_bytes_global": 45184
+    },
+    {
+      "start_ns": 632430030672667,
+      "end_ns": 632430031792026,
+      "allocated_bytes_global": 222384
+    },
+    {
+      "start_ns": 632430123700981,
+      "end_ns": 632430123992103,
+      "allocated_bytes_global": 49072
+    },
+    {
+      "start_ns": 632430131482885,
+      "end_ns": 632430132651729,
+      "allocated_bytes_global": 222368
+    },
+    {
+      "start_ns": 632430223971438,
+      "end_ns": 632430224272036,
+      "allocated_bytes_global": 47888
+    },
+    {
+      "start_ns": 632430232296708,
+      "end_ns": 632430233564070,
+      "allocated_bytes_global": 217104
+    },
+    {
+      "start_ns": 632430324259230,
+      "end_ns": 632430324549685,
+      "allocated_bytes_global": 42000
+    },
+    {
+      "start_ns": 632430324559079,
+      "end_ns": 632430324810386,
+      "allocated_bytes_global": 91392
+    },
+    {
+      "start_ns": 632430333130759,
+      "end_ns": 632430334409748,
+      "allocated_bytes_global": 229072
+    },
+    {
+      "start_ns": 632430424541209,
+      "end_ns": 632430424751021,
+      "allocated_bytes_global": 27312
+    },
+    {
+      "start_ns": 632430424759063,
+      "end_ns": 632430425089191,
+      "allocated_bytes_global": 113664
+    },
+    {
+      "start_ns": 632430433930383,
+      "end_ns": 632430435258710,
+      "allocated_bytes_global": 224016
+    },
+    {
+      "start_ns": 632430525083990,
+      "end_ns": 632430525347991,
+      "allocated_bytes_global": 48352
+    },
+    {
+      "start_ns": 632430534742035,
+      "end_ns": 632430538241922,
+      "allocated_bytes_global": 583920
+    },
+    {
+      "start_ns": 632430625405215,
+      "end_ns": 632430625673214,
+      "allocated_bytes_global": 50576
+    },
+    {
+      "start_ns": 632430637469573,
+      "end_ns": 632430638185986,
+      "allocated_bytes_global": 103488
+    },
+    {
+      "start_ns": 632430638325171,
+      "end_ns": 632430638926093,
+      "allocated_bytes_global": 115920
+    },
+    {
+      "start_ns": 632430725708501,
+      "end_ns": 632430725958911,
+      "allocated_bytes_global": 60080
+    },
+    {
+      "start_ns": 632430738278721,
+      "end_ns": 632430738956749,
+      "allocated_bytes_global": 114192
+    },
+    {
+      "start_ns": 632430739010515,
+      "end_ns": 632430739620343,
+      "allocated_bytes_global": 108480
+    },
+    {
+      "start_ns": 632430826027976,
+      "end_ns": 632430826377723,
+      "allocated_bytes_global": 39232
+    },
+    {
+      "start_ns": 632430839040255,
+      "end_ns": 632430840530297,
+      "allocated_bytes_global": 227216
+    },
+    {
+      "start_ns": 632430926340762,
+      "end_ns": 632430926519753,
+      "allocated_bytes_global": 30416
+    },
+    {
+      "start_ns": 632430926532141,
+      "end_ns": 632430926677867,
+      "allocated_bytes_global": 20480
+    },
+    {
+      "start_ns": 632430939884060,
+      "end_ns": 632430940577840,
+      "allocated_bytes_global": 94800
+    },
+    {
+      "start_ns": 632430940666178,
+      "end_ns": 632430941405538,
+      "allocated_bytes_global": 114800
+    },
+    {
+      "start_ns": 632431026620551,
+      "end_ns": 632431026800258,
+      "allocated_bytes_global": 24928
+    },
+    {
+      "start_ns": 632431026834220,
+      "end_ns": 632431027093987,
+      "allocated_bytes_global": 26960
+    },
+    {
+      "start_ns": 632431040669727,
+      "end_ns": 632431041359706,
+      "allocated_bytes_global": 121120
+    },
+    {
+      "start_ns": 632431041497803,
+      "end_ns": 632431042290401,
+      "allocated_bytes_global": 114592
+    },
+    {
+      "start_ns": 632431126897329,
+      "end_ns": 632431127079760,
+      "allocated_bytes_global": 23168
+    },
+    {
+      "start_ns": 632431127184657,
+      "end_ns": 632431127338630,
+      "allocated_bytes_global": 29856
+    },
+    {
+      "start_ns": 632431141451766,
+      "end_ns": 632431142165052,
+      "allocated_bytes_global": 116320
+    },
+    {
+      "start_ns": 632431142381771,
+      "end_ns": 632431143087757,
+      "allocated_bytes_global": 99344
+    },
+    {
+      "start_ns": 632431227174046,
+      "end_ns": 632431227343766,
+      "allocated_bytes_global": 20928
+    },
+    {
+      "start_ns": 632431227426767,
+      "end_ns": 632431227596863,
+      "allocated_bytes_global": 32448
+    },
+    {
+      "start_ns": 632431242258752,
+      "end_ns": 632431242938523,
+      "allocated_bytes_global": 104528
+    },
+    {
+      "start_ns": 632431243174543,
+      "end_ns": 632431243910740,
+      "allocated_bytes_global": 117424
+    },
+    {
+      "start_ns": 632431327440303,
+      "end_ns": 632431327606739,
+      "allocated_bytes_global": 17824
+    },
+    {
+      "start_ns": 632431327615269,
+      "end_ns": 632431327871583,
+      "allocated_bytes_global": 110400
+    },
+    {
+      "start_ns": 632431343040084,
+      "end_ns": 632431343757467,
+      "allocated_bytes_global": 105200
+    },
+    {
+      "start_ns": 632431343997488,
+      "end_ns": 632431344688769,
+      "allocated_bytes_global": 106064
+    },
+    {
+      "start_ns": 632431427937722,
+      "end_ns": 632431428411354,
+      "allocated_bytes_global": 136000
+    },
+    {
+      "start_ns": 632431443851626,
+      "end_ns": 632431444587680,
+      "allocated_bytes_global": 125408
+    },
+    {
+      "start_ns": 632431444775933,
+      "end_ns": 632431445433705,
+      "allocated_bytes_global": 124848
+    },
+    {
+      "start_ns": 632431528341908,
+      "end_ns": 632431528528236,
+      "allocated_bytes_global": 29344
+    },
+    {
+      "start_ns": 632431528544352,
+      "end_ns": 632431528677770,
+      "allocated_bytes_global": 26272
+    },
+    {
+      "start_ns": 632431544682358,
+      "end_ns": 632431545382797,
+      "allocated_bytes_global": 99920
+    },
+    {
+      "start_ns": 632431545390935,
+      "end_ns": 632431547601135,
+      "allocated_bytes_global": 493552
+    },
+    {
+      "start_ns": 632431628640059,
+      "end_ns": 632431628818212,
+      "allocated_bytes_global": 20704
+    },
+    {
+      "start_ns": 632431628835666,
+      "end_ns": 632431628935018,
+      "allocated_bytes_global": 24576
+    },
+    {
+      "start_ns": 632431646731968,
+      "end_ns": 632431647470137,
+      "allocated_bytes_global": 104208
+    },
+    {
+      "start_ns": 632431647692346,
+      "end_ns": 632431648362784,
+      "allocated_bytes_global": 121136
+    },
+    {
+      "start_ns": 632431728934423,
+      "end_ns": 632431729153440,
+      "allocated_bytes_global": 25024
+    },
+    {
+      "start_ns": 632431729181777,
+      "end_ns": 632431729310318,
+      "allocated_bytes_global": 24368
+    },
+    {
+      "start_ns": 632431747560482,
+      "end_ns": 632431748317780,
+      "allocated_bytes_global": 102592
+    },
+    {
+      "start_ns": 632431748446420,
+      "end_ns": 632431749144107,
+      "allocated_bytes_global": 100128
+    },
+    {
+      "start_ns": 632431829261691,
+      "end_ns": 632431829630856,
+      "allocated_bytes_global": 65520
+    },
+    {
+      "start_ns": 632431848403274,
+      "end_ns": 632431849193632,
+      "allocated_bytes_global": 115344
+    },
+    {
+      "start_ns": 632431849236227,
+      "end_ns": 632431849956338,
+      "allocated_bytes_global": 123888
+    },
+    {
+      "start_ns": 632431929581771,
+      "end_ns": 632431929941237,
+      "allocated_bytes_global": 41968
+    },
+    {
+      "start_ns": 632431949284682,
+      "end_ns": 632431950767836,
+      "allocated_bytes_global": 221120
+    },
+    {
+      "start_ns": 632432029859954,
+      "end_ns": 632432030196368,
+      "allocated_bytes_global": 42320
+    },
+    {
+      "start_ns": 632432050215934,
+      "end_ns": 632432051506475,
+      "allocated_bytes_global": 230912
+    },
+    {
+      "start_ns": 632432130180639,
+      "end_ns": 632432130448208,
+      "allocated_bytes_global": 29888
+    },
+    {
+      "start_ns": 632432150994409,
+      "end_ns": 632432152281889,
+      "allocated_bytes_global": 222048
+    },
+    {
+      "start_ns": 632432230526797,
+      "end_ns": 632432230771190,
+      "allocated_bytes_global": 80816
+    },
+    {
+      "start_ns": 632432251805782,
+      "end_ns": 632432253129952,
+      "allocated_bytes_global": 216048
+    },
+    {
+      "start_ns": 632432330850864,
+      "end_ns": 632432331165039,
+      "allocated_bytes_global": 36432
+    },
+    {
+      "start_ns": 632432331168419,
+      "end_ns": 632432331372037,
+      "allocated_bytes_global": 84800
+    },
+    {
+      "start_ns": 632432352593439,
+      "end_ns": 632432353997018,
+      "allocated_bytes_global": 220224
+    },
+    {
+      "start_ns": 632432431189786,
+      "end_ns": 632432431389503,
+      "allocated_bytes_global": 33680
+    },
+    {
+      "start_ns": 632432431398403,
+      "end_ns": 632432431655717,
+      "allocated_bytes_global": 105152
+    },
+    {
+      "start_ns": 632432453581914,
+      "end_ns": 632432454810659,
+      "allocated_bytes_global": 237728
+    },
+    {
+      "start_ns": 632432531707766,
+      "end_ns": 632432531949513,
+      "allocated_bytes_global": 64320
+    },
+    {
+      "start_ns": 632432554637413,
+      "end_ns": 632432567619053,
+      "allocated_bytes_global": 552944
+    },
+    {
+      "start_ns": 632432638525920,
+      "end_ns": 632432638775355,
+      "allocated_bytes_global": 40832
+    },
+    {
+      "start_ns": 632432667580877,
+      "end_ns": 632432668473915,
+      "allocated_bytes_global": 243344
+    },
+    {
+      "start_ns": 632432738837428,
+      "end_ns": 632432739071773,
+      "allocated_bytes_global": 52304
+    },
+    {
+      "start_ns": 632432768446295,
+      "end_ns": 632432769456158,
+      "allocated_bytes_global": 207712
+    },
+    {
+      "start_ns": 632432839144838,
+      "end_ns": 632432839460388,
+      "allocated_bytes_global": 43280
+    },
+    {
+      "start_ns": 632432869383170,
+      "end_ns": 632432870168562,
+      "allocated_bytes_global": 110096
+    },
+    {
+      "start_ns": 632432870194440,
+      "end_ns": 632432870896203,
+      "allocated_bytes_global": 118880
+    },
+    {
+      "start_ns": 632432939465067,
+      "end_ns": 632432939764580,
+      "allocated_bytes_global": 45184
+    },
+    {
+      "start_ns": 632432970264915,
+      "end_ns": 632432970971802,
+      "allocated_bytes_global": 113696
+    },
+    {
+      "start_ns": 632432970991652,
+      "end_ns": 632432971729372,
+      "allocated_bytes_global": 106688
+    },
+    {
+      "start_ns": 632433039745651,
+      "end_ns": 632433040225090,
+      "allocated_bytes_global": 61888
+    },
+    {
+      "start_ns": 632433071050355,
+      "end_ns": 632433071816033,
+      "allocated_bytes_global": 120416
+    },
+    {
+      "start_ns": 632433071825670,
+      "end_ns": 632433072553624,
+      "allocated_bytes_global": 119008
+    },
+    {
+      "start_ns": 632433140057335,
+      "end_ns": 632433140479857,
+      "allocated_bytes_global": 41616
+    },
+    {
+      "start_ns": 632433171919561,
+      "end_ns": 632433173376788,
+      "allocated_bytes_global": 215664
+    },
+    {
+      "start_ns": 632433240438998,
+      "end_ns": 632433240651367,
+      "allocated_bytes_global": 30224
+    },
+    {
+      "start_ns": 632433240803999,
+      "end_ns": 632433240953154,
+      "allocated_bytes_global": 28000
+    },
+    {
+      "start_ns": 632433272829209,
+      "end_ns": 632433274210326,
+      "allocated_bytes_global": 222240
+    },
+    {
+      "start_ns": 632433340784313,
+      "end_ns": 632433340963029,
+      "allocated_bytes_global": 18640
+    },
+    {
+      "start_ns": 632433341044080,
+      "end_ns": 632433341198735,
+      "allocated_bytes_global": 22928
+    },
+    {
+      "start_ns": 632433341208002,
+      "end_ns": 632433341422663,
+      "allocated_bytes_global": 93792
+    },
+    {
+      "start_ns": 632433373820681,
+      "end_ns": 632433374967346,
+      "allocated_bytes_global": 229392
+    },
+    {
+      "start_ns": 632433441070052,
+      "end_ns": 632433441243684,
+      "allocated_bytes_global": 26768
+    },
+    {
+      "start_ns": 632433441252268,
+      "end_ns": 632433441451762,
+      "allocated_bytes_global": 84784
+    },
+    {
+      "start_ns": 632433441520388,
+      "end_ns": 632433441664793,
+      "allocated_bytes_global": 30624
+    },
+    {
+      "start_ns": 632433474608486,
+      "end_ns": 632433475679404,
+      "allocated_bytes_global": 212032
+    },
+    {
+      "start_ns": 632433541546908,
+      "end_ns": 632433541762397,
+      "allocated_bytes_global": 29312
+    },
+    {
+      "start_ns": 632433541875811,
+      "end_ns": 632433542025056,
+      "allocated_bytes_global": 18224
+    },
+    {
+      "start_ns": 632433575477976,
+      "end_ns": 632433577732750,
+      "allocated_bytes_global": 611968
+    },
+    {
+      "start_ns": 632433641852100,
+      "end_ns": 632433642038918,
+      "allocated_bytes_global": 20480
+    },
+    {
+      "start_ns": 632433642141406,
+      "end_ns": 632433642303962,
+      "allocated_bytes_global": 19152
+    },
+    {
+      "start_ns": 632433677750103,
+      "end_ns": 632433678850748,
+      "allocated_bytes_global": 209408
+    },
+    {
+      "start_ns": 632433742132448,
+      "end_ns": 632433742321770,
+      "allocated_bytes_global": 30608
+    },
+    {
+      "start_ns": 632433742396010,
+      "end_ns": 632433742540805,
+      "allocated_bytes_global": 24656
+    },
+    {
+      "start_ns": 632433778579649,
+      "end_ns": 632433779655372,
+      "allocated_bytes_global": 227376
+    },
+    {
+      "start_ns": 632433842421283,
+      "end_ns": 632433842611032,
+      "allocated_bytes_global": 27056
+    },
+    {
+      "start_ns": 632433842636547,
+      "end_ns": 632433842776927,
+      "allocated_bytes_global": 30032
+    },
+    {
+      "start_ns": 632433879410271,
+      "end_ns": 632433880407342,
+      "allocated_bytes_global": 232368
+    },
+    {
+      "start_ns": 632433942709051,
+      "end_ns": 632433943019261,
+      "allocated_bytes_global": 33744
+    },
+    {
+      "start_ns": 632433980276943,
+      "end_ns": 632433981335273,
+      "allocated_bytes_global": 218064
+    },
+    {
+      "start_ns": 632434042991963,
+      "end_ns": 632434043323963,
+      "allocated_bytes_global": 48608
+    },
+    {
+      "start_ns": 632434081179171,
+      "end_ns": 632434082145679,
+      "allocated_bytes_global": 217616
+    },
+    {
+      "start_ns": 632434143287392,
+      "end_ns": 632434143602967,
+      "allocated_bytes_global": 56896
+    },
+    {
+      "start_ns": 632434182148167,
+      "end_ns": 632434183119194,
+      "allocated_bytes_global": 237728
+    },
+    {
+      "start_ns": 632434243623388,
+      "end_ns": 632434243887492,
+      "allocated_bytes_global": 52992
+    },
+    {
+      "start_ns": 632434283046997,
+      "end_ns": 632434284067313,
+      "allocated_bytes_global": 213872
+    },
+    {
+      "start_ns": 632434344008644,
+      "end_ns": 632434344289112,
+      "allocated_bytes_global": 42464
+    },
+    {
+      "start_ns": 632434344292184,
+      "end_ns": 632434344498056,
+      "allocated_bytes_global": 98880
+    },
+    {
+      "start_ns": 632434384068776,
+      "end_ns": 632434385185334,
+      "allocated_bytes_global": 233232
+    },
+    {
+      "start_ns": 632434444313393,
+      "end_ns": 632434444489874,
+      "allocated_bytes_global": 32640
+    },
+    {
+      "start_ns": 632434444498144,
+      "end_ns": 632434444748843,
+      "allocated_bytes_global": 116320
+    },
+    {
+      "start_ns": 632434484961277,
+      "end_ns": 632434485966043,
+      "allocated_bytes_global": 218912
+    },
+    {
+      "start_ns": 632434544839912,
+      "end_ns": 632434545169313,
+      "allocated_bytes_global": 57392
+    },
+    {
+      "start_ns": 632434585890713,
+      "end_ns": 632434588208472,
+      "allocated_bytes_global": 578480
+    },
+    {
+      "start_ns": 632434645119621,
+      "end_ns": 632434645300427,
+      "allocated_bytes_global": 21232
+    },
+    {
+      "start_ns": 632434645317793,
+      "end_ns": 632434645415535,
+      "allocated_bytes_global": 17056
+    },
+    {
+      "start_ns": 632434688262918,
+      "end_ns": 632434689137876,
+      "allocated_bytes_global": 236768
+    },
+    {
+      "start_ns": 632434745394155,
+      "end_ns": 632434745578211,
+      "allocated_bytes_global": 20240
+    },
+    {
+      "start_ns": 632434745594827,
+      "end_ns": 632434745724130,
+      "allocated_bytes_global": 23696
+    },
+    {
+      "start_ns": 632434789247740,
+      "end_ns": 632434790181597,
+      "allocated_bytes_global": 214208
+    },
+    {
+      "start_ns": 632434845679655,
+      "end_ns": 632434846019099,
+      "allocated_bytes_global": 53872
+    },
+    {
+      "start_ns": 632434890197585,
+      "end_ns": 632434891429643,
+      "allocated_bytes_global": 212960
+    },
+    {
+      "start_ns": 632434945961247,
+      "end_ns": 632434946293140,
+      "allocated_bytes_global": 56176
+    },
+    {
+      "start_ns": 632434991059079,
+      "end_ns": 632434991815722,
+      "allocated_bytes_global": 115888
+    },
+    {
+      "start_ns": 632434991950794,
+      "end_ns": 632434992715428,
+      "allocated_bytes_global": 107632
+    },
+    {
+      "start_ns": 632435046245671,
+      "end_ns": 632435046568616,
+      "allocated_bytes_global": 39376
+    },
+    {
+      "start_ns": 632435091920185,
+      "end_ns": 632435092617535,
+      "allocated_bytes_global": 113184
+    },
+    {
+      "start_ns": 632435092858487,
+      "end_ns": 632435093515704,
+      "allocated_bytes_global": 113312
+    },
+    {
+      "start_ns": 632435146518705,
+      "end_ns": 632435146718014,
+      "allocated_bytes_global": 29120
+    },
+    {
+      "start_ns": 632435146722626,
+      "end_ns": 632435146931136,
+      "allocated_bytes_global": 19840
+    },
+    {
+      "start_ns": 632435192720496,
+      "end_ns": 632435194307608,
+      "allocated_bytes_global": 219120
+    },
+    {
+      "start_ns": 632435246813220,
+      "end_ns": 632435246981934,
+      "allocated_bytes_global": 24752
+    },
+    {
+      "start_ns": 632435247016114,
+      "end_ns": 632435247125649,
+      "allocated_bytes_global": 28672
+    },
+    {
+      "start_ns": 632435293815434,
+      "end_ns": 632435295105159,
+      "allocated_bytes_global": 215248
+    },
+    {
+      "start_ns": 632435347075996,
+      "end_ns": 632435347259615,
+      "allocated_bytes_global": 27856
+    },
+    {
+      "start_ns": 632435347267159,
+      "end_ns": 632435347466605,
+      "allocated_bytes_global": 81536
+    },
+    {
+      "start_ns": 632435347484660,
+      "end_ns": 632435347584592,
+      "allocated_bytes_global": 21344
+    },
+    {
+      "start_ns": 632435394882797,
+      "end_ns": 632435395927813,
+      "allocated_bytes_global": 252608
+    },
+    {
+      "start_ns": 632435447561621,
+      "end_ns": 632435447742339,
+      "allocated_bytes_global": 21712
+    },
+    {
+      "start_ns": 632435447758990,
+      "end_ns": 632435447860566,
+      "allocated_bytes_global": 28240
+    },
+    {
+      "start_ns": 632435447867913,
+      "end_ns": 632435448070541,
+      "allocated_bytes_global": 81056
+    }
+  ],
+  "allocation_time_coverage_by_scope_bytes": {
+    "probe_only": 52640528,
+    "outside": 94464,
+    "probe_signature_overlap": 4165952,
+    "signature_only": 7759584
+  }
+}

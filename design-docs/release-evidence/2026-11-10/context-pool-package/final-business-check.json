@@ -1,0 +1,73 @@
+{
+  "utc": "2026-11-10T06:19:50Z",
+  "pid": 3730524,
+  "start_ticks": 39645663,
+  "binary_sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+  "status_kib_or_count": {
+    "VmRSS": 139432,
+    "RssAnon": 129344,
+    "VmSwap": 0,
+    "Threads": 29
+  },
+  "host_mem_available_kib": 900952,
+  "health": [
+    {
+      "port": 19887,
+      "status": 200
+    },
+    {
+      "port": 19901,
+      "status": 200
+    },
+    {
+      "port": 19987,
+      "status": 200
+    }
+  ],
+  "units": {
+    "vhttpd-context-pool-20261110.service": {
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "MemoryPeak": "[not set]",
+      "CPUQuotaPerSecUSec": "infinity",
+      "MemoryMax": "infinity",
+      "MemorySwapMax": "infinity",
+      "TasksMax": "1890",
+      "Nice": "0",
+      "PrivateNetwork": "no",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "vhttpd-bodytest-memory-observer-20261108.service": {
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "MemoryPeak": "18046976",
+      "CPUQuotaPerSecUSec": "10ms",
+      "MemoryMax": "50331648",
+      "MemorySwapMax": "infinity",
+      "TasksMax": "1890",
+      "Nice": "19",
+      "PrivateNetwork": "no",
+      "ActiveState": "active",
+      "SubState": "running"
+    }
+  },
+  "diagnostic_runs": {
+    "01-before": {
+      "status": "completed",
+      "pid": 1930989,
+      "pid_exists_after_completion": false,
+      "binary_sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9"
+    },
+    "02-after": {
+      "status": "completed",
+      "pid": 1943791,
+      "pid_exists_after_completion": false,
+      "binary_sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d"
+    }
+  },
+  "scope": "Only independent synthetic package tests and read-only process/health checks. Business package, lifecycle, debugger and GC unchanged.",
+  "unit_property_note": "Transient unit unloaded on completion; running limits are proved in active-unit-properties.json and launch.json, not unloaded show defaults."
+}

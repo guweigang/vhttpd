@@ -1,0 +1,10 @@
+{
+  "excluded": [
+    "unconditional move: escaped alias risk",
+    "address-only stamp: ABA risk",
+    "intermediate final/gc/retained results are superseded, not final acceptance",
+    "autofree launcher exit134/direct Header errors are not passes",
+    "stale duplicate experimental compiles cancelled"
+  ],
+  "final_results": "owner prefix, macos-owner-final, linux-owner-final, linux-owner-boehm"
+}

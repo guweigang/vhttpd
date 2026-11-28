@@ -3434,10 +3434,18 @@ fn test_inproc_vjsx_executor_repo_paseo_relay_nudges_control_when_server_data_do
 	assert client_open.accepted
 	assert client_open.commands.any(it.event == 'send' && it.target_id == 'ws_control_nudge'
 		&& it.data.contains('"type":"connected"'))
-	time.sleep(80 * time.millisecond)
-	executor.pump_all_lane_sessions() or { panic(err) }
-	pending := app.websocket.state.pending['ws_control_nudge'] or { []ws.HubPendingMessage{} }
-	assert pending.len == 0
+	deadline := time.now().add(2 * time.second)
+	mut synced := false
+	for !synced && time.now() < deadline {
+		app.websocket.state.mu.@lock()
+		pending := app.websocket.state.pending['ws_control_nudge'] or { []ws.HubPendingMessage{} }
+		synced = pending.any(it.data.contains('"type":"sync"') && it.data.contains('"conn_nudge_demo"'))
+		app.websocket.state.mu.unlock()
+		if !synced {
+			time.sleep(time.millisecond)
+		}
+	}
+	assert synced
 }
 
 fn test_inproc_vjsx_executor_repo_paseo_relay_disconnects_server_data_on_last_client_close() {

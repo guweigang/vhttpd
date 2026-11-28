@@ -1,0 +1,11 @@
+sequence {"status": "full_soak_running", "current_case": "mixed", "cases": [{"workload": "paseo", "baseline_rss_kib": 62124, "settled_rss_kib": 62568, "max_load_rss_kib": 62332, "http_ok": 0, "paseo_ok": 78}, {"workload": "http", "baseline_rss_kib": 49940, "settled_rss_kib": 49804, "max_load_rss_kib": 50304, "http_ok": 6392, "paseo_ok": 0}, {"workload": "mixed", "baseline_rss_kib": 83276, "settled_rss_kib": 79440, "max_load_rss_kib": 83464, "http_ok": 23961, "paseo_ok": 293}], "failure": null, "full_unit": "vhttpd-soak-fixed5-24h-20261102"}
+state {"status": "running", "phase": "load", "elapsed_seconds": 39597.69, "http_ok": 1557069, "http_errors": 0, "paseo_ok": 18986, "paseo_errors": 0, "runtime_pid": 108824, "failure": null}
+latest_sample {"elapsed_seconds": 39597.69, "phase": "load", "runtime": {"VmHWM": 194316, "VmRSS": 194064, "RssAnon": 183616, "VmSwap": 0, "Threads": 22, "fd_count": 22, "cpu_ticks": 346246, "start_ticks": 5375404}, "host_available_kib": 681796, "cgroup_memory_bytes": 277966848, "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0", "existing_runtime": {"VmHWM": 288076, "VmRSS": 250116, "RssAnon": 242900, "VmSwap": 0, "Threads": 24, "fd_count": 29, "cpu_ticks": 811718, "start_ticks": 601054}, "http_ok": 1557069, "http_errors": 0, "paseo_ok": 18986, "paseo_errors": 0}
+units Result=success
+ActiveState=inactive
+SubState=dead
+
+Result=success
+ActiveState=active
+SubState=running
+

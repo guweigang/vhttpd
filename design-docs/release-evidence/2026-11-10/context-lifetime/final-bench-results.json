@@ -1,0 +1,23 @@
+[
+  {
+    "run": 1,
+    "reverse": "0",
+    "exit": 0,
+    "stdout": "BENCH body=0 reuse=false total=5148608 n=256\nBENCH body=0 reuse=true total=3100688 n=256\nBENCH body=1024 reuse=false total=5482832 n=256\nBENCH body=1024 reuse=true total=3451696 n=256\nBENCH body=8192 reuse=false total=7244688 n=256\nBENCH body=8192 reuse=true total=5199504 n=256\nLAYOUT context=7984 state=7992\n",
+    "stderr": ""
+  },
+  {
+    "run": 2,
+    "reverse": "1",
+    "exit": 0,
+    "stdout": "BENCH body=0 reuse=true total=3100176 n=256\nBENCH body=0 reuse=false total=5142704 n=256\nBENCH body=1024 reuse=true total=3444944 n=256\nBENCH body=1024 reuse=false total=5492656 n=256\nBENCH body=8192 reuse=true total=5204576 n=256\nBENCH body=8192 reuse=false total=7247616 n=256\nLAYOUT context=7984 state=7992\n",
+    "stderr": ""
+  },
+  {
+    "run": 3,
+    "reverse": "0",
+    "exit": 0,
+    "stdout": "BENCH body=0 reuse=false total=5155920 n=256\nBENCH body=0 reuse=true total=3094336 n=256\nBENCH body=1024 reuse=false total=5483824 n=256\nBENCH body=1024 reuse=true total=3445472 n=256\nBENCH body=8192 reuse=false total=7240768 n=256\nBENCH body=8192 reuse=true total=5210320 n=256\nLAYOUT context=7984 state=7992\n",
+    "stderr": ""
+  }
+]

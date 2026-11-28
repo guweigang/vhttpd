@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace VHttpd\PhpWorker;
 
 use VHttpd\Wire\JsonClient;
+use VHttpd\Wire\FrameCodec;
 
 final class Client
 {
@@ -16,6 +17,18 @@ final class Client
         float $readTimeoutSeconds = 5.0,
     ) {
         $this->wire = new JsonClient($socketPath, 'worker', $connectTimeoutSeconds, $readTimeoutSeconds);
+    }
+
+    /** @param resource $conn */
+    public static function writeFrame($conn, string $payload): void
+    {
+        FrameCodec::write($conn, $payload);
+    }
+
+    /** @param resource $conn */
+    public static function readFrame($conn): string
+    {
+        return FrameCodec::read($conn);
     }
 
     public function connect(): void

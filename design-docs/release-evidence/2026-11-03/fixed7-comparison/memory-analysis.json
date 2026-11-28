@@ -1,0 +1,109 @@
+{
+  "method": "Median of six 10-second samples per 60-second window; five-minute load bins. Separate concurrent cgroups, 60-second stagger. RSS is process resident memory, not exact live heap.",
+  "cases": {
+    "fixed6": {
+      "idle_last_60s": {
+        "VmRSS": 71456.0,
+        "RssAnon": 44188.0,
+        "fd_count": 22.0,
+        "Threads": 21.0
+      },
+      "load_first_60s": {
+        "VmRSS": 73536.0,
+        "RssAnon": 46268.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      "load_last_60s": {
+        "VmRSS": 77616.0,
+        "RssAnon": 50284.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      "cool_last_60s": {
+        "VmRSS": 77200.0,
+        "RssAnon": 49868.0,
+        "fd_count": 22.0,
+        "Threads": 21.0
+      },
+      "load_rss_growth_kib": 4080.0,
+      "cool_vs_load_start_kib": 3664.0,
+      "cool_vs_idle_kib": 5744.0,
+      "load_windows_5min": [
+        {
+          "from_elapsed_s": 600.08,
+          "rss_median_kib": 74458.0,
+          "anon_median_kib": 47190.0
+        },
+        {
+          "from_elapsed_s": 900.15,
+          "rss_median_kib": 75492.0,
+          "anon_median_kib": 48216.0
+        },
+        {
+          "from_elapsed_s": 1200.2,
+          "rss_median_kib": 76432.0,
+          "anon_median_kib": 49100.0
+        },
+        {
+          "from_elapsed_s": 1500.86,
+          "rss_median_kib": 77206.0,
+          "anon_median_kib": 49874.0
+        }
+      ],
+      "max_load_rss_kib": 77900
+    },
+    "fixed7": {
+      "idle_last_60s": {
+        "VmRSS": 79492.0,
+        "RssAnon": 52300.0,
+        "fd_count": 22.0,
+        "Threads": 21.0
+      },
+      "load_first_60s": {
+        "VmRSS": 80050.0,
+        "RssAnon": 52858.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      "load_last_60s": {
+        "VmRSS": 80004.0,
+        "RssAnon": 52812.0,
+        "fd_count": 22.0,
+        "Threads": 22.0
+      },
+      "cool_last_60s": {
+        "VmRSS": 75448.0,
+        "RssAnon": 48256.0,
+        "fd_count": 22.0,
+        "Threads": 21.0
+      },
+      "load_rss_growth_kib": -46.0,
+      "cool_vs_load_start_kib": -4602.0,
+      "cool_vs_idle_kib": -4044.0,
+      "load_windows_5min": [
+        {
+          "from_elapsed_s": 600.08,
+          "rss_median_kib": 80054.0,
+          "anon_median_kib": 52862.0
+        },
+        {
+          "from_elapsed_s": 900.13,
+          "rss_median_kib": 80014.0,
+          "anon_median_kib": 52822.0
+        },
+        {
+          "from_elapsed_s": 1200.17,
+          "rss_median_kib": 80016.0,
+          "anon_median_kib": 52824.0
+        },
+        {
+          "from_elapsed_s": 1500.22,
+          "rss_median_kib": 80002.0,
+          "anon_median_kib": 52810.0
+        }
+      ],
+      "max_load_rss_kib": 80232
+    }
+  }
+}

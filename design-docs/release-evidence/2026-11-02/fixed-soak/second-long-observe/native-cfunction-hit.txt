@@ -1,0 +1,20 @@
+[New LWP 53764]
+[New LWP 49217]
+[New LWP 49216]
+[New LWP 49215]
+[New LWP 49211]
+[New LWP 49210]
+[New LWP 49209]
+[New LWP 49208]
+[New LWP 49207]
+[New LWP 49206]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x0000705a3c498e51 in __futex_abstimed_wait_common64 (private=128, cancel=true, abstime=0x0, op=265, expected=49215, futex_word=0x705a3265c990) at ./nptl/futex-internal.c:57
+
+warning: 57	./nptl/futex-internal.c: No such file or directory
+0x5625c87b38b8 <GC_gc_no>:	192
+0x5625c87871e0 <GC_arrays>:	62124032
+0x5625c8787208 <GC_arrays+40>:	10584064
+Breakpoint 1 at 0x5625c837d870
+[Inferior 1 (process 49205) detached]

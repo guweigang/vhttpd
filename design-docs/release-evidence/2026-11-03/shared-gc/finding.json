@@ -1,0 +1,57 @@
+{
+  "checked_utc": "2026-11-03T01:21:36.931126+00:00",
+  "root_cause": "shared duplication helper uses malloc_uncollectable; shared WebSocket client/server states are permanent GC roots",
+  "vlang_root": "/Users/guweigang/local/v",
+  "vlang_base_commit": "d13ccdd0768496cd6faea9ddfbdd0ddf9e4c4186",
+  "vlang_was_clean": true,
+  "vjsx_modified_for_this_fix": false,
+  "long_soak_pid_unchanged": 108824,
+  "long_soak_start_ticks": 5375404,
+  "modified_files": {
+    "vlib/v/gen/c/struct.v": "ff47c1797d210153d6b51f2a6b5eaa0149fdd177a77099862b58a0883a8873c7",
+    "vlib/v/compiler_tests/lock_codegen_test.v": "72cea3290904361ca9f25803071d7b933914d934a31b2e0b5677e358065ea26b",
+    "vlib/v/tests/concurrency/shared_gc_memory_test.v": "a57cb914436f4bb3b42ee77c43565118be9639f8fb808e48002ee87dc02360fc"
+  },
+  "mac_before": {
+    "before_gc_bytes": 53248,
+    "after_gc_bytes": 4415488,
+    "exit_code": 1
+  },
+  "mac_after": "three tests pass: unreachable wrappers, shared aliases and held lock, worker-only reference during GC",
+  "linux_validation": {
+    "before_shared_exit": 1,
+    "after_shared_exit": 0,
+    "before_handshake_exit": 1,
+    "after_handshake_exit": 0,
+    "handshake_count": 4096,
+    "before_gc_bytes": 249856,
+    "after_gc_bytes_before_fix": 4075520
+  },
+  "compiler_tests": "running; not release acceptance",
+  "rebuild": "./v self completed",
+  "compiler_binary_sha256": "1282b963f64a964324eb0c7b443f275acc2f8939a27da950c3fea154ab5c283d",
+  "mac_real_handshake": {
+    "count": 4096,
+    "before_gc_bytes": 253952,
+    "after_gc_bytes_before_fix": 5853184,
+    "after_fix": "passes original 1 MiB GC and 2 MiB native malloc budgets; parallel isolation passes"
+  },
+  "lock_codegen": "passed",
+  "broad_suites": "full vlib/v and gen/c attempted, stopped due local memory contention; these are not reported passed",
+  "mac_production_validation": "old compiler fails explicit check 53248 -> 4415488 bytes; fixed compiler passes all three cases in ordinary and -prod modes",
+  "compiler_diagnostics": {
+    "passed": 1876,
+    "skipped": 1,
+    "total": 1877,
+    "exit_code": 0
+  },
+  "linux_production_validation": {
+    "ordinary_strict_exit": 0,
+    "production_strict_exit": 0,
+    "checks": "explicit panic checks, retained under -prod"
+  },
+  "patch_sha256": "5137c9e2ceddbbdef04aa72c9081571ac9b11a9ef4656c0470f256d9dfbd7c5e",
+  "updated_utc": "2026-11-03T01:49:25.058514+00:00",
+  "linux_toolchain_image": "sha256:b8c62eb9ba46c9292e9ba2e88fd5da216f5c9352c54f2b00d460118b3fb59094",
+  "long_soak": "unchanged PID 108824, start_ticks 5375404, running original fixed5 binary, zero errors at final checkpoint; no new runtime package deployed"
+}

@@ -1,9 +1,9 @@
 module main
 
+import memidle
 import dispatch
 import executor
 import log
-import net
 import net.http
 import net.unix
 import net.websocket
@@ -101,6 +101,8 @@ pub fn (mut app App) worker_websocket_open(mut conn unix.StreamConn, req http.Re
 }
 
 fn worker_websocket_message_cb(mut ws_client websocket.Client, msg &websocket.Message, ref voidptr) ! {
+	memidle.begin()
+	defer { memidle.end() }
 	mut state := unsafe { &ws.BridgeState(ref) }
 	state.rt.trace('ws.message.enter', {
 		'conn_id':     state.conn_id
@@ -289,10 +291,10 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	headers := transport.header_map_from_request(ctx.req)
 	if descriptor := relay_websocket_path_descriptor(app.relay, normalized_path) {
 		mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
-		ctx.takeover_conn()
-		ctx.conn.set_write_timeout(time.infinite)
-		ctx.conn.set_read_timeout(time.infinite)
-		mut conn := ctx.conn
+		mut conn := takeover_inbound_websocket(mut ctx) or {
+			run.finish()
+			return inbound_websocket_unavailable(mut ctx)
+		}
 		spawn run_relay_websocket_session(mut run, mut app, mut conn, key, method.to_upper(),
 			normalized_path, query, headers, remote_addr, req_id, trace_id, descriptor)
 		return veb.no_result()
@@ -339,10 +341,11 @@ fn proxy_worker_websocket(mut app App, mut ctx Context, method string, path stri
 	}
 	delivery := worker_websocket_session_delivery_outcome(ws_open, req_id, path)
 	selected_socket := delivery.metadata['worker_socket'] or { ws_open.socket_path }
-	ctx.takeover_conn()
-	ctx.conn.set_write_timeout(time.infinite)
-	ctx.conn.set_read_timeout(time.infinite)
-	mut conn := ctx.conn
+	mut conn := takeover_inbound_websocket(mut ctx) or {
+		worker_conn.close() or {}
+		ws_open.finish_worker()
+		return inbound_websocket_unavailable(mut ctx)
+	}
 	transferred = true
 	spawn run_worker_websocket_session(mut run, app.build_websocket_runtime_context_for_state(engines.primary), mut conn, mut worker_conn, selected_socket, key,
 		method.to_upper(), path, req_id, trace_id, start_ms, ws_open.lease)
@@ -360,17 +363,24 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	headers := transport.header_map_from_request(ctx.req)
 	if descriptor := relay_websocket_path_descriptor(app.relay, normalized_path) {
 		mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
-		ctx.takeover_conn()
-		ctx.conn.set_write_timeout(time.infinite)
-		ctx.conn.set_read_timeout(time.infinite)
-		mut conn := ctx.conn
+		mut conn := takeover_inbound_websocket(mut ctx) or {
+			run.finish()
+			return inbound_websocket_unavailable(mut ctx)
+		}
 		spawn run_relay_websocket_session(mut run, mut app, mut conn, key, method.to_upper(),
 			normalized_path, query, headers, remote_addr, req_id, trace_id, descriptor)
 		return veb.no_result()
 	}
 	mut run := reserve_inbound_websocket(mut app, ctx) or { return inbound_websocket_unavailable(mut ctx) }
+	lifecycle := &ws.DispatchConnState{}
+	app.websocket.state.reserve_dispatch_open(req_id, lifecycle)
 	mut transferred := false
-	defer { if !transferred { run.finish() } }
+	defer {
+		if !transferred {
+			app.websocket.state.unregister_owned(req_id, lifecycle)
+			run.finish()
+		}
+	}
 	websocket_runtime := app.build_websocket_runtime_context()
 	presence := websocket_runtime.presence(req_id)
 	open_frame := websocket_runtime.build_frame('open', method, normalized_path, query, headers,
@@ -415,18 +425,17 @@ fn proxy_worker_websocket_dispatch(mut app App, mut ctx Context, method string, 
 	open_command_count := (delivery.metadata['command_count'] or { '${resp.commands.len}' }).int()
 	mut open_commands := []transport.WorkerWebSocketFrame{cap: open_command_count}
 	open_commands << resp.commands
-	ctx.takeover_conn()
-	ctx.conn.set_write_timeout(time.infinite)
-	ctx.conn.set_read_timeout(time.infinite)
-	mut conn := ctx.conn
+	mut conn := takeover_inbound_websocket(mut ctx) or {
+		return inbound_websocket_unavailable(mut ctx)
+	}
 	transferred = true
 	spawn ws.run_dispatch_session(mut run, websocket_runtime, mut conn, key,
 		method.to_upper(), normalized_path, query, headers, remote_addr, req_id, trace_id,
-		start_ms, open_commands)
+		start_ms, open_commands, lifecycle)
 	return veb.no_result()
 }
 
-fn handle_worker_websocket_session(rt ws.RuntimeContext, mut client_conn net.TcpConn, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64, serving ?&ws.IngressRun, lease ?&executor.WorkerRequestLease) {
+fn handle_worker_websocket_session(rt ws.RuntimeContext, mut client_conn ws.IngressConnection, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64, serving ?&ws.IngressRun, lease ?&executor.WorkerRequestLease) {
 	rt.trace('ws.session.start', {
 		'request_id':    req_id
 		'trace_id':      trace_id
@@ -475,7 +484,7 @@ fn handle_worker_websocket_session(rt ws.RuntimeContext, mut client_conn net.Tcp
 	})
 	ws_server.on_message_ref(worker_websocket_message_cb, state)
 	ws_server.on_close_ref(worker_websocket_close_cb, state)
-	ws.managed_handshake(mut ws_server, mut client_conn, key, captured) or {
+	ws.managed_ingress_handshake(mut ws_server, mut client_conn, key, captured) or {
 		state.rt.trace('ws.session.handshake.error', {
 			'conn_id':    state.conn_id
 			'request_id': state.request_id
@@ -494,8 +503,16 @@ fn handle_worker_websocket_session(rt ws.RuntimeContext, mut client_conn net.Tcp
 
 fn reserve_inbound_websocket(mut app App, ctx Context) ?&ws.IngressRun {
 	mut run := app.websocket.state.ingress.reserve() or { return none }
-	fd := if !isnil(ctx.conn) { ctx.conn.sock.handle } else { ctx.client_fd }
-	if !run.attach(fd) {
+	attached := if !isnil(ctx.conn) {
+		run.attach(ctx.conn.sock.handle)
+	} else if ctx.client_fd >= 0 {
+		run.attach(ctx.client_fd)
+	} else if fd := https_websocket_socket[veb.Context](&ctx.Context) {
+		run.attach_tls(fd)
+	} else {
+		false
+	}
+	if !attached {
 		run.finish()
 		return none
 	}
@@ -507,7 +524,7 @@ fn inbound_websocket_unavailable(mut ctx Context) veb.Result {
 	return ctx.text('WebSocket server shutting down')
 }
 
-fn run_worker_websocket_session(mut run ws.IngressRun, rt ws.RuntimeContext, mut client_conn net.TcpConn, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64, lease ?&executor.WorkerRequestLease) {
+fn run_worker_websocket_session(mut run ws.IngressRun, rt ws.RuntimeContext, mut client_conn ws.IngressConnection, mut worker_conn unix.StreamConn, selected_socket string, key string, method string, path string, req_id string, trace_id string, start_ms i64, lease ?&executor.WorkerRequestLease) {
 	defer { run.finish() }
 	if run.stopped() {
 		client_conn.close() or {}

@@ -1,0 +1,36 @@
+name: Protocol contracts
+on:
+  pull_request:
+    paths:
+      - 'src/codex/**'
+      - 'src/feishu/**'
+      - 'src/*codex*'
+      - 'src/*feishu*'
+      - 'examples/codexbot-app-ts/**'
+      - 'tests/protocol/**'
+      - '.github/workflows/protocol-contracts.yml'
+  workflow_dispatch:
+    inputs:
+      codex_version:
+        description: 'Codex CLI candidate version to compare with the reviewed baseline'
+        default: '0.166.0'
+        required: true
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix tests/protocol --ignore-scripts --no-audit --no-fund
+      - run: node --test examples/codexbot-app-ts/tests/*.test.mjs tests/protocol/*.test.mjs
+      - name: Export candidate Codex schemas and compare both layers
+        env:
+          CODEX_VERSION: ${{ inputs.codex_version || '0.166.0' }}
+        run: |
+          [[ "$CODEX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          npm install --prefix /tmp/codex-contract --no-audit --no-fund "@openai/codex@$CODEX_VERSION"
+          node tests/protocol/check-codex-schema.mjs --codex /tmp/codex-contract/node_modules/.bin/codex

@@ -1,0 +1,8 @@
+MainPID=1979288
+NRestarts=0
+CPUQuotaPerSecUSec=300ms
+MemoryMax=268435456
+MemorySwapMax=0
+PrivateNetwork=yes
+ActiveState=active
+SubState=running

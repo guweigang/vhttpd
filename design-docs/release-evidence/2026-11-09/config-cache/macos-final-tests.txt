@@ -1,0 +1,5 @@
+---- Testing... ----------------------------------------------------------------
+OK    [1/2] C: 37495.95 ms, R:  3105.341 ms /Users/guweigang/Source/vhttpd/src/configcache/cache_test.v
+OK    [2/2] C: 53449.511 ms, R:  3164.868 ms /Users/guweigang/Source/vhttpd/src/executor/config_cache_host_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 2 passed, 2 total. Elapsed time: 56621 ms, on 2 parallel jobs. Comptime: 90945 ms. Runtime: 6270 ms.

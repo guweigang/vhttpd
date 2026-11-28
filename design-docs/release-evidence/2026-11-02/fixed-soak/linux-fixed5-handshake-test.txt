@@ -1,0 +1,4 @@
+---- Testing... ----------------------------------------------------------------
+OK     570.359 ms /work/fixed5/src/ws/handshake_memory_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 64592 ms, on 1 job. Comptime: 63994 ms. Runtime: 570 ms.

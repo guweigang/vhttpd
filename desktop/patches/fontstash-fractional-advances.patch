@@ -1,0 +1,38 @@
+--- a/thirdparty/fontstash/fontstash.h
++++ b/thirdparty/fontstash/fontstash.h
+@@ -445,7 +445,7 @@
+ 	int next;
+ 	short size, blur;
+ 	short x0,y0,x1,y1;
+-	short xadv,xoff,yoff;
++	float xadv; short xoff,yoff;
+ };
+ typedef struct FONSglyph FONSglyph;
+ 
+@@ -1123,7 +1123,7 @@
+ 	glyph->y0 = (short)gy;
+ 	glyph->x1 = (short)(glyph->x0+gw);
+ 	glyph->y1 = (short)(glyph->y0+gh);
+-	glyph->xadv = (short)(scale * advance * 10.0f);
++	glyph->xadv = scale * advance * 10.0f;
+ 	glyph->xoff = (short)(x0 - pad);
+ 	glyph->yoff = (short)(y0 - pad);
+ 	glyph->next = 0;
+@@ -1180,7 +1180,7 @@
+ 
+ 	if (prevGlyphIndex != -1) {
+ 		float adv = fons__tt_getGlyphKernAdvance(&font->font, prevGlyphIndex, glyph->index) * scale;
+-		*x += (int)(adv + spacing + 0.5f);
++		*x += adv + spacing;
+ 	}
+ 
+ 	// Each glyph has 2px border to allow good interpolation,
+@@ -1221,7 +1221,7 @@
+ 		q->t1 = y1 * stash->ith;
+ 	}
+ 
+-	*x += (int)(glyph->xadv / 10.0f + 0.5f);
++	*x += glyph->xadv / 10.0f;
+ }
+ 
+ static void fons__flush(FONScontext* stash)

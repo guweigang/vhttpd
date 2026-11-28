@@ -8,6 +8,21 @@ struct InProcVjsxRuntimeSessionFactory {}
 
 struct InProcVjsxRuntimeProfileLog {}
 
+// Module preparation needs the TypeScript bridge, not the application's host
+// modules. Native callbacks installed by those modules must not keep a temporary
+// compiler context alive after compilation.
+fn InProcVjsxRuntimeSessionFactory.new_compiler(config VjsxRuntimeFacadeConfig) &vjsx.RuntimeSession {
+	mut session := vjsx.new_runtime_session(vjsx.ContextConfig{
+		asset_root: VjsxHostLoader.asset_root()
+	})
+	session.context().set_runtime_profile(if config.runtime_profile == '' {
+		'script'
+	} else {
+		config.runtime_profile
+	})
+	return &session
+}
+
 fn InProcVjsxRuntimeSessionFactory.new(config VjsxRuntimeFacadeConfig) !&vjsx.RuntimeSession {
 	asset_root := VjsxHostLoader.asset_root()
 	session_value := match config.runtime_profile {

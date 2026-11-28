@@ -1,0 +1,48 @@
+{
+  "scope": "Same Ubuntu V/GCC/Boehm compiler; four scanner configs over two metadata-size fixtures, 100 cycles, 11 probes plus one full scan per cycle. Sequential allocation microbenchmark, not server memory acceptance.",
+  "results": {
+    "legacy": {
+      "cycles": 100,
+      "runtimes": 4,
+      "allocated_bytes": 369996800,
+      "bytes_per_four_runtime_cycle": 3699968,
+      "last_signature": "faa23489f79c92c0",
+      "fingerprints": [
+        "8da6118033581765",
+        "8da6118033581765",
+        "faa23489f79c92c0",
+        "faa23489f79c92c0"
+      ]
+    },
+    "prior": {
+      "cycles": 100,
+      "runtimes": 4,
+      "allocated_bytes": 7724800,
+      "bytes_per_four_runtime_cycle": 77248,
+      "last_signature": "faa23489f79c92c0",
+      "fingerprints": [
+        "8da6118033581765",
+        "8da6118033581765",
+        "faa23489f79c92c0",
+        "faa23489f79c92c0"
+      ]
+    },
+    "new": {
+      "cycles": 100,
+      "runtimes": 4,
+      "allocated_bytes": 7473408,
+      "bytes_per_four_runtime_cycle": 74734,
+      "last_signature": "faa23489f79c92c0",
+      "fingerprints": [
+        "8da6118033581765",
+        "8da6118033581765",
+        "faa23489f79c92c0",
+        "faa23489f79c92c0"
+      ]
+    }
+  },
+  "new_vs_legacy_allocation_reduction": 0.9798014253096243,
+  "new_vs_prior_cache_allocation_reduction": 0.03254349627174813,
+  "identical_signatures": true,
+  "all_four_fingerprints_identical": true
+}

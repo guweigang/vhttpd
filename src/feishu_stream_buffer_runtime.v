@@ -4,7 +4,7 @@ import connection_runtime
 import log
 import time
 import upstream
-import codex
+import conversation_binding
 import feishu
 
 const feishu_stream_buffer_rollover_runes = feishu.stream_buffer_rollover_runes
@@ -51,8 +51,8 @@ fn (mut app App) feishu_runtime_commit_rollover_receipt(claim feishu.BufferRollo
 	// and all HTTP I/O run after unlock. Lock order is FeishuState then CodexState.
 	stream_id := claim.buffer.stream_id
 	if stream_id != '' {
-		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id), stream_id,
-			codex.CodexTarget{ platform: 'feishu', message_id: message_id, stream_generation: claim.buffer.generation, buffer_message_id: message_id })
+		app.publish_reply_binding(stream_id,
+			conversation_binding.ReplyTarget{ platform: 'feishu', message_id: message_id, stream_generation: claim.buffer.generation, buffer_message_id: message_id })
 	}
 	return app.providers.feishu.next_sent_receipt_unlocked(message_id, message_id)
 }
@@ -104,8 +104,8 @@ fn (mut app App) feishu_runtime_publish_finish_segment_receipt(claim feishu.Buff
 	}
 	stream_id := claim.buffer.stream_id
 	if stream_id.trim_space() != '' {
-		app.codex_add_stream_target(app.codex_resolve_instance_for_stream(stream_id), stream_id,
-			codex.CodexTarget{ platform: 'feishu', message_id: message_id, stream_generation: claim.buffer.generation, buffer_message_id: claim.buffer.message_id })
+		app.publish_reply_binding(stream_id,
+			conversation_binding.ReplyTarget{ platform: 'feishu', message_id: message_id, stream_generation: claim.buffer.generation, buffer_message_id: claim.buffer.message_id })
 	}
 	return app.providers.feishu.next_sent_receipt_unlocked(claim.buffer.message_id, message_id)
 }

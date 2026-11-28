@@ -59,12 +59,42 @@ fn codexbot_ts_feishu_action_payload(request_id string, decision string, open_me
 	)}}}}'
 }
 
+fn codexbot_ts_fixture_root() string {
+	return os.join_path(os.temp_dir(), 'vhttpd_codexbot_fixture_${os.getpid()}')
+}
+
 fn codexbot_ts_with_temp_db(db_name string, run fn (string)) {
-	with_temp_sqlite_db_env('CODEXBOT_TS_DB_PATH', db_name, run)
+	root := codexbot_ts_fixture_root()
+	repo := os.real_path(os.join_path(os.dir(@FILE), '..', 'examples', 'codexbot-app-ts'))
+	os.mkdir_all(root) or { panic(err) }
+	defer { os.rmdir_all(root) or {} }
+	for extension in ['.mts', '.mjs', '.ts', '.json'] {
+		for source in os.walk_ext(repo, extension) {
+			if source.ends_with('bot.local.json') { continue }
+			target := os.join_path(root, source[repo.len + 1..])
+			os.mkdir_all(os.dir(target)) or { panic(err) }
+			os.cp(source, target) or { panic(err) }
+		}
+	}
+	db_path := os.join_path(root, 'data', db_name)
+	config_path := os.join_path(root, 'config', 'bot.local.json')
+	mut text := os.read_file(os.join_path(os.dir(@FILE), 'testdata', 'codexbot-config.json')) or { panic(err) }
+	text = text.replace('"../data/codexbot.sqlite"', json.encode(db_path))
+	text = text.replace('"../projects/vhttpd"', json.encode(os.getwd()))
+	text = text.replace('"../projects"', json.encode(os.join_path(root, 'projects')))
+	text = text.replace('"token": ""', '"token": "codexbot-test-token"')
+	text = text.replace('"main": {\n        "startup": true\n      }', '"main": {"startup": true}, "local4501": {"startup": false, "url": "ws://127.0.0.1:4501"}')
+	if db_name.contains('stale') { text = text.replace('180000', '1') }
+	os.write_file(config_path, text) or { panic(err) }
+	run(db_path)
 }
 
 fn codexbot_ts_app_file() string {
-	return os.real_path(os.join_path(os.dir(@FILE), '..', 'examples', 'codexbot-app-ts', 'app.mts'))
+	return os.join_path(codexbot_ts_fixture_root(), 'app.mts')
+}
+
+fn codexbot_ts_test_header() http.Header {
+	return http.new_header(key: .authorization, value: 'Bearer codexbot-test-token')
 }
 
 fn codexbot_ts_new_executor_with_options(thread_count int, enable_fs bool) InProcVjsxExecutor {
@@ -215,6 +245,7 @@ fn (mut h CodexbotTsTestHarness) admin_state(trace_id string, request_id string)
 		req:         http.Request{
 			method: .get
 			url:    '/admin/state'
+			header: codexbot_ts_test_header()
 			host:   'example.test'
 		}
 		remote_addr: '127.0.0.1'

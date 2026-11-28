@@ -1,6 +1,8 @@
 module main
 
 import executor
+import relaydb
+import takeover
 import time
 import veb
 import veb.request_id
@@ -11,6 +13,8 @@ pub struct Context {
 	request_id.RequestIdContext
 mut:
 	observed_pipeline string
+	observed_request_id string
+	observed_trace_id string
 	// Request-owned observation state; absent for unobserved/upgrade requests.
 	observed_timing          ?&executor.HttpRequestTiming
 	observed_adapter_depth   int
@@ -25,6 +29,8 @@ pub struct App {
 pub mut:
 	control_plane ControlPlaneRuntime
 	lifecycle     ProcessLifecycle
+	relay_databases &relaydb.Gateway = &relaydb.Gateway{}
+	takeovers &takeover.Registry = &takeover.Registry{}
 }
 
 fn resolve_trace_id(ctx Context, path string) string {
@@ -63,6 +69,7 @@ fn resolve_request_id(ctx Context, path string) string {
 }
 
 fn (mut app App) emit(kind string, fields map[string]string) {
+	if kind.starts_with('relay.') { app.control_plane.record_application_relay_event(kind,fields) }
 	app.control_plane.emit(kind, fields)
 }
 

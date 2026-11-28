@@ -1,0 +1,20 @@
+import subprocess
+code=r'''from pathlib import Path
+import subprocess
+r=Path('/root/vhttpd-release-tests/20261103-fixed6-gc-extended')
+s=r"""from pathlib import Path
+import subprocess,time,json,datetime
+r=Path(__file__).resolve().parent;unit='vhttpd-fixed6-gc-extended-20261103.service';low=0
+while subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0:
+ available=next(int(x.split()[1]) for x in Path('/proc/meminfo').read_text().splitlines() if x.startswith('MemAvailable:'));low=low+1 if available<512*1024 else 0
+ if low>=3:
+  pid=subprocess.check_output(['systemctl','show',unit,'--value','-p','MainPID'],text=True).strip()
+  assert str(r/'run.py').encode() in Path('/proc',pid,'cmdline').read_bytes()
+  (r/'guard-intervention.json').write_text(json.dumps({'reason':'Host available memory below 512MiB for three checks; stop independent diagnostic only','utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'available_kib':available,'unit':unit},indent=2))
+  subprocess.run(['systemctl','stop',unit],check=True);break
+ time.sleep(10)
+"""
+(r/'host-memory-guard.py').write_text(s)
+subprocess.run(['systemd-run','--unit=vhttpd-fixed6-diag-memory-guard-20261103','--property=MemoryMax=32M','--property=CPUQuota=5%','--property=Nice=19','--property=RuntimeMaxSec=2300','--property=UMask=0077','/usr/bin/python3',str(r/'host-memory-guard.py')],check=True)
+'''
+subprocess.run(['ssh','-p','2222','-o','BatchMode=yes','-o','ConnectTimeout=10','root@bullsoft.org','python3 -'],input=code,text=True,check=True,timeout=30)

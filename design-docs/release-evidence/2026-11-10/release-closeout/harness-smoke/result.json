@@ -1,0 +1,80 @@
+{
+  "status": "completed",
+  "phases_seconds": {
+    "baseline": 10,
+    "load": 30,
+    "cooldown": 20
+  },
+  "http_ok": 1213,
+  "http_errors": 0,
+  "paseo_ok": 15,
+  "paseo_errors": 0,
+  "recent_errors": [],
+  "runtime_pid": 1976580,
+  "binary_sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+  "ports": [
+    34667,
+    60437,
+    44795
+  ],
+  "phase": "cooldown",
+  "elapsed_seconds": 51.12541363702621,
+  "last_sample": {
+    "elapsed_seconds": 51.125,
+    "phase": "cooldown",
+    "runtime": {
+      "VmHWM": 134400,
+      "VmRSS": 89928,
+      "RssAnon": 62408,
+      "VmSwap": 0,
+      "Threads": 20,
+      "fd_count": 20,
+      "cpu_ticks": 713,
+      "start_ticks": 71615359,
+      "binary_sha256": "dca8844f0725b08e22d3a6ce5adf63ed51c9aaaceb5ce3360aaaba1dc9c61d9d",
+      "gc_heap_bytes": 39071744,
+      "gc_free_bytes": 22462464,
+      "gc_unmapped_bytes": 0,
+      "gc_total_allocated_bytes": 314534368,
+      "gc_epoch": 24,
+      "last_activity": 716207,
+      "last_attempt": 0,
+      "gc_epoch_changed_during_read": false,
+      "idle_gc": {
+        "active": 0,
+        "last_activity_ns": 716215939436130,
+        "last_attempt_ns": 0,
+        "attempts": 0,
+        "collections": 0,
+        "last_elapsed_ns": 0,
+        "max_elapsed_ns": 0,
+        "heap_after_bytes": 0,
+        "generation": 6246,
+        "claimed_generation": 0,
+        "cancelled": 0,
+        "passes": 0
+      },
+      "gc_trigger": {
+        "cached_threshold_bytes": 14021672,
+        "adjusted_allocated_bytes": 8830208,
+        "bytes_since_gc": 10118512,
+        "explicit_freed_bytes": 1288912,
+        "non_gc_bytes_raw": 18446744073709547232,
+        "non_gc_at_gc_raw": 18446744073709547840,
+        "composite_accounting_bytes": 4204464,
+        "atomic_accounting_bytes": 1454240,
+        "root_bytes": 4524352,
+        "stack_scanned_bytes": 362416,
+        "free_space_divisor": 1,
+        "epoch_changed_during_read": false
+      },
+      "minor_faults": 100063
+    },
+    "host_available_kib": 926948,
+    "cgroup_memory_bytes": 90386432,
+    "cgroup_memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "natural_status": "completed",
+  "natural_ended_utc": "2026-11-10T06:48:38Z",
+  "ended_utc": "2026-11-10T06:48:38Z"
+}

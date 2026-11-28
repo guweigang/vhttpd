@@ -1,0 +1,277 @@
+{
+  "status": "Independent short comparison completed; no production deployment or 24h acceptance",
+  "order": "legacy(old main+old GC), new, new, matched-GC control(old main+same upstream GC object as new). NOT ABBA repeated old control. One matched control; do not treat resident-memory difference as statistically established.",
+  "upstream_gc": {
+    "gc_c_matches_HEAD": true,
+    "gc_startup_matches_HEAD": true,
+    "base": "d13ccdd0768496cd6faea9ddfbdd0ddf9e4c4186",
+    "gc_source_sha256": "711336923f4288267a459a9567e054f46e0ef8fc4e1d6d0ba810efd65d480714",
+    "shared_codegen_diff_retained": true
+  },
+  "gc_policy": "Previous explicit 1/7/0 overrides match the pinned upstream effective defaults, so removing them is not a behavioral policy change. runtime-policy-probe.json verifies actual globals. No local GC source policy patches. Upstream V startup initializes divisor1, raw Boehm C initial3 is not effective V default. GC_* env overrides removed in all completed arms. Existing vhttpd idle policy unchanged; no forced collection/debugger intervention.",
+  "build": "Frozen d13ccdd V compiler and SDK; upstream gc.c built explicitly GCC O2. This does not validate unguarded O3 production builds. Legacy collector .text differs; matched control uses exact new collector object to separate body handoff from collector rebuild. Reused unchanged native helper objects audited.",
+  "comparisons": {
+    "http": {
+      "gc_allocated_mib_per_second": {
+        "matched_control": 9.221183052412453,
+        "new_runs": [
+          8.506002907517507,
+          8.507383517778374
+        ],
+        "new_mean": 8.50669321264794
+      },
+      "rss_tail_mib": {
+        "matched_control": 82.0625,
+        "new_runs": [
+          61.99609375,
+          97.125
+        ],
+        "new_mean": 79.560546875
+      },
+      "anon_tail_mib": {
+        "matched_control": 55.22265625,
+        "new_runs": [
+          35.3203125,
+          70.3515625
+        ],
+        "new_mean": 52.8359375
+      },
+      "gc_heap_tail_mib": {
+        "matched_control": 31.30859375,
+        "new_runs": [
+          20.640625,
+          54.64453125
+        ],
+        "new_mean": 37.642578125
+      },
+      "gc_free_tail_mib": {
+        "matched_control": 13.77734375,
+        "new_runs": [
+          6.546875,
+          31.05859375
+        ],
+        "new_mean": 18.802734375
+      },
+      "allocation_reduction_percent_vs_control": 7.7483532829075275
+    },
+    "paseo": {
+      "gc_allocated_mib_per_second": {
+        "matched_control": 0.8012379958091077,
+        "new_runs": [
+          0.7970482482050352,
+          0.7956980748858263
+        ],
+        "new_mean": 0.7963731615454308
+      },
+      "rss_tail_mib": {
+        "matched_control": 82.1484375,
+        "new_runs": [
+          62.298828125,
+          97.2265625
+        ],
+        "new_mean": 79.7626953125
+      },
+      "anon_tail_mib": {
+        "matched_control": 55.30859375,
+        "new_runs": [
+          35.623046875,
+          70.453125
+        ],
+        "new_mean": 53.0380859375
+      },
+      "gc_heap_tail_mib": {
+        "matched_control": 31.30859375,
+        "new_runs": [
+          20.640625,
+          54.64453125
+        ],
+        "new_mean": 37.642578125
+      },
+      "gc_free_tail_mib": {
+        "matched_control": 17.02734375,
+        "new_runs": [
+          6.90625,
+          37.4140625
+        ],
+        "new_mean": 22.16015625
+      },
+      "allocation_reduction_percent_vs_control": 0.6071646987689694
+    },
+    "mixed": {
+      "gc_allocated_mib_per_second": {
+        "matched_control": 9.929719203254601,
+        "new_runs": [
+          9.20010500650142,
+          9.207351257973661
+        ],
+        "new_mean": 9.20372813223754
+      },
+      "rss_tail_mib": {
+        "matched_control": 75.48828125,
+        "new_runs": [
+          62.890625,
+          83.462890625
+        ],
+        "new_mean": 73.1767578125
+      },
+      "anon_tail_mib": {
+        "matched_control": 48.6484375,
+        "new_runs": [
+          36.21484375,
+          56.689453125
+        ],
+        "new_mean": 46.4521484375
+      },
+      "gc_heap_tail_mib": {
+        "matched_control": 24.65625,
+        "new_runs": [
+          20.921875,
+          40.859375
+        ],
+        "new_mean": 30.890625
+      },
+      "gc_free_tail_mib": {
+        "matched_control": 5.248046875,
+        "new_runs": [
+          9.998046875,
+          17.70703125
+        ],
+        "new_mean": 13.8525390625
+      },
+      "allocation_reduction_percent_vs_control": 7.311295074478119
+    },
+    "cooldown": {
+      "gc_allocated_mib_per_second": {
+        "matched_control": 0.08047648675159978,
+        "new_runs": [
+          0.07984097854959869,
+          0.07999423434822193
+        ],
+        "new_mean": 0.07991760644891031
+      },
+      "rss_tail_mib": {
+        "matched_control": 62.099609375,
+        "new_runs": [
+          52.353515625,
+          55.0546875
+        ],
+        "new_mean": 53.7041015625
+      },
+      "anon_tail_mib": {
+        "matched_control": 35.259765625,
+        "new_runs": [
+          25.677734375,
+          28.28125
+        ],
+        "new_mean": 26.9794921875
+      },
+      "gc_heap_tail_mib": {
+        "matched_control": 11.4140625,
+        "new_runs": [
+          10.552734375,
+          12.6171875
+        ],
+        "new_mean": 11.5849609375
+      },
+      "gc_free_tail_mib": {
+        "matched_control": 0.0,
+        "new_runs": [
+          0.0,
+          0.0
+        ],
+        "new_mean": 0.0
+      },
+      "allocation_reduction_percent_vs_control": 0.6944640916228373
+    }
+  },
+  "natural_recovery_mib": {
+    "01-before": 20.166015625,
+    "02-after": 10.537109375,
+    "03-after": 28.408203125,
+    "04-before": 13.388671875
+  },
+  "cooldown_above_baseline_mib": {
+    "01-before": -21.681640625,
+    "02-after": -22.228515625,
+    "03-after": -27.10546875,
+    "04-before": -25.330078125
+  },
+  "counts": {
+    "http_ok": 57491,
+    "http_errors": 0,
+    "paseo_ok": 352,
+    "paseo_errors": 0
+  },
+  "mixed_anon_tail_minus_early_mib": {
+    "01-before": -9.302734375,
+    "02-after": 0.48046875,
+    "03-after": -13.775390625,
+    "04-before": -6.65625
+  },
+  "all_divisors": [
+    [
+      1
+    ],
+    [
+      1
+    ],
+    [
+      1
+    ],
+    [
+      1
+    ]
+  ],
+  "pressure_idle_attempt_increase": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "oom_free": true,
+  "limitations": "30s post-warmup baseline is not a fully settled idle baseline; avoid treating below-baseline cool tails as negative retained bytes. Synthetic topology/HTTP/Paseo, not business replay. Tail30s medians. Short curves cannot prove no leakage. Allocation churn is not live/retained bytes. No Windows, full test suite or new24h acceptance. Initial raw-C-default assertion attempt failed before load and excluded; exact logs archived.",
+  "packages": {
+    "after": {
+      "variant": "after",
+      "binary_sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9",
+      "scanner_sha256": "041e89551cbd5c180bfba82684c6631a294c08c3ab4d59b8edaf099a30c42cc5",
+      "gc_object_sha256": "7592c15d86847012199c9db03df624ab85d20b9e23e274a614a8f9be08c6e36c",
+      "idle_gc": true,
+      "http_observation": true,
+      "fixes": [
+        "Context reference",
+        "bounded config getter cache",
+        "upstream GC source with explicit O2",
+        "veb GC-managed response handoff"
+      ],
+      "diagnostic_only": true
+    },
+    "control": {
+      "variant": "control",
+      "binary_sha256": "249bf9291da23b05f3c26c161bad2f24105420b0b42882e2c4704d803a2d2aa3",
+      "scanner_sha256": "041e89551cbd5c180bfba82684c6631a294c08c3ab4d59b8edaf099a30c42cc5",
+      "gc_object_sha256": "7592c15d86847012199c9db03df624ab85d20b9e23e274a614a8f9be08c6e36c",
+      "idle_gc": true,
+      "http_observation": true,
+      "fixes": [
+        "Context reference",
+        "bounded config getter cache",
+        "upstream GC source with explicit O2"
+      ],
+      "diagnostic_only": true
+    }
+  },
+  "gc_defaults_verified": {
+    "utc": "2026-11-10T04:40:08Z",
+    "pid": 1871078,
+    "sha256": "f6144d0928fd5bcea4b75277f018ce4dedad62259d41c6888ecf820b80fd4fc9",
+    "values": {
+      "GC_free_space_divisor": 1,
+      "GC_unmap_threshold": 7,
+      "GC_force_unmap_on_gcollect": 0
+    },
+    "GC_environment": {},
+    "scope": "Read-only immutable GC policy globals of independent test process; no debugger, injection or collection."
+  },
+  "unit_evidence_note": "Successful transient unit unloaded after completion; show then reports defaults. Runtime MemoryMax=256MiB assertion and cgroup samples prove memory limit. launch-r2.json captures CPU30% and PrivateNetwork settings; unit-journal.txt confirms deactivated successfully. Do not quote unloaded properties as running limits."
+}

@@ -1,6 +1,6 @@
 // TEST ONLY, plain JavaScript. Never deploy this entry or expose a public proxy.
-import getUser from '../functions/get-user.js';
-import {createApplication, readConfig} from '../lib/application.mjs';
+import {readConfig} from '../lib/application.mjs';
+import {createCloudApplication} from '../lib/cloud/runtime.mjs';
 
 const config = readConfig(process.env);
 if (config.appId !== 'local-demo' || config.appSecret !== 'local-only-not-a-secret') {
@@ -8,7 +8,8 @@ if (config.appId !== 'local-demo' || config.appSecret !== 'local-only-not-a-secr
 }
 // This deliberately DOES NOT validate wx.login codes. All local clients are the
 // same fake user; only production app.mts performs real jscode2session exchange.
-const app = createApplication({getUser: getUser.main}, config, {
+const app = createCloudApplication(config, {
+  directory: './examples/wechat-cloud-functions/cloudfunctions',
   exchangeCode: async () => ({openid: 'local-demo-user', session_key: 'local-unused', unionid: ''}),
 });
 export default async ctx => {

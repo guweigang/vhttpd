@@ -1,0 +1,3 @@
+interface:
+  display_name: "vhttpd Workbench"
+  short_description: "Develop, deploy, and troubleshoot vhttpd apps"

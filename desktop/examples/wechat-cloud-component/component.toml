@@ -1,0 +1,27 @@
+version = 2
+
+[listeners.component_demo]
+protocol = "http"
+transport = "tcp"
+host = "127.0.0.1"
+port = 19903
+
+[engines.component_demo]
+kind = "vjsx"
+entry = "app.mjs"
+module_root = "."
+runtime_profile = "node"
+thread_count = 1
+enable_fs = true
+enable_network = true
+
+[adapters.component_demo]
+kind = "http-handler"
+engine = "engine:component_demo"
+
+[[pipelines]]
+id = "component_demo.http"
+group = "component_demo"
+ingress = "listener:component_demo"
+match.paths = ["*"]
+egress = "adapter:component_demo"

@@ -21,7 +21,8 @@ fn (mut app App) request_background_network_stop() BackgroundNetworkStop {
 	internal_generation := app.lifecycle.internal_admin.request_stop()
 	app.protocols.mcp.request_stop()
 	upstream_runs := app.websocket.upstream_runs.request_shutdown()
-	bridge_runs := app.providers.feishu.background_runs.request_shutdown()
+	mut bridge_runs := app.providers.feishu.background_runs.request_shutdown()
+	bridge_runs << app.lifecycle.reply_runs.request_shutdown()
 	return BackgroundNetworkStop{
 		internal_admin:      app.lifecycle.internal_admin
 		mcp:                 &app.protocols.mcp
@@ -175,6 +176,7 @@ fn (mut app App) finalize_runtime(runtime_cfg server_lifecycle.ServerRuntimeConf
 	log.info('[vhttpd] shutdown_app_runtime: stopping engine runtimes')
 	port := app.build_engine_lifecycle_port()
 	app.engines.stop(runtime_cfg.executor_plan.lifecycle, port)
+	app.relay_databases.close()
 	log.info('[vhttpd] shutdown_app_runtime: closing all plugins')
 	app.close_all_plugins()
 	log.info('[vhttpd] shutdown_app_runtime: stopping all providers')

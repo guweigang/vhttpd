@@ -1,5 +1,6 @@
 module feishu
 
+import protocol_diagnostics
 import config
 import connection_runtime
 import executor
@@ -90,6 +91,7 @@ pub:
 
 pub struct ProviderRuntime {
 pub mut:
+	protocol protocol_diagnostics.Snapshot
 	name                            string
 	connected                       bool
 	ws_url                          string
@@ -135,6 +137,7 @@ pub fn (rt &ProviderRuntime) app_snapshot(name string, enabled bool, open_base_u
 pub fn (rt &ProviderRuntime) app_snapshot_with_source(name string, enabled bool, open_base_url string, source string, static_configured bool, dynamic_configured bool) RuntimeAppSnapshot {
 	resolved_name := if rt.name.trim_space() != '' { rt.name } else { name }
 	return RuntimeAppSnapshot{
+		protocol: rt.protocol
 		name:                    resolved_name
 		source:                  source
 		static_configured:       static_configured
@@ -258,6 +261,7 @@ pub mut:
 
 pub struct RuntimeAppSnapshot {
 pub:
+	protocol protocol_diagnostics.Snapshot
 	name                    string
 	source                  string
 	static_configured       bool @[json: 'static_configured']
@@ -382,6 +386,7 @@ mut:
 	initial_send_sequence   u64
 	initial_send_count      int
 pub mut:
+	fragments &FragmentOwner = &FragmentOwner{}
 	mu                         sync.Mutex
 	enabled                    bool
 	open_base_url              string

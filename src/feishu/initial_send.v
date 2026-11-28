@@ -128,6 +128,7 @@ pub fn (mut s FeishuState) complete_initial_reply_unlocked(claim InitialSend, me
 // Caller holds mu through any paired target publication. A result ID touched
 // since admission remains unavailable even if its replacement was deleted.
 pub fn (mut s FeishuState) commit_initial_send_unlocked(claim InitialSend, message_id string, app_name string, receive_id string, receive_id_type string, content string) bool {
+	if !s.buffer_capacity_unlocked(message_id, content) { return false }
 	if !s.initial_send_can_complete_unlocked(claim, message_id) { return false }
 	mut registration := claim.registration
 	registration.published = true

@@ -137,7 +137,8 @@ fn test_dispatch_websocket_cancel_before_activation_closes_original_open_once() 
 	defer { peer.close() or {} }
 	mut run := app.websocket.state.ingress.reserve() or { panic('reserve') }
 	run.request_stop()
-	ws.run_dispatch_session(mut run, rt, mut server, 'key', 'GET', '/ws', {}, {}, '', 'c', 'trace', 0, [])
+	mut ingress_conn := ws.IngressConnection.tcp(server)
+	ws.run_dispatch_session(mut run, rt, mut ingress_conn, 'key', 'GET', '/ws', {}, {}, '', 'c', 'trace', 0, [], &ws.DispatchConnState{})
 	assert p.rows == ['old:open', 'old:close']
 	assert app.websocket.state.ingress.active() == 0
 }
@@ -152,7 +153,8 @@ fn test_dispatch_websocket_failed_handshake_closes_original_open_once() {
 	mut server, mut peer := multi_rpc_pair()
 	defer { peer.close() or {} }
 	server.close() or {}
-	ws.handle_dispatch_session(rt, mut server, 'key', 'GET', '/ws', {}, {}, '', 'c', 'trace', 0, [])
+	mut ingress_conn := ws.IngressConnection.tcp(server)
+	ws.handle_dispatch_session(rt, mut ingress_conn, 'key', 'GET', '/ws', {}, {}, '', 'c', 'trace', 0, [], &ws.DispatchConnState{})
 	assert p.rows == ['old:open', 'old:close']
 	assert app.websocket.active_connections() == 0
 }

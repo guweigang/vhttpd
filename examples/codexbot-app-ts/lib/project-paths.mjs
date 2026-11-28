@@ -20,7 +20,7 @@ export function createProjectPathHelpers(deps) {
   }
 
   function normalizeImportPath(rawPath) {
-    return path.resolve(rawPath);
+    return path.resolve(deps.botDefaults().projectRootDir, rawPath);
   }
 
   async function pathExistsAsDirectory(targetPath) {

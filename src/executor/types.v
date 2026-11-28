@@ -289,6 +289,7 @@ pub:
 
 pub struct AdminRelayRuntimeSummary {
 pub:
+	diagnostics      AdminRelayDiagnostics
 	descriptor_count int
 	agent_count      int
 	channel_count    int
@@ -301,6 +302,24 @@ pub:
 	carriers         []AdminRelayCarrierSummary
 	channels         []AdminRelayChannelSummary
 	sessions         []AdminRelaySessionSummary
+}
+
+pub struct AdminRelayEvent {
+pub:
+	serial u64
+	at_ms i64
+	kind string
+	fields map[string]string
+}
+
+pub struct AdminRelayDiagnostics {
+pub:
+	serial u64
+	completed u64
+	failed u64
+	retained int
+	capacity int = 256
+	events []AdminRelayEvent
 }
 
 pub struct AdminRuntimeSummary {

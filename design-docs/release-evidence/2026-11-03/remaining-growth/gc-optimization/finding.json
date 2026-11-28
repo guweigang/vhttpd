@@ -1,0 +1,100 @@
+{
+  "updated_utc": "2026-11-03T06:52:49.164590+00:00",
+  "status": "targeted_fix_verified_not_deployed_to_current_soak",
+  "metrics": {
+    "baseline": {
+      "heap_bytes": 7221248,
+      "free_bytes": 1105920,
+      "retained_bytes": 6115328,
+      "rss_bytes": 12128256,
+      "collections": 8480
+    },
+    "no-strict": {
+      "heap_bytes": 9637888,
+      "free_bytes": 2158592,
+      "retained_bytes": 7479296,
+      "rss_bytes": 13094912,
+      "collections": 10238
+    },
+    "O2": {
+      "heap_bytes": 376832,
+      "free_bytes": 303104,
+      "retained_bytes": 73728,
+      "rss_bytes": 5222400,
+      "collections": 16301
+    },
+    "O1": {
+      "heap_bytes": 368640,
+      "free_bytes": 344064,
+      "retained_bytes": 24576,
+      "rss_bytes": 5292032,
+      "collections": 14408
+    }
+  },
+  "production_gc_object_sha256": "c5709472d124a835010545e0f40ce2561dae4d4ae3d207bac337760e95d4b53e",
+  "scope": "GCC optimized bundled GC translation unit forced to O2; generated V code and other helpers unchanged; Clang/MSVC unaffected; current remote soak binary unchanged.",
+  "unresolved": "The precise upstream C/optimizer interaction inside GCC O3 is not yet isolated; no claim of upstream GCC bug. Non-GC-byte accounting underflow is separate and remains unfixed.",
+  "test_fixture_correction": "Initial V test did not include production parallel-cc mode and passed old toolchain; preserved, not counted as negative evidence. Re-run aligns actual production flags.",
+  "vlang_changed_files": [
+    "thirdparty/libgc/gc.c",
+    "vlib/builtin/gc_uncollectable_reclaim_test.v",
+    "vlib/builtin/gc_uncollectable_reclaim_test.c.h"
+  ],
+  "vjsx_changed": false,
+  "remote_soak_restarted": false,
+  "toolchain_image": {
+    "tag": "vhttpd-gc-o2-toolchain:20261103",
+    "id": "sha256:f3795a8c5067f58da6c2cad071ccbb7394196df15b249e325c995382d120ef58"
+  },
+  "tests": {
+    "gc_new_cold": {
+      "status": "passed",
+      "log": "gc-o2-regression-after.log.txt"
+    },
+    "gc_new_warm": {
+      "status": "passed",
+      "log": "gc-o2-regression-warm.log.txt"
+    },
+    "linux_shared_prod": {
+      "status": "passed",
+      "log": "gc-o2-shared-regression-final.log.txt"
+    },
+    "linux_handshake_4096_prod": {
+      "status": "passed",
+      "log": "gc-o2-handshake-regression.log.txt"
+    },
+    "macos_shared_prod": {
+      "status": "passed",
+      "log": "gc-o2-host-shared.log.txt"
+    },
+    "old_negative_prod_parallel_cc": {
+      "status": "failed_as_expected",
+      "before_bytes": 12288,
+      "after_bytes": 4399104,
+      "retained_delta_bytes": 4386816,
+      "budget_bytes": 2097152,
+      "log": "gc-o2-regression-before.log.txt"
+    },
+    "host_self": {
+      "status": "passed"
+    },
+    "linux_self": {
+      "status": "passed"
+    }
+  },
+  "additional_vhttpd_test_fix": {
+    "path": "src/ws/handshake_memory_test.v",
+    "reason": "Preserve synchronization and original memory budgets under -prod; channel receives and gates must not disappear with assertions.",
+    "runtime_behavior_changed": false
+  },
+  "remaining_release_work": [
+    "Build candidate runtime with validated GC toolchain and run independent workload validation.",
+    "After maintainer chooses replacement timing, rerun full 24h on final candidate. Current long soak remains unchanged as requested.",
+    "Formal cross-platform release gates remain open."
+  ],
+  "source_sha256": {
+    "thirdparty/libgc/gc.c": "6dc2f3273b6b72269f5f7be7646b28fcc5ce613420ed157edb12aba089f19bce",
+    "vlib/builtin/gc_uncollectable_reclaim_test.v": "830c72340dfa41ad99d22784ee7f1122e491587541fbed034179f8db8c449149",
+    "vlib/builtin/gc_uncollectable_reclaim_test.c.h": "f76696753ca8e9576186577c419acf0202df6ea57046cbec67bc649e41a767b2"
+  }
+}

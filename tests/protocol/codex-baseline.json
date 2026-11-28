@@ -1,0 +1,708 @@
+{
+  "generator": "codex-cli 0.166.0",
+  "surfaces": [
+    {
+      "layer": "application",
+      "file": "CommandExecutionRequestApprovalParams.json",
+      "direction": "response",
+      "paths": [
+        "threadId",
+        "turnId",
+        "itemId",
+        "command"
+      ],
+      "required": [
+        "itemId",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "turnId": {
+          "required": true,
+          "type": "string"
+        },
+        "itemId": {
+          "required": true,
+          "type": "string"
+        },
+        "command": {
+          "required": false,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "CommandExecutionRequestApprovalResponse.json",
+      "direction": "request",
+      "paths": [
+        "decision"
+      ],
+      "required": [
+        "decision"
+      ],
+      "fields": {
+        "decision": {
+          "required": true,
+          "alternatives": [
+            {
+              "type": "string",
+              "enum": [
+                "accept"
+              ]
+            },
+            {
+              "type": "string",
+              "enum": [
+                "acceptForSession"
+              ]
+            },
+            {
+              "type": "object"
+            },
+            {
+              "type": "object"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "decline"
+              ]
+            },
+            {
+              "type": "string",
+              "enum": [
+                "cancel"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "FileChangeRequestApprovalParams.json",
+      "direction": "response",
+      "paths": [
+        "threadId",
+        "turnId",
+        "itemId"
+      ],
+      "required": [
+        "itemId",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "turnId": {
+          "required": true,
+          "type": "string"
+        },
+        "itemId": {
+          "required": true,
+          "type": "string"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "FileChangeRequestApprovalResponse.json",
+      "direction": "request",
+      "paths": [
+        "decision"
+      ],
+      "required": [
+        "decision"
+      ],
+      "fields": {
+        "decision": {
+          "required": true,
+          "alternatives": [
+            {
+              "type": "string",
+              "enum": [
+                "accept"
+              ]
+            },
+            {
+              "type": "string",
+              "enum": [
+                "acceptForSession"
+              ]
+            },
+            {
+              "type": "string",
+              "enum": [
+                "decline"
+              ]
+            },
+            {
+              "type": "string",
+              "enum": [
+                "cancel"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "PermissionsRequestApprovalParams.json",
+      "direction": "response",
+      "paths": [
+        "threadId",
+        "turnId",
+        "itemId",
+        "permissions"
+      ],
+      "required": [
+        "cwd",
+        "itemId",
+        "permissions",
+        "startedAtMs",
+        "threadId",
+        "turnId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "turnId": {
+          "required": true,
+          "type": "string"
+        },
+        "itemId": {
+          "required": true,
+          "type": "string"
+        },
+        "permissions": {
+          "required": true,
+          "type": "object"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "PermissionsRequestApprovalResponse.json",
+      "direction": "request",
+      "paths": [
+        "permissions",
+        "scope"
+      ],
+      "required": [
+        "permissions"
+      ],
+      "fields": {
+        "permissions": {
+          "required": true,
+          "type": "object"
+        },
+        "scope": {
+          "required": false
+        }
+      }
+    },
+    {
+      "layer": "transport",
+      "file": "v1/InitializeParams.json",
+      "direction": "request",
+      "paths": [
+        "clientInfo.name",
+        "clientInfo.version"
+      ],
+      "required": [
+        "clientInfo"
+      ],
+      "fields": {
+        "clientInfo.name": {
+          "required": true,
+          "type": "string"
+        },
+        "clientInfo.version": {
+          "required": true,
+          "type": "string"
+        }
+      }
+    },
+    {
+      "layer": "transport",
+      "file": "v1/InitializeResponse.json",
+      "direction": "response",
+      "paths": [
+        "userAgent"
+      ],
+      "required": [
+        "codexHome",
+        "platformFamily",
+        "platformOs",
+        "userAgent"
+      ],
+      "fields": {
+        "userAgent": {
+          "required": true,
+          "type": "string"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/ThreadStartParams.json",
+      "direction": "request",
+      "paths": [
+        "model",
+        "cwd",
+        "sandbox",
+        "approvalPolicy"
+      ],
+      "required": [],
+      "fields": {
+        "model": {
+          "required": false,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cwd": {
+          "required": false,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sandbox": {
+          "required": false,
+          "alternatives": [
+            {
+              "type": "string",
+              "enum": [
+                "read-only",
+                "workspace-write",
+                "danger-full-access"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "approvalPolicy": {
+          "required": false,
+          "alternatives": [
+            {
+              "alternatives": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "untrusted",
+                    "on-request",
+                    "never"
+                  ]
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/ThreadResumeParams.json",
+      "direction": "request",
+      "paths": [
+        "threadId",
+        "excludeTurns",
+        "model",
+        "cwd",
+        "approvalPolicy",
+        "sandbox"
+      ],
+      "required": [
+        "threadId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "excludeTurns": {
+          "required": false,
+          "type": "boolean"
+        },
+        "model": {
+          "required": false,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cwd": {
+          "required": false,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approvalPolicy": {
+          "required": false,
+          "alternatives": [
+            {
+              "alternatives": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "untrusted",
+                    "on-request",
+                    "never"
+                  ]
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sandbox": {
+          "required": false,
+          "alternatives": [
+            {
+              "type": "string",
+              "enum": [
+                "read-only",
+                "workspace-write",
+                "danger-full-access"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/ThreadReadParams.json",
+      "direction": "request",
+      "paths": [
+        "threadId",
+        "includeTurns"
+      ],
+      "required": [
+        "threadId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "includeTurns": {
+          "required": false,
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/TurnStartParams.json",
+      "direction": "request",
+      "paths": [
+        "threadId",
+        "input"
+      ],
+      "required": [
+        "input",
+        "threadId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "input": {
+          "required": true,
+          "type": "array",
+          "items": {
+            "alternatives": [
+              {
+                "type": "object"
+              },
+              {
+                "alternatives": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "object"
+                  }
+                ]
+              },
+              {
+                "type": "object"
+              },
+              {
+                "type": "object"
+              },
+              {
+                "type": "object"
+              },
+              {
+                "type": "object"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/TurnInterruptParams.json",
+      "direction": "request",
+      "paths": [
+        "threadId",
+        "turnId"
+      ],
+      "required": [
+        "threadId",
+        "turnId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "turnId": {
+          "required": true,
+          "type": "string"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/ThreadResumeResponse.json",
+      "direction": "response",
+      "paths": [
+        "thread.id"
+      ],
+      "required": [
+        "approvalPolicy",
+        "approvalsReviewer",
+        "cwd",
+        "model",
+        "modelProvider",
+        "sandbox",
+        "thread"
+      ],
+      "fields": {
+        "thread.id": {
+          "required": true,
+          "type": "string"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/ThreadStartResponse.json",
+      "direction": "response",
+      "paths": [
+        "thread.id"
+      ],
+      "required": [
+        "approvalPolicy",
+        "approvalsReviewer",
+        "cwd",
+        "model",
+        "modelProvider",
+        "sandbox",
+        "thread"
+      ],
+      "fields": {
+        "thread.id": {
+          "required": true,
+          "type": "string"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/TurnStartResponse.json",
+      "direction": "response",
+      "paths": [
+        "turn.id",
+        "turn.status"
+      ],
+      "required": [
+        "turn"
+      ],
+      "fields": {
+        "turn.id": {
+          "required": true,
+          "type": "string"
+        },
+        "turn.status": {
+          "required": true,
+          "type": "string",
+          "enum": [
+            "completed",
+            "interrupted",
+            "failed",
+            "inProgress"
+          ]
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/ThreadReadResponse.json",
+      "direction": "response",
+      "paths": [
+        "thread.id",
+        "thread.turns"
+      ],
+      "required": [
+        "thread"
+      ],
+      "fields": {
+        "thread.id": {
+          "required": true,
+          "type": "string"
+        },
+        "thread.turns": {
+          "required": true,
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/AgentMessageDeltaNotification.json",
+      "direction": "response",
+      "paths": [
+        "threadId",
+        "turnId",
+        "itemId",
+        "delta"
+      ],
+      "required": [
+        "delta",
+        "itemId",
+        "threadId",
+        "turnId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "turnId": {
+          "required": true,
+          "type": "string"
+        },
+        "itemId": {
+          "required": true,
+          "type": "string"
+        },
+        "delta": {
+          "required": true,
+          "type": "string"
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/TurnCompletedNotification.json",
+      "direction": "response",
+      "paths": [
+        "threadId",
+        "turn.id",
+        "turn.status"
+      ],
+      "required": [
+        "threadId",
+        "turn"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "turn.id": {
+          "required": true,
+          "type": "string"
+        },
+        "turn.status": {
+          "required": true,
+          "type": "string",
+          "enum": [
+            "completed",
+            "interrupted",
+            "failed",
+            "inProgress"
+          ]
+        }
+      }
+    },
+    {
+      "layer": "application",
+      "file": "v2/ServerRequestResolvedNotification.json",
+      "direction": "response",
+      "paths": [
+        "threadId",
+        "requestId"
+      ],
+      "required": [
+        "requestId",
+        "threadId"
+      ],
+      "fields": {
+        "threadId": {
+          "required": true,
+          "type": "string"
+        },
+        "requestId": {
+          "required": true,
+          "alternatives": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer",
+              "format": "int64"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

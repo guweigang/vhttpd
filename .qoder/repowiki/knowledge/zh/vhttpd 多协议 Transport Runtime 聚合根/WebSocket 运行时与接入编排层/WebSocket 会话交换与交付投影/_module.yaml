@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: websocket_system/session_exchange_projections
+title: WebSocket 会话交换与交付投影
+scope:
+    - src/websocket_exchange_projection.v
+    - src/websocket_session_delivery_projection.v
+    - src/websocket_owner_runtime.v
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,27 @@
+{
+  "base_commit": "d260cecd415a8640fb655819efd52caee32e5fc2",
+  "vjsx_commit": "259620f1981a3573777ec8cda72883b1866404a7",
+  "fix_file_sha256": "5b96c315f373726f3983145159a8a5df8672ba7c99597089baf36fcd6d3ba38d",
+  "diagnostic": true,
+  "not_official_release": true,
+  "patch_files_sha256": {
+    "src/executor/inproc_vjsx_websocket_callback_runtime.v": "5b96c315f373726f3983145159a8a5df8672ba7c99597089baf36fcd6d3ba38d",
+    "src/executor/inproc_vjsx_websocket_lane_query_runtime.v": "60a0b2f27856d2846bb985bc79e290a843e6e67de946e9b492b5f5c12d18c6d2",
+    "src/app_websocket_runtime.v": "be59bbb347bede5a4e5f19a303aaa3d3c94f6b9417c236cc35ca1817055aa140",
+    "src/websocket_runtime.v": "b433ae7f27716da60e9ee53f3585c593c4d50e23e972a12a7922f73cc3c616c4",
+    "src/ws/hub_runtime.v": "2cf2042ad88ba185e74598480d3ce62296d127cd664966150cb0553286044219",
+    "src/ws/types.v": "ee57ccbafcedb34f384fe04c2c2036d86f24e3aa21c257c522009981102aea63",
+    "src/ws/dispatch_session.v": "8880ecd2672f935c6eef810375d0d5f5fb681edc56160155628488ab90ef7138",
+    "src/ws/ingress_owner.c.v": "ccd73188e65fad40f0af7b7a84c6d3c3dce088301ca67673b8ecb25d00e9a199",
+    "src/ws/handshake_callback_scope.c": "446c2614d65d7b9021ff8abd86091c793e471256ce0219ecf165836ce5ddf125",
+    "src/ws/handshake_callback_scope.h": "5cf66a18e519febb76546d43e5abf2663dcb1c85623d4f81bf6dc1ca98df73dd"
+  },
+  "fix_scope": "WebSocket event/query native callback ownership, GC-owned hub/kernel objects, and static handshake capture with cleanup; terminal client.dispose releases reconnect TLS context; vlang shared wrappers use collectable scanned storage",
+  "vlang_base_commit": "d13ccdd",
+  "vlang_codegen_sha256": "ff47c1797d210153d6b51f2a6b5eaa0149fdd177a77099862b58a0883a8873c7",
+  "vlang_patch_sha256": "5137c9e2ceddbbdef04aa72c9081571ac9b11a9ef4656c0470f256d9dfbd7c5e",
+  "toolchain_image": "sha256:b8c62eb9ba46c9292e9ba2e88fd5da216f5c9352c54f2b00d460118b3fb59094",
+  "isolated_from_current_dirty_workspace": true,
+  "vlang_compiler_sha256": "f9e86e7f5350ae532f210aff99cc213a938fd3a3c528c48a2cb30ef7f98aaed3",
+  "vlang_actual_commit": "d13ccdd0768496cd6faea9ddfbdd0ddf9e4c4186"
+}

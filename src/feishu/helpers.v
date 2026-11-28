@@ -576,12 +576,8 @@ pub fn proto_header_encode(header RuntimeProtoHeader) []u8 {
 
 pub fn (header RuntimeProtoHeader) encode() []u8 {
 	mut out := []u8{}
-	if header.key != '' {
-		RuntimeProtoFrame.encode_string_field(mut out, 1, header.key)
-	}
-	if header.value != '' {
-		RuntimeProtoFrame.encode_string_field(mut out, 2, header.value)
-	}
+	RuntimeProtoFrame.encode_string_field(mut out, 1, header.key)
+	RuntimeProtoFrame.encode_string_field(mut out, 2, header.value)
 	return out
 }
 
@@ -591,18 +587,12 @@ pub fn proto_frame_encode(frame RuntimeProtoFrame) []u8 {
 
 pub fn (frame RuntimeProtoFrame) encode() []u8 {
 	mut out := []u8{}
-	if frame.seq_id > 0 {
-		RuntimeProtoFrame.encode_field_key(mut out, 1, 0)
-		RuntimeProtoFrame.varint_encode(mut out, frame.seq_id)
-	}
-	if frame.log_id > 0 {
-		RuntimeProtoFrame.encode_field_key(mut out, 2, 0)
-		RuntimeProtoFrame.varint_encode(mut out, frame.log_id)
-	}
-	if frame.service != 0 {
-		RuntimeProtoFrame.encode_field_key(mut out, 3, 0)
-		RuntimeProtoFrame.varint_encode(mut out, u64(frame.service))
-	}
+	RuntimeProtoFrame.encode_field_key(mut out, 1, 0)
+	RuntimeProtoFrame.varint_encode(mut out, frame.seq_id)
+	RuntimeProtoFrame.encode_field_key(mut out, 2, 0)
+	RuntimeProtoFrame.varint_encode(mut out, frame.log_id)
+	RuntimeProtoFrame.encode_field_key(mut out, 3, 0)
+	RuntimeProtoFrame.varint_encode(mut out, u64(frame.service))
 	RuntimeProtoFrame.encode_field_key(mut out, 4, 0)
 	RuntimeProtoFrame.varint_encode(mut out, u64(frame.method))
 
@@ -639,6 +629,7 @@ pub fn RuntimeProtoFrame.varint_decode(buf []u8, start int) !(u64, int) {
 	mut idx := start
 	for idx < buf.len {
 		b := buf[idx]
+		if shift == 63 && b > 1 { return error('protobuf varint overflow') }
 		value |= u64(b & 0x7f) << shift
 		idx++
 		if (b & 0x80) == 0 {
@@ -664,11 +655,17 @@ pub fn RuntimeProtoFrame.skip_wire(buf []u8, start int, wire_type int) !int {
 		}
 		2 {
 			length, next := RuntimeProtoFrame.varint_decode(buf, start)!
+			if length > u64(buf.len - next) { return error('protobuf length exceeds payload') }
 			end := next + int(length)
 			if end > buf.len {
 				return error('protobuf length exceeds payload')
 			}
 			return end
+		}
+		1, 5 {
+			size := if wire_type == 1 { 8 } else { 4 }
+			if start + size > buf.len { return error('truncated protobuf fixed field') }
+			return start + size
 		}
 		else {
 			return error('unsupported protobuf wire type ${wire_type}')
@@ -682,18 +679,25 @@ pub fn proto_header_decode(buf []u8) !RuntimeProtoHeader {
 
 pub fn RuntimeProtoHeader.decode(buf []u8) !RuntimeProtoHeader {
 	mut out := RuntimeProtoHeader{}
+	mut required := u8(0)
 	mut idx := 0
 	for idx < buf.len {
 		key, next := RuntimeProtoFrame.varint_decode(buf, idx)!
 		idx = next
 		field_number := int(key >> 3)
 		wire_type := int(key & 0x07)
+		if field_number == 0 { return error('invalid protobuf field zero') }
+		if field_number in [1, 2] {
+			if wire_type != 2 { return error('invalid protobuf header wire type') }
+			required |= u8(1 << (field_number - 1))
+		}
 		if wire_type != 2 {
 			idx = RuntimeProtoFrame.skip_wire(buf, idx, wire_type)!
 			continue
 		}
 		length, next_len := RuntimeProtoFrame.varint_decode(buf, idx)!
 		start := next_len
+		if length > u64(buf.len - start) { return error('protobuf field exceeds payload') }
 		end := start + int(length)
 		if end > buf.len {
 			return error('protobuf header payload truncated')
@@ -707,6 +711,7 @@ pub fn RuntimeProtoHeader.decode(buf []u8) !RuntimeProtoHeader {
 
 		idx = end
 	}
+	if required != 3 { return error('missing required protobuf header fields') }
 	return out
 }
 
@@ -716,14 +721,18 @@ pub fn proto_frame_decode(buf []u8) !RuntimeProtoFrame {
 
 pub fn RuntimeProtoFrame.decode(buf []u8) !RuntimeProtoFrame {
 	mut out := RuntimeProtoFrame{}
+	mut required := u8(0)
 	mut idx := 0
 	for idx < buf.len {
 		key, next := RuntimeProtoFrame.varint_decode(buf, idx)!
 		idx = next
 		field_number := int(key >> 3)
 		wire_type := int(key & 0x07)
+		if field_number == 0 { return error('invalid protobuf field zero') }
 		match field_number {
 			1, 2, 3, 4 {
+				if wire_type != 0 { return error('invalid protobuf integer wire type') }
+				required |= u8(1 << (field_number - 1))
 				value, next_val := RuntimeProtoFrame.varint_decode(buf, idx)!
 				match field_number {
 					1 { out.seq_id = value }
@@ -741,7 +750,8 @@ pub fn RuntimeProtoFrame.decode(buf []u8) !RuntimeProtoFrame {
 				}
 				length, next_len := RuntimeProtoFrame.varint_decode(buf, idx)!
 				start := next_len
-				end := start + int(length)
+				if length > u64(buf.len - start) { return error('protobuf field exceeds payload') }
+		end := start + int(length)
 				if end > buf.len {
 					return error('protobuf field exceeds payload')
 				}
@@ -772,6 +782,7 @@ pub fn RuntimeProtoFrame.decode(buf []u8) !RuntimeProtoFrame {
 			}
 		}
 	}
+	if required != 15 { return error('missing required protobuf frame fields') }
 	return out
 }
 
@@ -989,7 +1000,7 @@ pub fn (frame RuntimeProtoFrame) ack(status int, headers_ map[string]string, dat
 	payload := json.encode(WsResponsePayload{
 		code:    if status > 0 { status } else { 200 }
 		headers: headers_.clone()
-		data:    data
+		data:    if data != '' { base64.encode(data.bytes()) } else { '' }
 	}, escape_unicode: true, time_as_unix: true)
 	return RuntimeProtoFrame{
 		seq_id:           frame.seq_id

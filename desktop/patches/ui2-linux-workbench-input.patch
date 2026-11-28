@@ -1,0 +1,47 @@
+--- a/ui/clipboard_nix.v
++++ b/ui/clipboard_nix.v
+@@ -7,9 +7,10 @@
+ // iOS have their own bridge files, and Android the default fallback.
+ module ui2
+ 
++import os
++import rand
+ import time
+ 
+ $if linux || freebsd || openbsd || netbsd || dragonfly || solaris {
+-	import os
+ 
+ 	struct LinuxClipboardTool {
+@@ -60,11 +61,13 @@
+-		if copy_args.len == 0 {
+-			return false
+-		}
++		if copy_args.len == 0 {
++			return false
++		}
+-		path := os.join_path(os.temp_dir(), 'ui2-clipboard-${os.getpid()}-${time.sys_mono_now()}.txt')
++		// Stage clipboard text in a directory only the current user can read.
++		suffix := rand.bytes(16) or { return false }
++		directory := os.join_path(os.temp_dir(), 'ui2-clipboard-' + suffix.hex())
++		os.mkdir(directory, mode: 0o700) or { return false }
++		defer { os.rmdir_all(directory) or {} }
++		path := os.join_path(directory, 'text')
+ 		os.write_file(path, text) or { return false }
+-		defer {
+-			os.rm(path) or {}
+-		}
+ 		$if clipboard_stage_probe ? {
+ 			eprintln('KW stage: file ${time.sys_mono_now()}')
+ 		}
+--- a/ui/ui_immediate.c.v
++++ b/ui/ui_immediate.c.v
+@@ -2351,7 +2351,8 @@
+ 	// unowned for focus and dismissal.
+ 	fn field_owns_key(key gg.KeyCode, modifiers u32) bool {
+ 		if key == .enter || key == .kp_enter {
+-			return true
++			// Let host forms handle their Ctrl/Command+Return shortcuts.
++			return modifiers & (u32(gg.Modifier.ctrl) | u32(gg.Modifier.super)) == 0
+ 		}
+ 		if key == .escape || key == .tab {
+ 			return false

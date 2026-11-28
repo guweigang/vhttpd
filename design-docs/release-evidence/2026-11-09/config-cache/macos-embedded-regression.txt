@@ -1,0 +1,11 @@
+---- Testing... ----------------------------------------------------------------
+src/executor/embedded_host_test.v:194:93: notice: unused parameter: `message_id`
+  192 | }
+  193 | 
+  194 | fn (mut h EmbeddedOnlyHost) issue_feishu_stream_creation(stream_id string, app_name string, message_id string) !string {
+      |                                                                                             ~~~~~~~~~~
+  195 |     h.creations++
+  196 |     return stream_id + ':' + app_name
+OK     234.823 ms /Users/guweigang/Source/vhttpd/src/executor/embedded_host_test.v
+--------------------------------------------------------------------------------
+Summary for all V _test.v files: 1 passed, 1 total. Elapsed time: 46201 ms, on 1 job. Comptime: 45962 ms. Runtime: 234 ms.

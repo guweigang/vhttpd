@@ -1,0 +1,337 @@
+{
+  "scope": "ABBA independent short comparison, four measured background scanners over two metadata-shaped source roots. Application payload is synthetic; no real DB/providers or business replay. Not 24-hour acceptance.",
+  "cold_definition": "Last 60 seconds of five-minute cooldown; no requests until separate resume check.",
+  "baseline_definition": "Last 30 seconds of one-minute baseline after all engines and a 35-second held request were warmed.",
+  "busy_definition": "Last 60 seconds of four-minute load, 80 RPS HTTP and one Paseo verification each 2 seconds.",
+  "package_difference": "Old is actual bodytest package. New includes previously developed HTTP observation allocation fixes and idle-only GC policy as well as scanner optimizations; whole-package memory differences cannot be assigned to scanner alone. Microbenchmark isolates allocation changes.",
+  "limitations": [
+    "Only two repeats per main variant; the extra prior-cache control has one repeat.",
+    "Cooldown minus baseline includes bounded request histories, caches and heap geometry; it is not a leak measurement.",
+    "Compiler/helper metadata observers are concurrent; no target pause or forced collection."
+  ],
+  "runs": {
+    "01-old": {
+      "status": "completed",
+      "binary_sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+      "http_ok": 19121,
+      "http_errors": 0,
+      "paseo_ok": 115,
+      "paseo_errors": 0,
+      "phases": {
+        "baseline": {
+          "VmRSS_median_mib": 58.140625,
+          "RssAnon_median_mib": 33.859375,
+          "gc_heap_bytes_median_mib": 17.87109375,
+          "gc_free_bytes_median_mib": 10.234375,
+          "gc_unmapped_bytes_median_mib": 18.56640625,
+          "allocation_mib_s": 3.1638984411707005,
+          "runtime_cpu_cores": 0.022792706333973126,
+          "gc_cycles": 5
+        },
+        "load": {
+          "VmRSS_median_mib": 67.775390625,
+          "RssAnon_median_mib": 43.494140625,
+          "gc_heap_bytes_median_mib": 26.953125,
+          "gc_free_bytes_median_mib": 10.458984375,
+          "gc_unmapped_bytes_median_mib": 9.484375,
+          "allocation_mib_s": 16.85348672155094,
+          "runtime_cpu_cores": 0.21265767566978092,
+          "gc_cycles": 41
+        },
+        "cooldown": {
+          "VmRSS_median_mib": 57.4921875,
+          "RssAnon_median_mib": 33.2109375,
+          "gc_heap_bytes_median_mib": 16.8671875,
+          "gc_free_bytes_median_mib": 3.8984375,
+          "gc_unmapped_bytes_median_mib": 19.5703125,
+          "allocation_mib_s": 3.167523218429251,
+          "runtime_cpu_cores": 0.02362691287121518,
+          "gc_cycles": 15
+        }
+      },
+      "load_anon_slope_mib_min": 0.010120802674592267,
+      "load_peak_anon_mib": 43.63671875,
+      "pressure_libc_attempt_values": [
+        640523
+      ],
+      "pressure_idle_gc_attempt_values": [
+        null
+      ],
+      "cooled_anon_residual_mib": -0.6484375,
+      "busy_to_cool_anon_drop_mib": 10.283203125,
+      "steady_latency_ms": {
+        "requests": 17925,
+        "p50": 3.3204579958692193,
+        "p95": 14.44764097686857,
+        "p99": 68.63855803385377,
+        "max": 401.15015499759465
+      },
+      "resume_latency_ms": {
+        "requests": 160,
+        "p95": 16.643660026602447,
+        "p99": 19.528256030753255,
+        "max": 19.676010007970035
+      },
+      "oom_events_zero": true
+    },
+    "02-new": {
+      "status": "completed",
+      "binary_sha256": "767456d29dec7b7b19badcb91dcdf00994a1fb0db47a2d79c0154d9339553d70",
+      "http_ok": 19115,
+      "http_errors": 0,
+      "paseo_ok": 116,
+      "paseo_errors": 0,
+      "phases": {
+        "baseline": {
+          "VmRSS_median_mib": 57.900390625,
+          "RssAnon_median_mib": 30.962890625,
+          "gc_heap_bytes_median_mib": 7.57421875,
+          "gc_free_bytes_median_mib": 0.001953125,
+          "gc_unmapped_bytes_median_mib": 38.38671875,
+          "allocation_mib_s": 0.07500214108770145,
+          "runtime_cpu_cores": 0.007598176437654963,
+          "gc_cycles": 2
+        },
+        "load": {
+          "VmRSS_median_mib": 94.298828125,
+          "RssAnon_median_mib": 67.357421875,
+          "gc_heap_bytes_median_mib": 45.9609375,
+          "gc_free_bytes_median_mib": 15.478515625,
+          "gc_unmapped_bytes_median_mib": 0.0,
+          "allocation_mib_s": 11.305146429666358,
+          "runtime_cpu_cores": 0.1973923149560543,
+          "gc_cycles": 16
+        },
+        "cooldown": {
+          "VmRSS_median_mib": 68.62890625,
+          "RssAnon_median_mib": 41.6875,
+          "gc_heap_bytes_median_mib": 17.6640625,
+          "gc_free_bytes_median_mib": 0.00390625,
+          "gc_unmapped_bytes_median_mib": 28.296875,
+          "allocation_mib_s": 0.07589954382114539,
+          "runtime_cpu_cores": 0.007634281559574664,
+          "gc_cycles": 2
+        }
+      },
+      "load_anon_slope_mib_min": 0.10499204601155272,
+      "load_peak_anon_mib": 67.3828125,
+      "pressure_libc_attempt_values": [
+        641182
+      ],
+      "pressure_idle_gc_attempt_values": [
+        1
+      ],
+      "cooled_anon_residual_mib": 10.724609375,
+      "busy_to_cool_anon_drop_mib": 25.669921875,
+      "steady_latency_ms": {
+        "requests": 17917,
+        "p50": 3.1536960741505027,
+        "p95": 13.334955088794231,
+        "p99": 56.2495089834556,
+        "max": 304.73583401180804
+      },
+      "resume_latency_ms": {
+        "requests": 160,
+        "p95": 18.619870068505406,
+        "p99": 38.510108017362654,
+        "max": 39.91937299724668
+      },
+      "oom_events_zero": true
+    },
+    "03-new-repeat": {
+      "status": "completed",
+      "binary_sha256": "767456d29dec7b7b19badcb91dcdf00994a1fb0db47a2d79c0154d9339553d70",
+      "http_ok": 19133,
+      "http_errors": 0,
+      "paseo_ok": 116,
+      "paseo_errors": 0,
+      "phases": {
+        "baseline": {
+          "VmRSS_median_mib": 50.46875,
+          "RssAnon_median_mib": 23.8359375,
+          "gc_heap_bytes_median_mib": 7.322265625,
+          "gc_free_bytes_median_mib": 0.0,
+          "gc_unmapped_bytes_median_mib": 46.529296875,
+          "allocation_mib_s": 0.07536280954613958,
+          "runtime_cpu_cores": 0.007597872595673211,
+          "gc_cycles": 0
+        },
+        "load": {
+          "VmRSS_median_mib": 86.572265625,
+          "RssAnon_median_mib": 59.935546875,
+          "gc_heap_bytes_median_mib": 53.8515625,
+          "gc_free_bytes_median_mib": 27.654296875,
+          "gc_unmapped_bytes_median_mib": 0.0,
+          "allocation_mib_s": 11.41639693108303,
+          "runtime_cpu_cores": 0.19158759588468396,
+          "gc_cycles": 17
+        },
+        "cooldown": {
+          "VmRSS_median_mib": 61.251953125,
+          "RssAnon_median_mib": 34.615234375,
+          "gc_heap_bytes_median_mib": 17.798828125,
+          "gc_free_bytes_median_mib": 0.00390625,
+          "gc_unmapped_bytes_median_mib": 36.052734375,
+          "allocation_mib_s": 0.07627536544067702,
+          "runtime_cpu_cores": 0.007451293980808374,
+          "gc_cycles": 2
+        }
+      },
+      "load_anon_slope_mib_min": 0.0948368192683141,
+      "load_peak_anon_mib": 60.109375,
+      "pressure_libc_attempt_values": [
+        641872
+      ],
+      "pressure_idle_gc_attempt_values": [
+        1
+      ],
+      "cooled_anon_residual_mib": 10.779296875,
+      "busy_to_cool_anon_drop_mib": 25.3203125,
+      "steady_latency_ms": {
+        "requests": 17933,
+        "p50": 3.0509060015901923,
+        "p95": 13.101298944093287,
+        "p99": 28.354611014947295,
+        "max": 242.64574400149286
+      },
+      "resume_latency_ms": {
+        "requests": 160,
+        "p95": 18.57515494339168,
+        "p99": 20.04080207552761,
+        "max": 22.92866597417742
+      },
+      "oom_events_zero": true
+    },
+    "04-old-repeat": {
+      "status": "completed",
+      "binary_sha256": "0890d93135156b2ad77ae25e1bc6ac833cd5b09cc226ff15145aaed1c6288baa",
+      "http_ok": 19112,
+      "http_errors": 0,
+      "paseo_ok": 115,
+      "paseo_errors": 0,
+      "phases": {
+        "baseline": {
+          "VmRSS_median_mib": 65.427734375,
+          "RssAnon_median_mib": 40.9765625,
+          "gc_heap_bytes_median_mib": 24.2265625,
+          "gc_free_bytes_median_mib": 17.283203125,
+          "gc_unmapped_bytes_median_mib": 12.2109375,
+          "allocation_mib_s": 3.220311635076997,
+          "runtime_cpu_cores": 0.024391219161102,
+          "gc_cycles": 6
+        },
+        "load": {
+          "VmRSS_median_mib": 64.890625,
+          "RssAnon_median_mib": 40.4375,
+          "gc_heap_bytes_median_mib": 23.291015625,
+          "gc_free_bytes_median_mib": 7.951171875,
+          "gc_unmapped_bytes_median_mib": 13.146484375,
+          "allocation_mib_s": 16.90918211719048,
+          "runtime_cpu_cores": 0.20958301523248626,
+          "gc_cycles": 49
+        },
+        "cooldown": {
+          "VmRSS_median_mib": 57.380859375,
+          "RssAnon_median_mib": 32.927734375,
+          "gc_heap_bytes_median_mib": 17.21875,
+          "gc_free_bytes_median_mib": 5.8671875,
+          "gc_unmapped_bytes_median_mib": 19.21875,
+          "allocation_mib_s": 3.2222766455663017,
+          "runtime_cpu_cores": 0.02381255339646991,
+          "gc_cycles": 15
+        }
+      },
+      "load_anon_slope_mib_min": -0.05575184460190207,
+      "load_peak_anon_mib": 40.81640625,
+      "pressure_libc_attempt_values": [
+        642512
+      ],
+      "pressure_idle_gc_attempt_values": [
+        null
+      ],
+      "cooled_anon_residual_mib": -8.048828125,
+      "busy_to_cool_anon_drop_mib": 7.509765625,
+      "steady_latency_ms": {
+        "requests": 17912,
+        "p50": 3.231715993024409,
+        "p95": 14.364256989210844,
+        "p99": 67.56594206672162,
+        "max": 186.01513397879899
+      },
+      "resume_latency_ms": {
+        "requests": 160,
+        "p95": 18.23574397712946,
+        "p99": 22.724344045855105,
+        "max": 25.91023501008749
+      },
+      "oom_events_zero": true
+    },
+    "05-prior-cache": {
+      "status": "completed",
+      "binary_sha256": "323cb5afaec016f410a625a1d48e8ceed7d3f39260ef267830916db021d8c273",
+      "http_ok": 19096,
+      "http_errors": 0,
+      "paseo_ok": 115,
+      "paseo_errors": 0,
+      "phases": {
+        "baseline": {
+          "VmRSS_median_mib": 49.265625,
+          "RssAnon_median_mib": 22.58203125,
+          "gc_heap_bytes_median_mib": 7.587890625,
+          "gc_free_bytes_median_mib": 0.001953125,
+          "gc_unmapped_bytes_median_mib": 33.626953125,
+          "allocation_mib_s": 0.08042010246682578,
+          "runtime_cpu_cores": 0.007996801279488205,
+          "gc_cycles": 2
+        },
+        "load": {
+          "VmRSS_median_mib": 76.66796875,
+          "RssAnon_median_mib": 49.98046875,
+          "gc_heap_bytes_median_mib": 41.21484375,
+          "gc_free_bytes_median_mib": 21.140625,
+          "gc_unmapped_bytes_median_mib": 0.0,
+          "allocation_mib_s": 11.364297330309066,
+          "runtime_cpu_cores": 0.195946560029083,
+          "gc_cycles": 21
+        },
+        "cooldown": {
+          "VmRSS_median_mib": 56.91796875,
+          "RssAnon_median_mib": 30.23046875,
+          "gc_heap_bytes_median_mib": 14.88671875,
+          "gc_free_bytes_median_mib": 0.00390625,
+          "gc_unmapped_bytes_median_mib": 26.328125,
+          "allocation_mib_s": 0.08091221481499365,
+          "runtime_cpu_cores": 0.0074525129510133615,
+          "gc_cycles": 2
+        }
+      },
+      "load_anon_slope_mib_min": -0.05428079935785471,
+      "load_peak_anon_mib": 50.16015625,
+      "pressure_libc_attempt_values": [
+        643173
+      ],
+      "pressure_idle_gc_attempt_values": [
+        1
+      ],
+      "cooled_anon_residual_mib": 7.6484375,
+      "busy_to_cool_anon_drop_mib": 19.75,
+      "steady_latency_ms": {
+        "requests": 17896,
+        "p50": 2.890437957830727,
+        "p95": 11.875184020027518,
+        "p99": 47.851247945800424,
+        "max": 758.534615044482
+      },
+      "resume_latency_ms": {
+        "requests": 160,
+        "p95": 18.260327982716262,
+        "p99": 28.266676934435964,
+        "max": 29.200038989074528
+      },
+      "oom_events_zero": true
+    }
+  },
+  "formal_abba_completed": true,
+  "control_completed": true,
+  "all_completed": true
+}

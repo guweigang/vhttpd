@@ -1,0 +1,35 @@
+{
+  "scope": "Single-process warm repeated getters over four paths, including a negative result. Both arms use the same current resolver semantics; 1000 lookups per arm. GC total allocated bytes, not live bytes/RSS or full-Paseo acceptance. Cold misses still parse and add bounded retained strings.",
+  "runs": [
+    {
+      "cached_gc_allocated_bytes": 19952,
+      "cached_ns": 808750,
+      "checksum": 3000,
+      "fixture_bytes": 13222,
+      "lookups": 1000,
+      "uncached_gc_allocated_bytes": 120620592,
+      "uncached_ns": 255482416,
+      "allocation_reduction": 0.9998345887740295
+    },
+    {
+      "cached_gc_allocated_bytes": 22960,
+      "cached_ns": 878792,
+      "checksum": 3000,
+      "fixture_bytes": 13222,
+      "lookups": 1000,
+      "uncached_gc_allocated_bytes": 120618064,
+      "uncached_ns": 277070708,
+      "allocation_reduction": 0.9998096470856969
+    },
+    {
+      "cached_gc_allocated_bytes": 22960,
+      "cached_ns": 818708,
+      "checksum": 3000,
+      "fixture_bytes": 13222,
+      "lookups": 1000,
+      "uncached_gc_allocated_bytes": 120618064,
+      "uncached_ns": 265821750,
+      "allocation_reduction": 0.9998096470856969
+    }
+  ]
+}

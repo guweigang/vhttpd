@@ -283,12 +283,12 @@ fn decode_json_hex4(raw string) ?rune {
     if raw.len != 4 {
         return none
     }
-    mut value := rune(0)
+    mut value := u32(0)
     for ch in raw {
         digit := json_hex_nibble(ch) or { return none }
-        value = (value << 4) | rune(digit)
+        value = (value << 4) | u32(digit)
     }
-    return value
+    return rune(value)
 }
 
 fn json_hex_nibble(ch u8) ?int {

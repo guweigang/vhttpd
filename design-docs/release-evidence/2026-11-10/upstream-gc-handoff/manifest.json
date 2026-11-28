@@ -1,0 +1,43 @@
+{
+  "run_order": [
+    [
+      "01-before",
+      "before"
+    ],
+    [
+      "02-after",
+      "after"
+    ],
+    [
+      "03-after",
+      "after"
+    ],
+    [
+      "04-before",
+      "before"
+    ]
+  ],
+  "baseline": 30,
+  "load": 240,
+  "cooldown": 180,
+  "load_split_seconds": {
+    "http": 60,
+    "paseo": 60,
+    "mixed": 120
+  },
+  "scope": "Serial legacy -> new -> new -> matched-GC control. Both arms remove GC_* environment overrides; upstream V initializes divisor1. Control reuses old main object and exact same freshly rebuilt upstream/O2 GC object as new candidate. First legacy result is a separate combined-change comparison, not an ABBA matched control. Same scanner,SDK,idle-GC policy; synthetic four-runtime topology, no business replay.",
+  "limits": {
+    "MemoryMax": "256M",
+    "MemorySwapMax": 0,
+    "CPUQuota": "30%",
+    "start_gate_mib": 640,
+    "host_guard_mib": 512
+  },
+  "before_sha256": "60da360c10cc76bc5f37c609b95dc275bec98f88c256f31cf7c491c31ef43faf",
+  "roles": {
+    "01-before": "legacy candidate, old GC object",
+    "02-after": "new handoff + upstream/O2 GC",
+    "03-after": "repeat new handoff + upstream/O2 GC",
+    "04-before": "old handoff + exact upstream/O2 GC object used in after"
+  }
+}

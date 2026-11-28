@@ -6,6 +6,8 @@ import provider
 import executor
 import server_lifecycle
 import runtime_plan
+import application_logs
+import os
 
 fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executor_plan executor.LogicExecutorRuntimePlan, cfg config.VhttpdConfig, plan runtime_plan.RuntimePlan, build_cfg server_lifecycle.AppRuntimeBuildConfig) &App {
 	mut runtime_plan_for_app := runtime_plan_with_projection_diagnostics(plan)
@@ -33,11 +35,18 @@ fn build_app_runtime(provider_settings provider.ProviderRuntimeSettings, executo
 	runtime_plan_for_app = runtime_plan_with_appended_diagnostics(runtime_plan_for_app,
 		relay_build.diagnostics)
 
+	mut control := ControlPlaneRuntime.new(build_cfg)
+	control.configure_application_logs(runtime_plan_for_app)
+	mut application_log := application_logs.shared()
+	log_directory := if build_cfg.event_log != '' {os.dir(build_cfg.event_log)} else {os.join_path(build_cfg.workdir,'.runtime')}
+	application_log.configure_directory(os.join_path(log_directory,'application-logs')) or {
+		log.warn('[vhttpd] application log persistence unavailable: ${err.msg()}')
+	}
 	return &App{
 		plan:          runtime_plan_for_app
 		legacy_config: cfg
 		app_build_cfg: build_cfg
-		control_plane: ControlPlaneRuntime.new(build_cfg)
+		control_plane: control
 		lifecycle:     ProcessLifecycle.started_now()
 		assets:        config.AssetsRuntime.new(build_cfg.assets_enabled, build_cfg.assets_prefix,
 			build_cfg.assets_root, build_cfg.assets_root_real, build_cfg.assets_cache_control)

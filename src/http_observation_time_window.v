@@ -7,8 +7,8 @@ import veb
 
 struct HttpObservationBucket {
 mut:
-	total executor.AdminHttpMetrics
-	routes map[string]executor.AdminHttpMetrics
+	total HttpObservedMetrics
+	routes map[string]HttpObservedMetrics
 }
 
 fn http_metrics_merge(a executor.AdminHttpMetrics, b executor.AdminHttpMetrics) executor.AdminHttpMetrics {
@@ -37,13 +37,15 @@ fn (mut observations HttpObservations) record_window(key string, status int, dur
 		observations.requests.clear()
 		observations.window_reset_unix = at_unix
 	}
-	observations.last_bucket_unix = stamp
-	for old in observations.buckets.keys() {
-		if old < stamp - 900 { observations.buckets.delete(old) }
+	if observations.last_bucket_unix != stamp {
+		for old in observations.buckets.keys() {
+			if old < stamp - 900 { observations.buckets.delete(old) }
+		}
 	}
+	observations.last_bucket_unix = stamp
 	mut bucket := observations.buckets[stamp] or { HttpObservationBucket{} }
 	bucket.total = http_metrics_record(bucket.total, status, duration_ms, at_unix)
-	bucket.routes[key] = http_metrics_record(bucket.routes[key] or { executor.AdminHttpMetrics{} }, status, duration_ms, at_unix)
+	bucket.routes[key] = http_metrics_record(bucket.routes[key] or { HttpObservedMetrics{} }, status, duration_ms, at_unix)
 	observations.buckets[stamp] = bucket
 }
 
@@ -71,12 +73,12 @@ fn (r &ActiveRuntimeRegistry) traffic_window(listener string, pipeline string, f
 		mut routes := map[string]executor.AdminHttpMetrics{}
 		for stamp, bucket in app.control_plane.http_observations.buckets {
 			if stamp < lower || stamp > now { continue }
-			value := if filtered { bucket.routes[pipeline] or { executor.AdminHttpMetrics{} } } else { bucket.total }
+			value := if filtered { (bucket.routes[pipeline] or { HttpObservedMetrics{} }).snapshot() } else { bucket.total.snapshot() }
 			metrics = http_metrics_merge(metrics, value)
 			series[stamp] = http_metrics_merge(series[stamp] or { executor.AdminHttpMetrics{} }, value)
 			for id, route in bucket.routes {
 				if filtered && id != pipeline { continue }
-				routes[id] = http_metrics_merge(routes[id] or { executor.AdminHttpMetrics{} }, route)
+				routes[id] = http_metrics_merge(routes[id] or { executor.AdminHttpMetrics{} }, route.snapshot())
 			}
 		}
 		app.control_plane.mu.unlock()
@@ -133,7 +135,7 @@ fn (r &ActiveRuntimeRegistry) request_details(listener string, pipeline string, 
 		cfg := cfgs[i] or { continue }
 		if !cfg.serve_data_plane || cfg.plan_listener_id != listener { continue }
 		app.control_plane.mu.@lock()
-		samples := (app.control_plane.http_observations.requests[pipeline] or { []executor.AdminHttpObservationError{} }).clone()
+		samples := (app.control_plane.http_observations.requests[pipeline] or { HttpObservationRing{} }).snapshot()
 		app.control_plane.mu.unlock()
 		retained = samples.len
 		for entry in samples {

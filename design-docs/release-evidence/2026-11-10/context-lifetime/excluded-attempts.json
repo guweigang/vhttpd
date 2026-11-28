@@ -1,0 +1,11 @@
+{
+  "excluded": [
+    "Scratch local prototype promoted to heap; not an optimization",
+    "Initial fixture returned stack routes pointer: generated C proof archived, not valid runtime validation",
+    "Intermediate tests called map.len on deliberately zero/uninitialized storage, and variadic-path expectations were wrong",
+    "Intermediate production identity comparison used struct-pointer !=; changed to voidptr identity and regression covers error Context vs empty slot",
+    "Prototype raw-malloc fallback superseded by original &Context constructor; only final regressions and final benchmark accepted",
+    "Earlier pagemap sample accepted range partition but lacked free-counter stability; lower estimate uses latest stable snapshot only"
+  ],
+  "production_scope": "Only veb_fasthttp.v and new response_writer_state_test.v retained. Temporary benchmark removed. GC/vjsx unchanged; business only read."
+}

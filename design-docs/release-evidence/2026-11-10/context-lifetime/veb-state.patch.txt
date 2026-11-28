@@ -1,0 +1,134 @@
+--- a/vlib/veb/veb_fasthttp.v
++++ b/vlib/veb/veb_fasthttp.v
+@@ -16,6 +16,28 @@
+ 	controllers_sorted        []&ControllerPath
+ 	routes                    &map[string]Route
+ 	benchmark_page_generation bool
++}
++
++// This private snapshot is never passed to application handlers. Each reactor
++// worker owns one slot; the handler Context remains a separate GC allocation.
++struct ResponseWriterState {
++mut:
++	context Context
++	busy    bool
++}
++
++fn response_writer_state_enabled[A]() bool {
++	if !response_body_can_share_gc_buffer() { return false }
++	// ControllerHandler is public and can retain the base Context it receives.
++	$if A is ControllerInterface {
++		return false
++	}
++	return true
++}
++
++fn make_response_writer_state[A]() voidptr {
++	if !response_writer_state_enabled[A]() { return unsafe { nil } }
++	return &ResponseWriterState{}
+ }
+ 
+ const http_500_response = 'HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'.bytes()
+@@ -123,6 +145,7 @@
+ 		host:                    params.host
+ 		port:                    params.port
+ 		append_handler:          parallel_append_handler[A, X]
++		make_state:              make_response_writer_state[A]
+ 		max_request_buffer_size: params.max_request_buffer_size
+ 		max_request_body_size:   params.max_request_body_size
+ 		timeout_in_seconds:      params.timeout_in_seconds
+@@ -200,7 +223,20 @@
+ // the connection's reused write buffer `out` — no intermediate response buffer —
+ // and signals takeover / close / file streaming through `ctl`.
+ fn parallel_append_handler[A, X](req fasthttp.HttpRequest, mut out []u8, worker_state voidptr, mut ctl fasthttp.ResponseControl) fasthttp.Step {
+-	_ = worker_state // veb keeps shared state in user_data, not per-worker state
++	mut writer_storage := unsafe { &Context(nil) }
++	mut writer_state := unsafe { &ResponseWriterState(worker_state) }
++	if response_writer_state_enabled[A]() && writer_state != unsafe { nil } && !writer_state.busy {
++		writer_state.busy = true
++		writer_storage = &writer_state.context
++	}
++	defer {
++		if writer_storage != unsafe { nil } {
++			// Drop every request reference, including on errors and takeover returns.
++			// The slot is fully initialized again before use by the next request.
++			unsafe { vmemset(writer_storage, 0, int(sizeof(Context))) }
++			writer_state.busy = false
++		}
++	}
+ 	// Per-request bump arena (only compiled in under -prealloc); mirrors the arena
+ 	// the legacy fasthttp reactor used to open for the veb handler.
+ 	arena := va_scope_begin()
+@@ -235,7 +271,7 @@
+ 		}
+ 	}
+ 	// Create and populate the `veb.Context` and route the request.
+-	mut completed_context := handle_request_and_route[A, X](mut global_app, req2, client_fd, params)
++	mut completed_context := handle_request_and_route_with_writer[A, X](mut global_app, req2, client_fd, params, writer_storage)
+ 
+ 	match completed_context.takeover_mode {
+ 		.manual {
+@@ -273,13 +309,19 @@
+ 	// target directly — write_to appends into `out` with no intermediate buffer.
+ 	completed_context.res.write_to(mut out)
+ 	completed_context.release_response_body()
+-	unsafe { free(completed_context) }
++	if voidptr(completed_context) != voidptr(writer_storage) {
++		unsafe { free(completed_context) }
++	}
+ 	va_scope_free_after(arena)
+ 	return .done
+ }
+ 
+ // runs middleware, and finds the correct route for a request.
+ fn handle_request_and_route[A, X](mut app A, req http.Request, _client_fd int, params RequestParams) &Context {
++	return handle_request_and_route_with_writer[A, X](mut app, req, _client_fd, params, unsafe { nil })
++}
++
++fn handle_request_and_route_with_writer[A, X](mut app A, req http.Request, _client_fd int, params RequestParams, writer_storage &Context) &Context {
+ 	$if A is RequestActivityApp {
+ 		app.before_handle_request(req)
+ 	}
+@@ -315,15 +357,33 @@
+ 	$if trace_prealloc ? {
+ 		unsafe { prealloc_scope_checkpoint(c'veb parsed host') }
+ 	}
+-	mut ctx := &Context{
+-		req:                   req
+-		page_gen_start:        page_gen_start
+-		client_fd:             _client_fd
+-		client_wants_to_close: request_has_connection_close(req)
+-		query:                 query
+-		form:                  form
+-		files:                 files
+-	}
++	mut ctx := unsafe { &Context(writer_storage) }
++	if ctx == unsafe { nil } {
++		// Keep the original constructor/ownership contract on every fallback path.
++		ctx = &Context{
++			req:                   req
++			page_gen_start:        page_gen_start
++			client_fd:             _client_fd
++			client_wants_to_close: request_has_connection_close(req)
++			query:                 query
++			form:                  form
++			files:                 files
++		}
++	} else {
++		// Reusable storage gets every default before any application handler runs.
++		unsafe {
++			*ctx = Context{
++				req:                   req
++				page_gen_start:        page_gen_start
++				client_fd:             _client_fd
++				client_wants_to_close: request_has_connection_close(req)
++				query:                 query
++				form:                  form
++				files:                 files
++			}
++		}
++	}
++
+ 	mut user_context := X{
+ 		Context: ctx
+ 	}

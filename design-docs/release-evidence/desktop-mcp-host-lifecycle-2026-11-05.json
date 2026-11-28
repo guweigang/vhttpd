@@ -1,0 +1,20 @@
+{
+  "client": "installed DSH Streamable HTTP connector",
+  "name": "mcp-desktop-lifecycle-1105",
+  "host_id": "ef8060202ecb63b40ba58217",
+  "target_id": "3e9196aac428d51981294d5c",
+  "create": "completed",
+  "stop": "completed",
+  "start": "completed",
+  "business_status": 200,
+  "cleanup": "stopped",
+  "negative_cases": 7,
+  "registered_tools": 62,
+  "desktop_sha256": "de915394eb11788d37a501caf52e9cc5caebac84dcd67599bd2968ad26d2470f",
+  "desktop_restored_environment": "default running",
+  "skills_ui": "DSH reloaded vhttpd-deploy and vhttpd-debug through skill tool",
+  "test_ssh_listener": "stopped",
+  "host_operation_persistence": "Desktop session only",
+  "management_transport": "local Streamable HTTP",
+  "timestamp": "2026-11-05T14:55:00+08:00"
+}

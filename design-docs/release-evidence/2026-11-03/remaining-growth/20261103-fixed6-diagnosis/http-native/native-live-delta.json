@@ -1,0 +1,13 @@
+{
+  "diagnostic_only": true,
+  "definition": "Native malloc allocations outstanding at trace timestamps; process receives SIGTERM so final leak totals include live startup runtimes. This excludes Boehm mmap/small allocations.",
+  "checkpoints_bytes": {
+    "30.0": 251026,
+    "60.0": 251026,
+    "120.0": 251026,
+    "170.0": 251026
+  },
+  "net_change_30s_to_170s_bytes": 0,
+  "end_bytes": 111391,
+  "top_positive_deltas": []
+}

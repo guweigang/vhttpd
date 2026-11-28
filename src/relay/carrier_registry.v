@@ -162,6 +162,11 @@ fn (plan CarrierDispatchPlan) admits_binding(relay_id string, carrier_id string)
 	return voidptr(current) == voidptr(expected)
 }
 
+// Opaque attachment identity survives equal public IDs across reconnects.
+pub fn (plan CarrierDispatchPlan) is_current() bool {
+	return plan.admits_binding(plan.relay_id, plan.carrier_id)
+}
+
 pub fn carrier_dispatch_plan_event_fields(plan CarrierDispatchPlan) map[string]string {
 	return event_fields(if plan.available {
 		'carrier.dispatch'

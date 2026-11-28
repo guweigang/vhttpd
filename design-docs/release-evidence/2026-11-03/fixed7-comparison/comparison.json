@@ -1,0 +1,33 @@
+{
+  "status": "completed",
+  "new_binary_sha256": "aaa1475c97b9bd003986c8d4f81ae10f7315ec3c544580085139f990151bf4a6",
+  "cases": {
+    "fixed6": {
+      "baseline_rss_kib": 72424,
+      "settled_rss_kib": 77204,
+      "max_load_rss_kib": 77900,
+      "http_ok": 47839,
+      "paseo_ok": 584,
+      "retained_rss_kib": 4780,
+      "sample_count": 192,
+      "http_errors": 0,
+      "paseo_errors": 0
+    },
+    "fixed7": {
+      "baseline_rss_kib": 80052,
+      "settled_rss_kib": 75448,
+      "max_load_rss_kib": 80232,
+      "http_ok": 47844,
+      "paseo_ok": 584,
+      "retained_rss_kib": -4604,
+      "sample_count": 192,
+      "http_errors": 0,
+      "paseo_errors": 0
+    }
+  },
+  "original_identities": {
+    "697847": 9646788,
+    "9303": 601054
+  },
+  "original_identities_unchanged": true
+}
