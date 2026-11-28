@@ -21,7 +21,7 @@ fn menu_text_edit(action string) {
 fn C.vhttpd_workbench_configure_app_menu(&char, &char)
 fn C.vhttpd_workbench_menu_tracking() int
 
-fn configure_platform_menus() { C.vhttpd_workbench_configure_app_menu(ui_text('关于 vhttpd Workbench').str, ui_text('退出工作台').str) }
+fn configure_platform_menus() { C.vhttpd_workbench_configure_app_menu(ui_text('关于 vhttpd desktop').str, ui_text('退出工作台').str) }
 
 fn menu_window_action(action string) {
 	window := macos.Id(ui2.native_window_handle())

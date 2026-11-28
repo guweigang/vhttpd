@@ -251,7 +251,7 @@
   "旧项目登记迁移失败：{0}。可通过导入项目重新登记。": "Old registration migration failed: {0}. Import the project to register it again.",
   "项目登记读取失败：{0}。请保留登记文件，通过导入项目恢复。": "Cannot read project registrations: {0}. Keep the registry file and import projects to recover.",
   "共享连接库读取失败，请保留 shared-relays.json，修复后重新打开工作台。": "Cannot read the shared connection library. Keep shared-relays.json, repair it and reopen the workbench.",
-  "vhttpd · 本地工作台": "vhttpd · Local Workbench",
+  "vhttpd desktop": "vhttpd desktop",
   "正在读取配置…": "Reading configuration…",
   "选择项目存放目录": "Choose project parent folder",
   "请先修复项目配置。": "Fix the project configuration first.",
@@ -1258,7 +1258,8 @@
   "模型开发 · MCP…": "Model development · MCP…",
   "使用说明": "User guide",
   "快捷键说明": "Keyboard shortcuts",
-  "关于 vhttpd Workbench": "About vhttpd Workbench",
+  "关于 vhttpd desktop": "About vhttpd desktop",
+  "发布于 {0}": "Released on {0}",
   "窗口": "Window",
   "最小化": "Minimize",
   "缩放": "Zoom",
@@ -1586,5 +1587,12 @@
   "远端管理已连接": "Connected to remote",
   "重新连接后检查进程与整项目配置，断开连接不会停止远端进程。": "Reconnect to check the process and whole-project configuration. Disconnecting does not stop the remote process.",
   "启动或运行失败": "Startup or runtime failed",
-  "管理已连接 · 业务未就绪": "Management connected · runtime not ready"
+  "管理已连接 · 业务未就绪": "Management connected · runtime not ready",
+  "Mac 独立运行包或 SHA256 校验文件缺失或存在多个候选。": "The standalone Mac runtime or its SHA256 file is missing or duplicated.",
+  "Mac 独立运行包或 SHA256 校验文件无效。": "The standalone Mac runtime or its SHA256 file is invalid.",
+  "运行包文件数量无效。": "The runtime archive has an invalid number of entries.",
+  "运行包包含不安全或重复的路径。": "The runtime archive contains unsafe or duplicate paths.",
+  "运行包缺少 vhttpd 或 Admin UI。": "The runtime archive is missing vhttpd or Admin UI.",
+  "无法检查运行包内容。": "Cannot inspect the runtime archive contents.",
+  "运行包包含链接、特殊文件或无效大小。": "The runtime archive contains links, special files or invalid sizes."
 }

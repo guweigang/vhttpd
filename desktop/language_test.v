@@ -116,17 +116,18 @@ fn test_configuration_preview_translates_wording_but_preserves_values_and_action
  assert menu_button_enabled(root,'start')
 }
 
-fn test_about_text_uses_selected_language_and_keeps_runtime_version() {
+fn test_about_text_uses_selected_language_and_desktop_release_metadata() {
  previous:=workbench_language
  defer {workbench_language=previous}
- app:=Workshop{runtime_info:host.RuntimeInfo{ready:true,version:'0.1.0'}}
+ app:=Workshop{runtime_info:host.RuntimeInfo{ready:true,version:'0.9.1'}}
  workbench_language='en'
  english:=app.workbench_about_text()
- assert english.contains('Development workbench built with V / ui2')
- assert english.contains('Current environment:')
- assert english.contains('Local vhttpd 0.1.0')
+ assert english.split_into_lines().len == 4
+ assert english.starts_with('vhttpd desktop ' + desktop_version + '\nReleased on ')
+ assert english.contains('Powered by vlang & ui2\n© Bullsoft.org')
+ assert !english.contains('vhttpd 0.9.1')
  workbench_language='zh-CN'
- assert app.workbench_about_text().contains('基于 V / ui2 的开发工作台')
+ assert app.workbench_about_text().contains('发布于 ' + desktop_release_date())
 }
 
 fn test_empty_application_picker_keeps_a_localized_disabled_placeholder() {

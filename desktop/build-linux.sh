@@ -13,6 +13,7 @@ service="$(cd "$VHTTPD_LINUX_RUNTIME_PACKAGE" && pwd)"
 python3 "$root/scripts/ci/verify_gc_runtime.py" "$service/vhttpd"
 compiler="${VHTTPD_DESKTOP_V:-v}"
 version="$(python3 "$root/desktop/workbench_version.py" --field version)"
+release_date="$(python3 "$root/desktop/workbench_version.py" --field release_date)"
 mkdir -p "$root/desktop/bin"
 stage="$(mktemp -d "$root/desktop/bin/.linux-build.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
@@ -22,7 +23,7 @@ package="$stage/$name"
 mkdir -p "$package/resources" "$package/runtime/admin" "$package/runtime/runtime"
 python3 "$root/desktop/package_linux_fonts.py" "$package/fonts"
 python3 "$root/desktop/build_font_decoder.py" "$package/vhttpd-fontdecode"
-"$compiler" -prod -nocache -gc boehm -cc gcc -d build_quickjs -d "vhttpd_desktop_version=$version" -d use_bundled_libgc -w -enable-globals \
+"$compiler" -prod -nocache -gc boehm -cc gcc -d build_quickjs -d "vhttpd_desktop_version=$version" -d "vhttpd_desktop_release_date=$release_date" -d use_bundled_libgc -w -enable-globals \
  -path "$root/desktop|$root/src|$stage/modules|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" -o "$package/vhttpd-workbench" "$root/desktop"
 cp "$root/desktop/assets/vhttpd-mark.png" "$package/resources/vhttpd-mark.png"
 cp "$root/desktop/assets/vhttpd-logo.png" "$package/resources/vhttpd-logo.png"
@@ -38,7 +39,7 @@ bash "$root/scripts/bundle_runtime_libs.sh" "$package/vhttpd-fontdecode" "$packa
 printf 'Desktop %s\n' "$version" > "$package/VERSION.txt"
 python3 -c 'import platform; print("构建基线：" + platform.freedesktop_os_release()["PRETTY_NAME"] + " / " + platform.machine() + " / " + " ".join(platform.libc_ver()))' > "$package/安装说明.txt"
 cat >> "$package/安装说明.txt" <<'GUIDE'
-vhttpd Workbench Linux 开发预览
+vhttpd desktop Linux 开发预览
 
 解压整个目录后运行 ./vhttpd-workbench。源码与应用数据另存，不要只复制 ELF。
 请使用与构建基线兼容的同架构 Linux 桌面，需 X11 / XWayland、OpenGL 和可用显卡驱动。

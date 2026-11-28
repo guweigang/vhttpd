@@ -19,7 +19,7 @@ fn set_workbench_tray(icon string) {
 	app := unsafe { workshop }
 	ui2.set_tray(ui2.TrayConfig{
 		icon: icon
-		tooltip: 'vhttpd Workbench'
+		tooltip: 'vhttpd desktop'
 		menu: workbench_tray_menu(!app.creating)
 	})
 }

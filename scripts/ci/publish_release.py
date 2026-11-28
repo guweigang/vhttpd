@@ -109,7 +109,7 @@ def prepare(download, output, env):
     guide = ('vhttpd ' + version + '\n\nmacOS / Linux：解压对应架构的 tar.gz，按包内 scripts/install_runtime.sh 安装，'
              '或直接运行包内 vhttpd。Windows：解压 zip，按包内安装说明运行 vhttpd.exe。\n'
              '运行包包含原生依赖，无需安装 V、Node 或编译工具。\n' if product == 'runtime' else
-             'vhttpd Desktop ' + version + '\n\nmacOS：Apple Silicon arm64，macOS 15 及以上；解压 zip 后将 App 移入 Applications。\n'
+             'vhttpd desktop ' + version + '\n\nmacOS：Apple Silicon arm64，macOS 15 及以上；解压 zip 后将 App 移入 Applications。\n'
              'Linux：按 CPU 架构选择 amd64 / arm64，解压后运行工作台启动脚本。\n'
              'Windows：解压 zip 后运行 vhttpd-workbench.exe，保留 resources、tools 和 DLL。\n'
              'Windows 本地 vhttpd 运行包独立下载；三端均无需 V、Node 或编译环境。\n')
@@ -157,7 +157,7 @@ def publish(download, output, env, command=gh):
     verify_tag()
     marker = f'<!-- vhttpd-stable-ci sha={sha} -->'
     notes = output.parent / 'release-notes.txt'
-    title = ('vhttpd Desktop ' if product == 'desktop' else 'vhttpd ') + version
+    title = ('vhttpd desktop ' if product == 'desktop' else 'vhttpd ') + version
     notes.write_text(title + '\n\n三端运行包已通过 CI 构建、解压启动及配置发布/重启生效验收。\n'
                      '下载对应平台附件，先阅读 INSTALL-zh.txt 并核对 SHA256SUMS。\n'
                      'macOS 包未经 Apple 签名/公证，首次打开请按安装说明操作。\n\n' + marker + '\n')

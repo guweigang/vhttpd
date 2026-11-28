@@ -84,7 +84,7 @@ def verify(archive):
         run('/usr/bin/codesign', '--verify', '--deep', '--strict', str(app))
         info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
         host = app / 'Contents/MacOS/vhttpd-workbench'
-        if run(str(host), '--version').strip() != 'vhttpd Desktop ' + info['VHTTPDReleaseVersion']:
+        if run(str(host), '--version').strip() != 'vhttpd desktop ' + info['VHTTPDReleaseVersion']:
             raise RuntimeError('Desktop executable and bundle version disagree')
         if not info.get('LSMinimumSystemVersion'):
             raise RuntimeError('The app must declare its actual minimum macOS')

@@ -11,6 +11,7 @@ version="$(python3 "$root/desktop/workbench_version.py" --field version)"
 bundle_version="$(python3 "$root/desktop/workbench_version.py" --field bundle_version)"
 archive_name="vhttpd-workbench-macos-arm64-$version.zip"
 target_app="$root/desktop/bin/vhttpd-workbench.app"
+release_date="$(python3 "$root/desktop/workbench_version.py" --field release_date)"
 mkdir -p "$root/desktop/bin"
 build_dir="$(mktemp -d "$root/desktop/bin/.build.XXXXXX")"
 trap 'rm -rf "$build_dir"' EXIT
@@ -57,7 +58,7 @@ if [[ -z "${VJS_QUICKJS_PATH:-}" ]]; then
   vjsx_source="${VJSX_DIR:-$HOME/.vmodules/vjsx}"
   export VJS_QUICKJS_PATH="$(VJS_QUICKJS_WORK_ROOT="$root" "$vjsx_source/scripts/ensure-quickjs.sh")"
 fi
-v -prod -nocache -gc boehm -cc "$build_dir/clang-compatible" -d build_quickjs -d "vhttpd_desktop_version=$version" -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$build_dir/modules|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" \
+v -prod -nocache -gc boehm -cc "$build_dir/clang-compatible" -d build_quickjs -d "vhttpd_desktop_version=$version" -d "vhttpd_desktop_release_date=$release_date" -d use_bundled_libgc -w -enable-globals -path "$root/desktop|$root/src|$build_dir/modules|$(dirname "$VJSX_DIR")|$root/.deps|@vlib|@vmodules" \
   -o "$build_dir/vhttpd-workbench" "$root/desktop"
 # Replace the directory entry atomically; never truncate the executable that
 # a running workbench has mapped into memory.
@@ -68,11 +69,13 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>vhttpd-workbench</string>
 <key>CFBundleIdentifier</key><string>io.vhttpd.workbench.prototype</string>
-<key>CFBundleName</key><string>vhttpd Workbench</string>
+<key>CFBundleName</key><string>vhttpd desktop</string>
+<key>CFBundleDisplayName</key><string>vhttpd desktop</string>
 <key>CFBundleIconFile</key><string>vhttpd-macos.icns</string>
 <key>CFBundleShortVersionString</key><string>$bundle_version</string>
 <key>CFBundleVersion</key><string>$bundle_version</string>
 <key>VHTTPDReleaseVersion</key><string>$version</string>
+<key>VHTTPDReleaseDate</key><string>$release_date</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

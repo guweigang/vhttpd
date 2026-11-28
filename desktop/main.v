@@ -208,7 +208,7 @@ const workshop = &Workshop{}
 
 fn main() {
 	if os.args.len == 2 && os.args[1] == '--version' && os.getenv('VHTTPD_SSH_ASKPASS') != '1' {
-		println('vhttpd Desktop ' + desktop_version)
+		println('vhttpd desktop ' + desktop_version)
 		return
 	}
 	if os.getenv('VHTTPD_SSH_ASKPASS') == '1' {
@@ -332,12 +332,12 @@ fn main() {
 	ui2.on_window_ready(configure_workbench_window)
 	$if windows {
   scale := windows_display_scale()
-		ui2.run_window(ui_text('vhttpd · 本地工作台'), int(980 * scale), int(740 * scale), build_window, handle_event)
+		ui2.run_window(ui_text('vhttpd desktop'), int(980 * scale), int(740 * scale), build_window, handle_event)
  } $else $if linux {
 		configure_linux_fonts()
-		ui2.run_window_with_options(ui2.WindowOptions{ title: ui_text('vhttpd · 本地工作台'), width: 980, height: 740, min_width: 760, min_height: 660 }, build_window, handle_event)
+		ui2.run_window_with_options(ui2.WindowOptions{ title: ui_text('vhttpd desktop'), width: 980, height: 740, min_width: 760, min_height: 660 }, build_window, handle_event)
 	} $else {
-		ui2.run_window(ui_text('vhttpd · 本地工作台'), 980, 740, build_window, handle_event)
+		ui2.run_window(ui_text('vhttpd desktop'), 980, 740, build_window, handle_event)
 	}
 	cleanup()
 }

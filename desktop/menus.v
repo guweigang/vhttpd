@@ -135,7 +135,7 @@ fn (app &Workshop) workbench_menus(root ui2.Element) []ui2.Menu {
 			menu_row('runtime', '管理运行包…', available, 'cmd+,'),
 			ui2.menu_separator(), menu_row('mcp_settings', '模型开发 · MCP…', available, ''),
 		]},
-		ui2.Menu{title: '帮助', items: [menu_row('help', '使用说明', true, ''), menu_row('shortcuts', '快捷键说明', true, ''), ui2.menu_separator(), menu_row('desktop_updates', '检查更新…', available, ''), menu_row('about', '关于 vhttpd Workbench', true, '')]},
+		ui2.Menu{title: '帮助', items: [menu_row('help', '使用说明', true, ''), menu_row('shortcuts', '快捷键说明', true, ''), ui2.menu_separator(), menu_row('desktop_updates', '检查更新…', available, ''), menu_row('about', '关于 vhttpd desktop', true, '')]},
 	]
 	$if macos { menus.insert(menus.len - 1, ui2.Menu{title: '窗口', items: [menu_row('minimize', '最小化', true, 'cmd+m'), menu_row('zoom', '缩放', true, ''), menu_row('fullscreen', '进入 / 退出全屏', true, 'ctrl+cmd+f')]}) }
 

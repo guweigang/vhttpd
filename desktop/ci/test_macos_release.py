@@ -8,7 +8,7 @@ from unittest.mock import patch
 import zipfile
 
 from macos_release import digest, prepare, publish
-from workbench_version import version_metadata, windows_resource
+from workbench_version import repository_version, version_metadata, windows_resource
 
 
 class GitHub:
@@ -55,6 +55,13 @@ class ReleaseTests(unittest.TestCase):
         (self.download / 'SHA256SUMS').write_text(digest(self.archive) + '  ' + self.archive.name + '\n')
         (self.download / '验收说明.txt').write_text('15/26 passed; Gatekeeper not verified')
 
+    def test_release_date_is_frozen_and_validated_at_build_time(self):
+        self.assertEqual(version_metadata({'VHTTPD_WORKBENCH_RELEASE_DATE': '2026-11-28'})['release_date'], '2026-11-28')
+        self.assertEqual(version_metadata({'SOURCE_DATE_EPOCH': '0'})['release_date'], '1970-01-01')
+        for value in ['2026-2-3', 'Nov 28, 2026', '2026-02-30', '2026-11-28\nextra']:
+            with self.subTest(date=value), self.assertRaises(ValueError):
+                version_metadata({'VHTTPD_WORKBENCH_RELEASE_DATE': value})
+
     def test_default_and_development_versions_follow_the_manifest(self):
         with patch('workbench_version.Path.read_text', return_value='0.1.7\n'):
             self.assertEqual(version_metadata({})['version'], '0.1.7')
@@ -73,9 +80,9 @@ class ReleaseTests(unittest.TestCase):
 
     def test_runtime_release_tag_does_not_set_desktop_version(self):
         metadata = version_metadata({'GITHUB_REF_TYPE': 'tag', 'GITHUB_REF_NAME': 'v0.9.0'})
-        self.assertEqual(metadata['version'], '0.2.0')
+        self.assertEqual(metadata['version'], repository_version())
         self.assertEqual(metadata['tag'], 'v0.9.0')
-        self.assertEqual(metadata['archive'], 'vhttpd-workbench-macos-arm64-0.2.0.zip')
+        self.assertEqual(metadata['archive'], 'vhttpd-workbench-macos-arm64-' + repository_version() + '.zip')
 
     def test_windows_resource_carries_numeric_and_full_desktop_versions(self):
         metadata = version_metadata({'VHTTPD_WORKBENCH_VERSION': '0.1.0-dev.gaaaaaaaaaaaa'})

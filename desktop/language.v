@@ -34,7 +34,7 @@ fn choose_language(preference string) {
 	}
 	workbench_language_preference = preference
 	workbench_language = l10n.effective_language(preference, workbench_system_language)
-	set_workbench_window_title(ui_text('vhttpd · 本地工作台'))
+	set_workbench_window_title(ui_text('vhttpd desktop'))
 	if ui2.tray_visible() { set_workbench_tray(ui2.tray().icon) }
 	ui2.refresh()
 }

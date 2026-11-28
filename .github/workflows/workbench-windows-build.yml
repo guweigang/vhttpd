@@ -134,6 +134,7 @@ jobs:
           $path = "$PWD/desktop|$PWD/src|$env:WORKBENCH_WINDOWS_MODULES|$env:WORKBENCH_WINDOWS_SDK_PARENT|$PWD/.deps|@vlib|@vmodules"
           $sdkCompatibility = '/FI"' + "$PWD/desktop/ci/msvc_sdk_compat.h" + '"'
           $desktopVersion = (& python desktop/workbench_version.py --field version).Trim()
+          $desktopReleaseDate = (& python desktop/workbench_version.py --field release_date).Trim()
           if ($LASTEXITCODE -ne 0) { throw 'Desktop version resolution failed' }
           python desktop/workbench_version.py --windows-resource "$output/workbench-version.rc"
           if ($LASTEXITCODE -ne 0) { throw 'Desktop version resource generation failed' }
@@ -143,7 +144,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource compilation failed' }
           } finally { Pop-Location }
           $iconResource = '"' + "$output/workbench.res" + '"'
-          & v -prod -cc msvc -gc boehm -cflags $sdkCompatibility -ldflags $iconResource -subsystem console -d "vhttpd_desktop_version=$desktopVersion" -d link_quickjs -d use_openssl -w -enable-globals `
+          & v -prod -cc msvc -gc boehm -cflags $sdkCompatibility -ldflags $iconResource -subsystem console -d "vhttpd_desktop_version=$desktopVersion" -d "vhttpd_desktop_release_date=$desktopReleaseDate" -d link_quickjs -d use_openssl -w -enable-globals `
             -path $path -o "$output/vhttpd-workbench.exe" desktop 2>&1 | Tee-Object "$output/desktop-build.log"
           if ($LASTEXITCODE -ne 0) { throw 'Full Desktop is not yet Windows-compatible; see desktop-build.log' }
           # Use the wide CRT entry point so redirected CLI output survives.

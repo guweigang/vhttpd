@@ -1,4 +1,5 @@
 """Resolve one version for the tag, app bundle and downloadable archive."""
+from datetime import date, datetime, timezone
 import json
 import os
 import re
@@ -21,6 +22,18 @@ def parse_version(version):
     return match
 
 
+def release_date(env):
+    value = env.get('VHTTPD_WORKBENCH_RELEASE_DATE')
+    if value is None:
+        stamp = env.get('SOURCE_DATE_EPOCH')
+        value = (datetime.fromtimestamp(int(stamp), timezone.utc) if stamp is not None
+                 else datetime.now(timezone.utc)).date().isoformat()
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
+        raise ValueError('Release date must use YYYY-MM-DD')
+    date.fromisoformat(value)
+    return value
+
+
 def version_metadata(env):
     tag = env.get('GITHUB_REF_NAME', '') if env.get('GITHUB_REF_TYPE') == 'tag' else ''
     runtime_tag = None
@@ -41,7 +54,7 @@ def version_metadata(env):
             raise ValueError('A development build requires a full source commit')
         version = version.split('-')[0].split('+')[0] + '-dev.g' + sha[:12]
     match = parse_version(version)
-    return {'version': version, 'bundle_version': '.'.join(match.group(1, 2, 3)),
+    return {'version': version, 'release_date': release_date(env), 'bundle_version': '.'.join(match.group(1, 2, 3)),
             'archive': 'vhttpd-workbench-macos-arm64-' + version + '.zip',
             'tag': tag, 'prerelease': 'true' if match[4] or (runtime_tag and runtime_tag[4]) else 'false'}
 
@@ -67,9 +80,9 @@ BEGIN
  BEGIN
   BLOCK "040904B0"
   BEGIN
-   VALUE "FileDescription", "vhttpd Desktop\\0"
+   VALUE "FileDescription", "vhttpd desktop\\0"
    VALUE "FileVersion", "{version}\\0"
-   VALUE "ProductName", "vhttpd Desktop\\0"
+   VALUE "ProductName", "vhttpd desktop\\0"
    VALUE "ProductVersion", "{version}\\0"
    VALUE "OriginalFilename", "vhttpd-workbench.exe\\0"
   END
