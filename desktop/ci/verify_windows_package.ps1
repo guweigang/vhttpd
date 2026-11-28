@@ -99,6 +99,6 @@ try {
  Start-Sleep -Seconds 2
  $process.Refresh()
  if ($process.HasExited) { throw 'Extracted Desktop exited unexpectedly' }
- if (!$process.CloseMainWindow() -or !$process.WaitForExit(15000) -or $process.ExitCode -ne 0) { throw 'Extracted Desktop did not exit normally' }
+ & "$PSScriptRoot/verify_windows_lifecycle.ps1" -DesktopProcessId $process.Id
 } finally { if (!$process.HasExited) { Stop-Process -Id $process.Id -Force } }
 @{archive_sha256=$expected; startup='passed'; normal_exit='passed'; dependency_closure='passed'; bundled_ssh='passed'; native_ssh_password_and_forwarding='passed'; packaged_password_helper='passed'; development_path=$false; real_server_acceptance='pending user Windows test'} | ConvertTo-Json | Set-Content "$ResultDirectory/package-acceptance.json"
