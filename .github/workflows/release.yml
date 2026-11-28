@@ -1,6 +1,12 @@
 name: Publish stable packages
 
 on:
+  workflow_dispatch:
+    inputs:
+      accepted_run:
+        description: Completed stable tag CI run; all platform acceptance jobs must have passed
+        required: true
+        type: string
   push:
     tags: ['v[0-9]*', '!v*-*', 'desktop-v[0-9]*', '!desktop-v*-*']
 
@@ -13,6 +19,7 @@ concurrency:
 
 jobs:
   plan:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
       product: ${{ steps.version.outputs.product }}
@@ -72,6 +79,35 @@ jobs:
         with:
           path: downloads
       - name: Validate all platform assets and publish the complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/publish_release.py publish downloads release-assets
+
+  resume-publication:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the accepted tag build and every platform result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCEPTED_RUN: ${{ inputs.accepted_run }}
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_publish_release.py
+          python3 scripts/ci/publish_release.py resume "$ACCEPTED_RUN"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.accepted_run }}
+          path: downloads
+      - name: Publish the original CI archives after full verification
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/ci/publish_release.py publish downloads release-assets

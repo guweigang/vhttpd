@@ -87,38 +87,36 @@ class StableReleaseTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 release.prepare(self.download, self.root / str(index), self.env)
 
-    def test_incomplete_upload_never_publishes_draft(self):
-        calls = []
+    def github_mock(self, calls, output, complete=True, existing=False):
+        draft = {'id': 123, 'tag_name': self.env['GITHUB_REF_NAME'], 'draft': True,
+                 'target_commitish': 'a' * 40, 'body': '<!-- vhttpd-stable-ci sha=' + 'a' * 40 + ' -->'}
         def github(args):
             calls.append(args)
             if args[0] == 'api' and '/git/ref/tags/' in args[1]:
-                return subprocess.CompletedProcess(args, 0, json.dumps({'object': {'type': 'commit', 'sha': 'a' * 40}}), '')
-            if args[0] == 'api':
-                count = sum(a[0] == 'api' and '/releases/tags/' in a[1] for a in calls)
-                if count == 1:
-                    return subprocess.CompletedProcess(args, 1, '', 'HTTP 404')
-                return subprocess.CompletedProcess(args, 0, '{"assets": []}', '')
-            return subprocess.CompletedProcess(args, 0, '', '')
+                data = {'object': {'type': 'commit', 'sha': 'a' * 40}}
+            elif args[0] == 'api' and '/releases?' in args[1]:
+                created = any(a[:2] == ['release', 'create'] for a in calls)
+                data = [[draft]] if existing or created else [[]]
+            elif args[0] == 'api' and args[1].endswith('/releases/123'):
+                assets = [{'name': p.name, 'size': p.stat().st_size} for p in output.iterdir()] if complete else []
+                data = dict(draft, assets=assets)
+            elif args[0] == 'api':
+                raise AssertionError('Draft must be read by ID, never by tag: ' + repr(args))
+            else:
+                return subprocess.CompletedProcess(args, 0, '', '')
+            return subprocess.CompletedProcess(args, 0, json.dumps(data), '')
+        return github
+
+    def test_incomplete_upload_never_publishes_draft(self):
+        calls = []; output = self.root / 'publish'
         with self.assertRaises(ValueError):
-            release.publish(self.download, self.root / 'publish', self.env, command=github)
+            release.publish(self.download, output, self.env, command=self.github_mock(calls, output, complete=False))
         self.assertTrue(any(a[:2] == ['release', 'upload'] for a in calls))
         self.assertFalse(any(a[:2] == ['release', 'edit'] for a in calls))
 
     def test_complete_verified_upload_is_published_after_tag_recheck(self):
-        calls = []
-        output = self.root / 'publish'
-        def github(args):
-            calls.append(args)
-            if args[0] == 'api' and '/git/ref/tags/' in args[1]:
-                return subprocess.CompletedProcess(args, 0, json.dumps({'object': {'type': 'commit', 'sha': 'a' * 40}}), '')
-            if args[0] == 'api':
-                count = sum(a[0] == 'api' and '/releases/tags/' in a[1] for a in calls)
-                if count == 1:
-                    return subprocess.CompletedProcess(args, 1, '', 'HTTP 404')
-                assets = [{'name': p.name, 'size': p.stat().st_size} for p in output.iterdir()]
-                return subprocess.CompletedProcess(args, 0, json.dumps({'assets': assets}), '')
-            return subprocess.CompletedProcess(args, 0, '', '')
-        release.publish(self.download, output, self.env, command=github)
+        calls = []; output = self.root / 'publish'
+        release.publish(self.download, output, self.env, command=self.github_mock(calls, output))
         writes = [a for a in calls if a[0] == 'release']
         self.assertEqual([a[1] for a in writes], ['create', 'upload', 'edit'])
         self.assertIn('--draft', writes[0])
@@ -126,6 +124,47 @@ class StableReleaseTests(unittest.TestCase):
         self.assertIn('--prerelease=false', writes[-1])
         self.assertIn('--latest=true', writes[-1])
         self.assertEqual(sum(a[0] == 'api' and '/git/ref/tags/' in a[1] for a in calls), 2)
+
+    def test_failed_publication_reuses_owned_draft_without_creating_duplicate(self):
+        calls = []; output = self.root / 'publish'
+        release.publish(self.download, output, self.env, command=self.github_mock(calls, output, existing=True))
+        self.assertEqual([a[1] for a in calls if a[0] == 'release'], ['upload', 'edit'])
+
+    def test_resume_reuses_its_owned_draft_without_creating_another(self):
+        calls = []
+        output = self.root / 'publish'
+        release.publish(self.download, output, self.env,
+                        command=self.github_mock(calls, output, existing=True))
+        self.assertEqual([a[1] for a in calls if a[0] == 'release'], ['upload', 'edit'])
+        self.assertFalse(any('/releases/tags/' in a[1] for a in calls if a[0] == 'api'))
+
+    def test_resume_requires_all_platform_acceptance_and_unchanged_tag(self):
+        env = dict(self.env, GITHUB_ENV=str(self.root / 'job-env'))
+        jobs = [{'id': index + 1, 'name': name, 'conclusion': 'success'} for index, name in enumerate([
+            'plan', 'runtime / macos-arm64', 'runtime / macos-amd64', 'runtime / linux-amd64',
+            'runtime / linux-arm64', 'runtime-windows / windows-amd64'])]
+        run = {'event': 'push', 'path': '.github/workflows/release.yml', 'status': 'completed',
+               'repository': {'full_name': env['GITHUB_REPOSITORY']},
+               'head_branch': env['GITHUB_REF_NAME'], 'head_sha': env['GITHUB_SHA']}
+        ref = {'object': {'type': 'commit', 'sha': env['GITHUB_SHA']}}
+        def github(args):
+            data = ([{'jobs': jobs}] if '/jobs?' in args[1] else
+                    ref if '/git/ref/' in args[1] else run)
+            return subprocess.CompletedProcess(args, 0, json.dumps(data), '')
+        jobs[-1]['conclusion'] = 'failure'
+        with self.assertRaises(ValueError):
+            release.resume('42', env, command=github)
+        self.assertFalse((self.root / 'job-env').exists())
+        jobs[-1]['conclusion'] = 'success'
+        ref['object']['sha'] = 'b' * 40
+        with self.assertRaises(ValueError):
+            release.resume('42', env, command=github)
+        ref['object']['sha'] = env['GITHUB_SHA']
+        release.resume('42', env, command=github)
+        self.assertIn('ACCEPTED_GITHUB_SHA=' + env['GITHUB_SHA'], (self.root / 'job-env').read_text())
+        run['event'] = 'pull_request'
+        with self.assertRaises(ValueError):
+            release.resume('42', env, command=github)
 
     def desktop_archives(self):
         for path in self.download.iterdir():

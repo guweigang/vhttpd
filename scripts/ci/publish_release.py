@@ -161,25 +161,82 @@ def publish(download, output, env, command=gh):
     notes.write_text(title + '\n\n三端运行包已通过 CI 构建、解压启动及配置发布/重启生效验收。\n'
                      '下载对应平台附件，先阅读 INSTALL-zh.txt 并核对 SHA256SUMS。\n'
                      'macOS 包未经 Apple 签名/公证，首次打开请按安装说明操作。\n\n' + marker + '\n')
-    existing = command(['api', f'repos/{repo}/releases/tags/{tag}'])
-    if existing.returncode == 0:
-        data = json.loads(existing.stdout)
+    def find_release():
+        # The by-tag REST endpoint hides drafts, including from Actions tokens.
+        pages = json.loads(checked(['api', f'repos/{repo}/releases?per_page=100', '--paginate', '--slurp']))
+        matches = [item for page in pages for item in page if item['tag_name'] == tag]
+        if len(matches) > 1:
+            raise ValueError('Multiple releases found for tag')
+        return matches[0] if matches else None
+
+    def owned_draft(data):
         if not data.get('draft') or data.get('target_commitish') != sha or marker not in (data.get('body') or ''):
             raise ValueError('Refusing to replace a public release or unrelated draft')
-    elif 'HTTP 404' in existing.stderr:
+        return data
+
+    existing = find_release()
+    if existing is not None:
+        owned_draft(existing)
+    else:
         checked(['release', 'create', tag, '--repo', repo, '--verify-tag', '--target', sha,
                  '--draft', '--title', title, '--notes-file', str(notes), '--prerelease=false', '--latest=false'])
-    else:
-        raise RuntimeError(existing.stderr)
+    draft = find_release()
+    if draft is None:
+        raise ValueError('Created release draft could not be found')
+    draft = owned_draft(draft)
     checked(['release', 'upload', tag, '--repo', repo, '--clobber', *map(str, assets)])
-    # Compare remote asset sizes before the draft becomes public.
-    remote = json.loads(checked(['api', f'repos/{repo}/releases/tags/{tag}']))
+    # Read by ID: the by-tag endpoint returns 404 until a draft is published.
+    remote = json.loads(checked(['api', f'repos/{repo}/releases/{draft["id"]}']))
+    owned_draft(remote)
     sizes = {a['name']: a['size'] for a in remote['assets']}
     if sizes != {p.name: p.stat().st_size for p in assets}:
         raise ValueError('Uploaded release assets are incomplete')
     verify_tag()
     checked(['release', 'edit', tag, '--repo', repo, '--draft=false', '--prerelease=false',
              '--latest=' + ('true' if product == 'runtime' else 'false')])
+
+
+def resume(run_id, env, command=gh):
+    """Recover publication from an immutable tag run whose package jobs all passed."""
+    if not re.fullmatch(r'[1-9][0-9]*', run_id):
+        raise ValueError('A numeric accepted run ID is required')
+    repo = env['GITHUB_REPOSITORY']
+    def api(path, *args):
+        result = command(['api', f'repos/{repo}/' + path, *args])
+        if result.returncode:
+            raise RuntimeError(result.stderr)
+        return json.loads(result.stdout)
+    run = api('actions/runs/' + run_id)
+    if (run['event'] != 'push' or run['path'] != '.github/workflows/release.yml'
+            or run['status'] != 'completed' or run['repository']['full_name'] != repo):
+        raise ValueError('Only a completed same-repository stable tag build may be resumed')
+    accepted = dict(env, GITHUB_REF_TYPE='tag', GITHUB_REF_NAME=run['head_branch'],
+                    GITHUB_SHA=run['head_sha'], GITHUB_EVENT_NAME='push', GITHUB_RUN_ID=run_id)
+    product, _ = plan(accepted)
+    pages = api('actions/runs/' + run_id + '/jobs?filter=all&per_page=100', '--paginate', '--slurp')
+    latest = {}
+    for job in sorted((job for page in pages for job in page['jobs']), key=lambda job: job['id']):
+        latest[job['name']] = job['conclusion']
+    required = (['plan', 'runtime / macos-arm64', 'runtime / macos-amd64',
+                 'runtime / linux-amd64', 'runtime / linux-arm64', 'runtime-windows / windows-amd64']
+                if product == 'runtime' else [
+                    'plan', 'desktop-windows / windows-files', 'desktop-windows / windows-amd64',
+                    'desktop-linux / package (ubuntu-24.04, amd64)',
+                    'desktop-linux / package (ubuntu-24.04-arm, arm64)',
+                    'desktop-macos / Build candidate from source (macOS 15 arm64)',
+                    'desktop-macos / Installed app on macOS 15 arm64',
+                    'desktop-macos / Installed app on macOS 26 arm64',
+                    'desktop-macos / Collect verified unsigned preview download'])
+    if any(latest.get(name) != 'success' for name in required):
+        raise ValueError('Every required platform package/acceptance job must have succeeded')
+    ref = api('git/ref/tags/' + accepted['GITHUB_REF_NAME'])['object']
+    if ref['type'] != 'commit' or ref['sha'] != accepted['GITHUB_SHA']:
+        raise ValueError('Accepted source tag no longer matches the build')
+    with open(env['GITHUB_ENV'], 'a') as output:
+        for key in ['GITHUB_REF_TYPE', 'GITHUB_REF_NAME', 'GITHUB_SHA', 'GITHUB_EVENT_NAME', 'GITHUB_RUN_ID']:
+            # GitHub reserves GITHUB_*; use explicit accepted-build inputs instead.
+            output.write('ACCEPTED_' + key + '=' + accepted[key] + '\n')
+
 
 
 if __name__ == '__main__':
@@ -189,7 +246,13 @@ if __name__ == '__main__':
             with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
                 output.write(f'product={product}\nversion={version}\n')
         print(product, version)
+    elif sys.argv[1] == 'resume':
+        resume(sys.argv[2], os.environ)
     elif sys.argv[1] == 'publish':
-        publish(Path(sys.argv[2]), Path(sys.argv[3]), os.environ)
+        env = dict(os.environ)
+        for key in list(env):
+            if key.startswith('ACCEPTED_GITHUB_'):
+                env[key.removeprefix('ACCEPTED_')] = env[key]
+        publish(Path(sys.argv[2]), Path(sys.argv[3]), env)
     else:
         raise ValueError('Expected plan or publish')
